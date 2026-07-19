@@ -16,6 +16,9 @@ The ADR is two minutes at decision time that saves an archaeology session
 later - and it is the difference between "we chose X" and "we chose X
 over Y because Z, and Z may stop being true."
 
+**Dials:** `--thinking` (default medium) and `--verbosity` per the
+universal grammar.
+
 ## When to write one
 
 - A choice between real alternatives was made (library, architecture,

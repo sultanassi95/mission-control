@@ -80,7 +80,11 @@ One question at a time; write nothing until the set is complete:
 1. **Role + experience:** what kind of engineer/builder are you, in your
    own words? (Their answer seeds how technical the AI's output runs.)
 2. **How you talk:** direct or padded? terse or explanatory? how do you
-   want pushback delivered? anything that annoys you in AI output?
+   want pushback delivered? anything that annoys you in AI output? And
+   concretely, day to day: `quiet` (gates and results only), `normal`
+   (brief status at direction changes), or `narrated` (step-by-step
+   commentary)? - recorded as the standing verbosity in
+   `CONSTITUTION.local.md`.
 3. **North-star + stakes (first-class):** what is this portfolio FOR -
    the mission in a sentence, and what genuinely rides on it. Take the
    answer seriously and verbatim; the stakes line is the single most
@@ -91,11 +95,11 @@ One question at a time; write nothing until the set is complete:
 5. **Cadence:** full-time on this portfolio, moonlighting, or a
    second-shift setup around a day job? (Shapes the daily rituals.)
 
-**The early aha (about 3 minutes in):** immediately after the
-how-you-talk answer, mirror their voice back - two sentences about their
-own portfolio written the way THEY talk - and ask "does that sound like
-you?" Adjust until it does. This is the moment the thing stops feeling
-like a form.
+**The early aha (the trigger is the answer, not the clock):** immediately
+after the how-you-talk answer, mirror their voice back - two sentences
+about their own portfolio written the way THEY talk - and ask "does that
+sound like you?" Adjust until it does. This is the moment the thing stops
+feeling like a form.
 
 Write `_command/founder-profile.md` (who they are, how they talk, how to
 work with them) and `_command/north-star.md` (the mission + stakes, 60
@@ -117,6 +121,11 @@ fronts first; the rest can join later via `/new-front` - say so):
    manifest, README, TODOs, branches ahead of base) and present the
    pre-filled spoke draft: "here is what I found - correct anything."
    Confirming beats answering; only ask what a repo cannot tell you.
+   **No repo yet / not a code project:** skip the scan and the
+   move-in-or-register gate entirely - the front's folder is created at
+   the portfolio root when it has files (or later, when it does), the
+   spoke's git-memory reads `N/A`, and the next action is asked, not
+   drafted from evidence.
 3. **The move-in-or-register gate:** offer the move into the portfolio
    root with the exact `mv` command visible (the repo stays its own git,
    invisible to this repo's git via the allowlist .gitignore); move only
@@ -126,7 +135,9 @@ fronts first; the rest can join later via `/new-front` - say so):
 4. **The human questions:** trust (yours / partnered / employer + the IP
    boundary written into the hub; confidential fronts' spokes carry
    pointers and process, never payloads - no client or employer code,
-   deliverable text, or secrets in `_command/`), posture, stakes (one
+   deliverable text, or secrets in `_command/`; a stakeholder-venture
+   front - where you present rather than push - is trust `stakeholder`),
+   posture (naming which front is PRIMARY - exactly one), stakes (one
    line), the
    tracker (detect-then-confirm: "I see GitHub issue templates here - is
    GitHub Issues this project's tracker, or should I run its native
@@ -166,7 +177,12 @@ Two questions:
    escalation is exceptional), balanced, or spend-for-speed?
 
 Write the answers as routing ceilings into `_command/CONSTITUTION.local.md`
-(drafted fully in Stage 4), referencing `framework/roles.md` presets.
+(drafted fully in Stage 4), referencing `framework/roles.md` presets. The
+cost posture also sets the standing `--spend` default for every skill
+(frugal = lean, balanced = standard, spend-for-speed = standard with
+`deep` freely suggested); record it beside the ceilings, with the Stage-1
+standing verbosity and a standing `--thinking` default (usually medium;
+the founder may pin higher or lower).
 Confirm in one line; no stop gate.
 
 ## Stage 4 - Instantiate

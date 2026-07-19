@@ -1,6 +1,6 @@
 # <front> - front context (hub)
 
-> One-liner. **Trust:** personal | partnered | stakeholder | employer.
+> One-liner. **Trust:** yours | partnered | employer | stakeholder.
 
 **People:** owner + partners (in order).
 **Posture:** current direction in a sentence.
@@ -24,4 +24,4 @@ flowchart LR
 ## Cross-repo constraints
 - <write posture, stakeholder / employer notes>
 
-_Up: [mental-model](../../mental-model.md) · Rules: [CONSTITUTION](../../CONSTITUTION.md)_
+_Up: the portfolio picture `_command/mental-model.md` · the rules `framework/CONSTITUTION.md` from the portfolio root_

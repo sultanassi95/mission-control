@@ -32,9 +32,12 @@ skip a phase, never reorder, never invent new phases.
 - **`--full-auto` (optional flag; alias: `--auto`).** Skips both default
   pause points; the flow runs end-to-end without stopping. Default (no
   flag) = partial autonomy with pauses.
-- **`--deep-review` (optional flag).** Forces the full multi-angle Phase-5
-  sweep. Reserved for pre-release / high-stakes changes. Default fan-out
-  is conservative (see Phase 5).
+- **`--spend <lean|standard|deep>` (optional).** lean = reviewer cap 1,
+  tightest prose; standard (default) = the Phase-5 sizing table as-is;
+  deep = the full multi-angle review sweep. **`--deep-review` remains as
+  an alias for `--spend deep`.** `--thinking` (default high - Phase 1 is
+  root-cause work) and `--verbosity` per the universal grammar (the
+  pause points and evidence pastes are discipline at every tier).
 - **`with Override: <clauses>` suffix (freeform).** Per-invocation
   overrides the founder types after the flags. Interpret each override as
   a scalpel, not a blanket (see

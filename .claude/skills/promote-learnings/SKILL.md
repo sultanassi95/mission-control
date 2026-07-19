@@ -28,6 +28,12 @@ doctrine, pulled and never edited; your standing rules live in
 `_command/CONSTITUTION.local.md`, which loads alongside it every session.
 Promotion writes there, and only there.
 
+## Dials
+
+`--thinking` (default high - doctrine selection is high stakes) and
+`--verbosity` per the universal grammar; the founder sign-off pause is
+discipline at every tier.
+
 ## Phase 1: Read
 
 - Read `MEMORY.md` in full in the session-memory directory (the auto-memory

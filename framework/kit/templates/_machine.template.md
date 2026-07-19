@@ -22,5 +22,5 @@ sed/awk absent · robocopy absent - each with the local equivalent>
 ## Platform rules for THIS machine (copied from framework/platform.md)
 - <only the applicable crib lines>
 
-## Preferences (founder-confirmed at liftoff)
+## Preferences (confirmed at the Stage 4 gate, corrected any time)
 package_manager: <pnpm | npm | yarn> · terminal: <what the founder uses>

@@ -19,6 +19,11 @@ and why, and what the week taught.
 `--front <name>`: one front's week only (its shipped/stuck, its lessons,
 its next-week objective). Unscoped (default): the whole portfolio.
 
+**Dials:** `--spend lean` = shipped/stuck bullets only · `standard`
+(default) = the full retro · `deep` = adds the week-scale lessons sweep
+and a `/spend` meter read. `--thinking` (default high - a retro is
+synthesis) and `--verbosity` per the universal grammar.
+
 ## Step 1 - Gather
 
 - `_command/daily/today.md` + `trackers/fronts.md` - the week's intent.

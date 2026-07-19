@@ -20,6 +20,11 @@ with evidence; a preflight that only says "looks good" has not run.
 `--front <name>`: check only that front's wiring, spokes, and boards
 (checks 2-3 below, scoped). Unscoped (default): the whole instance.
 
+**Dials:** `--spend lean` = checks 1 only (imports + machine profile) ·
+`standard` (default) = all checks · `deep` = adds the full
+board-consistency scan and the cold-read self-summary. `--verbosity` per
+the universal grammar - PASS/FAIL evidence is discipline at every tier.
+
 ## The checks (in order)
 
 1. **Imports resolve.** Read the root `CLAUDE.md`; verify every `@import`

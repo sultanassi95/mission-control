@@ -27,6 +27,11 @@ each run their scoped debrief; the last (or a dedicated) session runs
 the unscoped one. **Unscoped (default):** the consolidating debrief -
 all touched slices, then the `today.md` rewrite.
 
+**Dials:** `--spend lean` = task states + the pointer only · `standard`
+(default) = the full checklist · `deep` = adds the product-docs refresh
+sweep and week context. `--verbosity` per the universal grammar - but
+Step 4 (lessons) and the caps are discipline, never skipped at any tier.
+
 ## Step 1 - Roll up state (per touched front)
 
 For each project this session touched, append to its `progress.md`:

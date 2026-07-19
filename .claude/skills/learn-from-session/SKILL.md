@@ -50,6 +50,15 @@ entry. A single insight can warrant BOTH - the full teaching artifact in
 `learning/` and a one-line recall hook in memory - but never force a
 double-write for something that is genuinely only one or the other.
 
+## Dials
+
+`--spend lean` = cap the survivors at the 3 highest-value candidates ·
+`standard` (default) = the normal gate · `deep` = widen the scan to the
+whole week. `--thinking` (default medium) deepens the critique gate's
+scrutiny and never bypasses its eight rules. `--verbosity` per the
+universal grammar - the Phase 2 verdict list (PASS/REFRAME/DROP) is the
+audit trail and prints at every tier.
+
 ## Phase 1: Scan the session
 
 Read back over the session and list every candidate lesson. Look for:

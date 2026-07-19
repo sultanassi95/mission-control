@@ -6,6 +6,24 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-07-19: The thinking dial. Judgment-set skills (briefing, triage,
+  mission-flow, map-front, retro, promote-learnings, learn-from-session,
+  as-built, adr, doc-voice) accept `--thinking <low|medium|high|max>` -
+  the routing grid's effort dial surfaced per invocation: deliberation
+  depth in the session, literal effort on dispatches, defaults from the
+  roles presets; it cannot re-dial the harness's session effort (a large
+  mismatch is surfaced, never fought), and `low` thins deliberation,
+  never discipline. Standing default recorded at liftoff Stage 3.
+- 2026-07-19: Universal dials. Every varying skill now accepts
+  `--spend <lean|standard|deep>` (what the invocation may cost - each
+  skill defines its tiers; lean also steps dispatches one routing tier
+  down, within ceilings; mission-flow's `--deep-review` becomes an alias
+  for `--spend deep`) and `--verbosity <quiet|normal|narrated>` (how
+  much the agent talks; narration only - gates, evidence, and reports
+  are exempt at every tier). Standing defaults are captured at liftoff:
+  the Stage-3 cost posture maps to the spend default, and Stage 1 now
+  asks the concrete verbosity question. Precedence: flag > standing
+  preference > framework default.
 - 2026-07-19: License set to PolyForm Noncommercial 1.0.0 (personal and
   noncommercial use free; commercial rights reserved). Clean switch:
   nothing was ever distributed under the earlier draft license.

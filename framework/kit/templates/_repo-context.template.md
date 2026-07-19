@@ -1,15 +1,16 @@
 ---
-repo: <repo-name>
+repo: <project-name>
 front: <front>
-path: <path relative to work/>
-remote: <git remote url>
-trust: personal | partnered | stakeholder | employer
-base_branch: <branch to branch FROM>
-branch_convention: "<house style, e.g. feat/* · fix/*>"
+path: <path from the portfolio root, or the external registered path>
+remote: <git remote url, or N/A>
+trust: yours | partnered | employer | stakeholder
+tracker: tasks | jira | github
+base_branch: <branch to branch FROM, or N/A for non-git projects>
+branch_convention: "<house style, e.g. feat/* · fix/*, or N/A>"
 write_posture: "<e.g. branch-from-base OK; never add/commit/push unless founder asks>"
-build: "<command>"
-test:  "<command>"
-run:   "<command>"
+build: "<command, or N/A for non-code projects>"
+test:  "<command, or N/A>"
+run:   "<command, or N/A>"
 key_dirs: "<optional>"
 gotchas: "<optional>"
 ---
@@ -28,4 +29,4 @@ gotchas: "<optional>"
 - Depends on: <counterparts, one line> - detail in [_map.md](../_map.md)
 - Depended on by: <N> inbound - check `_map.md` before changing contracts
 
-_Front: [_front](./_front.md) · Up: [mental-model](../../mental-model.md) · Rules: [CONSTITUTION](../../CONSTITUTION.md)_
+_Up: the front hub `_front.md` (beside this file, or one level up in a housed project) · the portfolio picture `_command/mental-model.md` · the rules `framework/CONSTITUTION.md` from the portfolio root_

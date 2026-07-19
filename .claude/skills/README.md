@@ -19,6 +19,43 @@ the whole-portfolio default; scoped invocations read and write only that
 slice (which is also how parallel per-front sessions coexist - see the
 concurrency convention in `framework/continuity-stack.md`).
 
+## Universal dials
+
+Two flags any varying skill accepts, resolved by precedence (the flag >
+your standing preference in `CONSTITUTION.local.md` > the framework
+default):
+
+- **`--spend <lean | standard | deep>`** - how much the invocation may
+  COST. Each skill's SKILL.md defines what its tiers buy; at `lean`,
+  sub-agent dispatches also step one routing tier down (always within
+  your ceilings - the flag can spend less than your posture, never more
+  than your caps). Your liftoff cost posture sets the standing default
+  (frugal = lean, balanced = standard). Not to be confused with
+  **`/spend`**, the skill: that is the METER (retrospective, reads the
+  records); `--spend` is the DIAL (prospective, sets one invocation's
+  posture).
+- **`--thinking <low | medium | high | max>`** - how HARD the agent
+  reasons about the judgments inside one invocation. The vocabulary is
+  the routing grid's effort dial on purpose - one dial, one vocabulary.
+  Three real effects, one honest limit: it sets deliberation depth in
+  the running session (alternatives enumerated and self-checked at
+  `high`+; the direct path at `low` - stepping DOWN on mechanical work
+  is where savings hide), it sets the literal effort on any sub-agent
+  the invocation dispatches, and each skill's default comes from
+  `framework/roles.md`'s preset for its work class. The limit: it cannot
+  re-dial the harness's own session effort - a large mismatch is
+  surfaced in one line, never silently fought. Taken by the judgment-set
+  skills only; `low` thins deliberation, never discipline.
+- **`--verbosity <quiet | normal | narrated>`** - how much the agent
+  TALKS in conversation. `quiet`: only STOP gates, decision-changing
+  findings, and the final report. `normal` (default): brief status at
+  direction changes - rigor, delivered invisibly. `narrated`:
+  step-by-step commentary, built for your first week; costs more and
+  says so. Verbosity shapes narration, NEVER discipline: gate
+  artifacts, evidence pastes, and reports are exempt at every tier.
+  Your standing default is captured at liftoff (the how-you-talk
+  question) and applies to plain sessions too.
+
 | Group | Skill | One line | When |
 |---|---|---|---|
 | **Cadence** | `briefing` | Read the board, report state per front, lock today's ONE objective | every morning |
