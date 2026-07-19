@@ -1,0 +1,67 @@
+# <PROJECT_NAME> - Progress
+
+> Session continuity file. Always up-to-date. State lives here;
+> transferable lessons go to `_command/learning/`; structural facts go to
+> the front's hub/spoke. `/debrief` maintains this at every session end.
+> **Start here:** Quick View → the first ⏳ → resume.
+
+---
+
+## Quick View
+
+| Milestone / workstream | Status | Evidence when ✅ |
+|---|---|---|
+| <name> | ⏳ / 🟡 / ✅ | <the literal proof: test output, live URL, merged PR> |
+
+---
+
+## Active Pointer
+
+| Field | Value |
+|---|---|
+| **Current focus** | <the active milestone / workstream> |
+| **Next action** | <one concrete line, startable without thinking> |
+| **Blockers** | <none / the specific thing + who owns it> |
+| **Last Updated** | <YYYY-MM-DD> |
+| **Last Session Outcome** | <one line - what shipped this session> |
+
+---
+
+## Session Log
+
+> Append-only. One entry per session, newest first.
+
+<!-- Format:
+## YYYY-MM-DD - Session N - <one-line title>
+
+**What happened:**
+- Bullet, with evidence (counts, links, gate output)
+
+**Artifacts produced / modified:**
+- `path/to/file.md`
+
+**Deviations logged:**
+- `<ID>` - <one-line>
+
+**Next session pointer:** <what should the next session pick up?>
+-->
+
+---
+
+## Verification Status
+
+> Verification evidence per milestone. Cite the command, its literal
+> output (or the path to it), and pass/fail. A claim without a receipt
+> here is not a claim.
+
+| Milestone | Verification | Status | Evidence |
+|---|---|---|---|
+| <empty until first verification> | | | |
+
+---
+
+## Deviations
+
+Tracked in `deviations-register.md` (per `kit/doctrine/deviations-protocol.md`).
+Anything 🔴 Open blocks promotion of the milestone it touches. Hardening
+sweeps (register-to-plans consistency passes) get one Session Log entry each.

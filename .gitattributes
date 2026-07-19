@@ -1,0 +1,3 @@
+# On upstream pulls, your operating CLAUDE.md always wins over the shipped
+# bootstrap. Enable once in your clone: git config merge.ours.driver true
+CLAUDE.md merge=ours

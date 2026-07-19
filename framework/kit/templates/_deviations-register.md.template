@@ -1,0 +1,57 @@
+# <PROJECT_NAME> - Deviations Register
+
+> Every drift from plan is logged here. Protocol: `doctrine/deviations-protocol.md`.
+
+---
+
+## Master Tracker
+
+| ID | Discovered | Phase | Discovery Source | Status | Consolidated | Summary |
+|---|---|---|---|---|---|---|
+| `RULE-REAL-EVIDENCE-ONLY` | <bootstrap date> | - | - | 🟢 Closed | 🔵 Yes | Every claim about reality cites a real, verifiable source. No invented testimonials, no hypothetical personas. |
+
+<!-- New rows appended in chronological order. Format:
+| `P3-IMPL-2` | 2026-05-20 | Phase 3 | Implementation | 🔴 Open | ⚪ No | Replace cost formula in plan file P3.2 |
+-->
+
+---
+
+## Body Sections
+
+> One section per Master Tracker row. Format: `Problem → Why (intent) → Resolution → Anti-patterns rejected`.
+
+---
+
+### RULE-REAL-EVIDENCE-ONLY - Every claim about reality cites a real, verifiable source
+
+**Problem**
+Project artifacts that contain unverifiable claims about buyers, competitors, markets, or users degrade the quality of every downstream decision. Building against imagined customers is the #1 cause of startup failure.
+
+**Why (intent)**
+Every claim in a project artifact must be traceable to a real source. This prevents the project from drifting into a fantasy version of its market.
+
+**Resolution**
+What counts as real evidence (examples - adapt per project):
+- A specific Chrome Web Store review with the URL
+- A specific Reddit thread with the URL and quoted text
+- A specific competitor's pricing page snapshot with the date
+- A real conversation transcript (with permission)
+- A documented industry report with the citation
+- A real customer email or DM
+- A real analytics screenshot from the project's own data (once it exists)
+
+What does NOT count:
+- "Users in this segment typically want X..." (unverifiable generalization)
+- "A hypothetical user named Sarah, 28, would..." (invented persona)
+- "Industry reports suggest..." (no specific citation)
+- "It's well-known that..." (unverifiable claim)
+
+Every artifact is reviewed for compliance with this rule before promotion. Violations are logged as separate deviations and the artifact goes back for citation.
+
+**Anti-patterns rejected**
+- "Soft" version where vague generalizations are acceptable "for now." Rejected because the line between a soft rule and no rule is invisible in practice.
+- Project-specific exception lists ("this product can skip the rule because..."). Rejected because every project rationalizes its way out of evidence discipline. The rule is universal.
+
+---
+
+<!-- New body sections append below as deviations are logged. -->
