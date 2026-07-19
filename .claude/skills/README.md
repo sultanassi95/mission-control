@@ -21,7 +21,7 @@ concurrency convention in `framework/continuity-stack.md`).
 
 ## Universal dials
 
-Two flags any varying skill accepts, resolved by precedence (the flag >
+Three dials any varying skill accepts, resolved by precedence (the flag >
 your standing preference in `CONSTITUTION.local.md` > the framework
 default):
 

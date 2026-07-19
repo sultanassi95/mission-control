@@ -95,7 +95,9 @@ demonstrating the discipline (the refusal), not just declaring it.
 
 Pre-installed rituals: they ship at `.claude/skills/` inside the repo, so
 cloning IS installing and pulling updates them. The portfolio-wide ones
-take `--front` / `--project` scope flags. The full table is in
+take `--front` / `--project` scope flags, plus three universal dials -
+`--spend` (cost), `--thinking` (reasoning depth), `--verbosity` (how much
+it talks). The full table is in
 [`.claude/skills/README.md`](.claude/skills/README.md):
 
 - **Cadence:** `briefing` (morning) · `debrief` (evening) · `retro`
