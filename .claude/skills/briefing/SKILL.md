@@ -23,6 +23,11 @@ else ask). **Unscoped (default):** the whole portfolio, with the rotation
 rule below. **Scoped:** that front's queues + hub Status only; propose
 that front's day and stop.
 
+**Dials:** `--spend lean` = primary + surprises only, queues skipped ·
+`standard` (default) = the rotation rule · `deep` = every front, full
+queue detail. `--thinking` (default medium - proposal judgment) and
+`--verbosity` per the universal grammar (README).
+
 **The rotation rule (unscoped):** propose next actions for the PRIMARY
 front, today's rotation front(s), and any front with a surprise (a red
 CI run, a partner's commit, an expired credential). Every other front

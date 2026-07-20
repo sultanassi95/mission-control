@@ -35,6 +35,11 @@ their confirmations); same depth refreshes. Every edge carries
 `confidence: detected | confirmed`; the map header carries `mapped:`
 dates per depth.
 
+**Dials:** `--spend` maps coarsely onto depth (lean = depth 1, standard
+= depth 1 + the confirmations pass, deep = depth 2); `--depth` remains
+the precise control and wins when both are given. `--thinking` (default
+medium - edge inference) and `--verbosity` per the universal grammar.
+
 ## Procedure
 
 1. **Read the front** - hub, every spoke - so the scan knows the project

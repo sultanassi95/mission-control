@@ -19,6 +19,8 @@ flowchart TB
 
 Orthogonal: a cheap model at high effort, or a strong model at low effort, are both valid. Don't assume "bigger model = more thinking."
 
+Per invocation, skills surface the effort dial as `--thinking <low|medium|high|max>` (the skills README's universal dials): it sets deliberation depth in the running session and the literal effort on dispatches; it cannot re-dial the harness's own session effort - a large mismatch is surfaced, never silently fought.
+
 ## Rules of thumb
 
 - **Escalate on evidence, not anxiety.** Start at the lowest model + effort that could plausibly hold the bar; only re-run higher if the output *actually* fails. Record the escalation as a lesson.

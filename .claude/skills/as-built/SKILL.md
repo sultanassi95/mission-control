@@ -16,6 +16,9 @@ drifting source of truth. The fix is a *promotion*: one living doc that
 carries the final design and the still-relevant why, with the obsolete
 scaffolding (phase steps, resolved open questions, TBDs) dropped.
 
+**Dials:** `--thinking` (default medium) and `--verbosity` per the
+universal grammar; the STOP gate before any deletion holds at every tier.
+
 ## Preconditions (hard)
 
 - The plan is **fully implemented AND verified** - literal verification

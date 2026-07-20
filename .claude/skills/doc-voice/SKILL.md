@@ -17,6 +17,9 @@ reader ("don't worry, you only do this once!") or narrates its own
 assembly ("we then added...") undermines that portrayal. This skill is
 the register pass.
 
+**Dials:** `--thinking` (default medium) and `--verbosity` per the
+universal grammar; the before/after approval gate holds at every tier.
+
 ## What gets rewritten
 
 - **AI-to-reader conversational patterns:** "you'll see...", "don't

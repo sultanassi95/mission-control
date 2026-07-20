@@ -41,8 +41,9 @@ flowchart LR
   `-ErrorAction SilentlyContinue` hides output but not the exit code.
 - `robocopy` exit codes 0 to 7 mean SUCCESS - never treat nonzero as
   failure without reading it.
-- Console encoding often mangles unicode output (checkmarks render as
-  mojibake) - judge results by exit codes and text, not glyphs.
+- Console or capture layers may mangle unicode output even at a utf-8
+  code page (checkmarks render as mojibake in captured logs) - judge
+  results by exit codes and text, not glyphs.
 - Prefer cmdlets over unix names in PowerShell (`Move-Item` over `mv` -
   the aliases exist but argument semantics differ).
 

@@ -61,8 +61,9 @@ Offer, with the exact command shown:
 ## Step 3 - Ask only what a repo cannot answer
 
 One question at a time:
-- **Trust level:** yours / partnered / employer. If employer: note the IP
-  boundary explicitly in the hub (employer-owned code and secrets stay
+- **Trust level:** yours / partnered / employer / stakeholder (a venture
+  where you present rather than push). If employer: note the IP boundary
+  explicitly in the hub (employer-owned code and secrets stay
   confidential, separate from your own projects). Confidential fronts'
   spokes carry pointers and process, never payloads - no client or
   employer code, deliverable text, or secrets in `_command/`.

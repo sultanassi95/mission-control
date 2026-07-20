@@ -22,6 +22,12 @@ items are routed within it, and anything that clearly belongs elsewhere
 is flagged `OUT OF SCOPE -> <front>` in the table rather than filed.
 Unscoped (default): items route to any front.
 
+**Dials:** `--spend lean` = classify only, smallest table · `standard`
+(default) = the full triage · `deep` = adds a duplicate scan and
+per-item dependents lookups. `--thinking` (default medium -
+classification judgment) and `--verbosity` per the universal grammar -
+the STOP gate table is discipline, shown at every tier.
+
 ## Step 1 - Parse, don't invent
 
 Split the paste into atomic items. Rules:
