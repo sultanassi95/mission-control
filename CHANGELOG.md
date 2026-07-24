@@ -6,6 +6,22 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-07-24: Liftoff conventions distilled into the foundation (the staging
+  record `framework/liftoff-conventions.md` is retired). Front placement
+  (register / move / copy) + the gitignored `fronts/` container and the
+  `yours | partnered | employer | stakeholder` trust taxonomy now live in
+  `task-board.md`; the generic Definition-of-Done floor (incl. a
+  production-execution-reality clause) is in `engineering-standard.md` (which
+  the ticket template + task-board already reference); liftoff-by-derivation
+  (pre-fill from a lived-in instance, confirm beats answer, stakes verbatim) is
+  in `LIFTOFF.md` Stage 1. Ticket-as-folder + filestorage, one-tracker-per-
+  project, and gates/no-self-approval/git-rule were already in the foundation.
+- 2026-07-24: mission-flow + debrief hardened - mission-flow gains a Phase-1
+  "real telemetry first" step and a Phase-1/2 production-execution-reality
+  check, and a firm Phase-6 integration+e2e QA gate (not skipped under
+  `--auto`); debrief Step 2 now reconciles the tracker (Jira / GitHub / native
+  board), not just the local files.
+
 - 2026-07-19: The thinking dial. Judgment-set skills (briefing, triage,
   mission-flow, map-front, retro, promote-learnings, learn-from-session,
   as-built, adr, doc-voice) accept `--thinking <low|medium|high|max>` -

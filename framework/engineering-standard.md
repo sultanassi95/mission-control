@@ -47,3 +47,34 @@ flowchart LR
 | 13 | Docs · ADRs · Tech-debt | docs-as-pictures; decision records; tracked (never silent) debt |
 
 **Cross-cutting on every layer:** git hard-rule · evidence-before-claims (literal output) · gate-locked · implement-exactly · diagram-first · right-sized agents · real-evidence-only. **Performance & cost** ride layers 7/8/12; **git-workflow** rides 11.
+
+## Definition of Done - the integration-truth floor
+
+The generic floor a change clears before it is `done`. The ticket template
+(`kit/templates/_task.template.md`) instantiates this as a per-ticket checklist,
+and `task-board.md` enforces it; an instance may bind a sharper version in
+`_command/CONSTITUTION.local.md`. "Compiles + unit-green" is a checkpoint, never
+done.
+
+1. **Real path, end to end** - no stub or mock on the critical path; every
+   external boundary gets one live integration pass; a remaining stub is
+   `[STUB]` and the ticket stays open.
+2. **Whole vertical slice** - both sides wired and verified against the
+   acceptance criteria, proven by at least one test exercising the actual
+   serialized request across the boundary (not two mocks of the same idea),
+   plus request validation so a contract violation is a clean 4xx, not a 500.
+3. **Production-execution reality** - how the change runs in the DEPLOYED
+   environment is established at design time, not after review: reachability,
+   where jobs/migrations run, the secrets/roles/deploy hooks it relies on. A
+   thing that works locally but cannot run in prod is a planning defect.
+4. **Terminal artifact verified** - query the thing the user consumes, broken
+   down by the unit that can partially fail; a green checkpoint is a promise,
+   not a receipt.
+5. **Designed for scale** - bulk semantics, idempotency, backpressure; N rows is
+   one bulk call plus a queue, never N requests.
+6. **Tested at the altitude of the risk** - user-critical flows get e2e; unit is
+   the floor, never the ceiling; the plan names the altitude and why.
+7. **No guess worn as a finding** - root cause shown with literal evidence;
+   assumptions labelled `[ASSUMPTION]` / `[UNVERIFIED]`; the outward artifacts
+   (commit, PR, tracker, docs) read as an engineer authored them, zero process
+   vocabulary.

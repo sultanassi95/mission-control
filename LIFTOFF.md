@@ -75,6 +75,14 @@ End with: "Preflight complete - ready to lift off?" and wait for a yes.
 
 ## Stage 1 - The founder interview (the soul)
 
+**Derivation mode (when a lived-in instance already exists).** If the founder
+already has a working `_command/`, `CLAUDE.md`, and real repos (a prior
+workspace, a migration), derive the new instance from them instead of running
+the cold interview: read what is there, present pre-filled drafts, and let the
+founder confirm or correct - confirming beats answering. The one thing detection
+must NOT silently adopt is the deeply personal stakes line (question 3): carry
+it verbatim, but require an explicit yes.
+
 One question at a time; write nothing until the set is complete:
 
 1. **Role + experience:** what kind of engineer/builder are you, in your

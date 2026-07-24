@@ -27,7 +27,7 @@ _command/portfolio/<front>/
 ├─ _front.md                    hub
 ├─ <projectA>/
 │  ├─ <projectA>.md             spoke
-│  └─ tasks/  (_board.md + T-NNN-<slug>.md ...)
+│  └─ tasks/                    _board.md + one FOLDER per ticket (see below)
 └─ <projectB>/
    ├─ <projectB>.md
    └─ tasks/
@@ -44,14 +44,125 @@ _command/portfolio/<front>/
 
 **The promotion rule:** when a second project joins a single-project front, `/new-front` restructures in the same pass - housing directories are created and each spoke + `tasks/` moves into its own. A task's identity is its filename, not its path, so ids and history survive the move.
 
-## The task file (the truth)
+## Front placement - register, move, or copy
 
-`tasks/T-NNN-<slug>.md` - NNN zero-padded, sequenced per board. From `kit/templates/_task.template.md`:
+How a front's repo relates to the portfolio root is the founder's choice per
+front; each keeps its own git, invisible to the portfolio via the allowlist:
+- **register-in-place** - the repo stays where it is; the spoke records its path.
+- **move-in** - relocate the repo under the portfolio (instant, same-drive).
+- **copy-in** - duplicate it under the portfolio, leaving the original live for
+  parallel work. Copy read-only, excluding regenerable / lock-prone dirs
+  (`node_modules .next dist build .venv __pycache__ ...`) so a running dev
+  server is never disturbed, then reinstall deps in the copy.
 
-- Frontmatter: `id, title, state, size (S|M|L), created, updated, branch, pr, parent`.
-- Body: the delivery-hygiene description floor - context, acceptance criteria, evidence + repro for bugs, out-of-scope. No placeholders.
-- States: `backlog | ready | in-progress | blocked | review | done | dropped`. Dropping is a founder call, said out loud - a parked item is a decision; a silently rotting one is a debt.
-- **Task files never delete.** `done` and `dropped` stay on disk as history (cheap, greppable); they simply age off the board view, whose Done and Dropped sections show only the 10 most recent each.
+Host the front repos in a single gitignored `fronts/` container at the portfolio
+root rather than scattering them; the allowlist ignores it and `.gitignore`
+names it explicitly. The spoke's `path:` records where the repo actually lives.
+
+## The ticket - a folder (the truth)
+
+A ticket is a **folder**, `tasks/<ID>-<slug>/`, whose name is its identity (ID
+zero-padded and sequenced per board for the native tracker, or the external key
+like `AI-1471`; slug in kebab-case). The folder moves as one unit when a
+single-project front promotes to multi-project, so the id and its history
+survive the move. Inside it, from `kit/templates/_task.template.md`:
+
+- `ticket.md` - the record:
+  - Frontmatter: `id, title, state, size (S|M|L), created, updated, branch, pr, parent`.
+  - Body: the delivery-hygiene description floor - context, acceptance
+    criteria, the **Definition of Done checklist** (the integration-truth floor,
+    below), evidence log for the literal verification output, out-of-scope. No
+    placeholders.
+- The working subfolders - `scripts/ samples/ artifacts/ screenshots/` - the
+  ticket's own working files. Full convention in the next section.
+
+States live in `ticket.md` frontmatter: `backlog | ready | in-progress |
+blocked | review | done | dropped`. Dropping is a founder call, said out loud -
+a parked item is a decision; a silently rotting one is a debt.
+
+**Ticket folders never delete.** `done` and `dropped` stay on disk as history
+(cheap, greppable); they simply age off the board view, whose Done and Dropped
+sections show only the 10 most recent each.
+
+## Ticket filestorage - the working files
+
+Real work generates working files: repro scripts, sample inputs, generated
+outputs, QA screenshots. Given no home they sprawl across the workspace root -
+the failure this convention exists to prevent. Each ticket folder owns its mess.
+
+```
+tasks/<ID>-<slug>/
+├─ ticket.md        the record + the Definition-of-Done checklist + evidence log (text)   [tracked]
+├─ scripts/         repro / verify / one-off scripts - prevention infrastructure          [tracked]
+├─ samples/         inputs · fixtures · datasets used to reproduce or verify              [gitignored]
+├─ artifacts/       generated outputs · exports · dumps · logs                            [gitignored]
+└─ screenshots/     QA / verification images                                             [gitignored]
+```
+
+| Path | Tracked? | Why |
+|---|---|---|
+| `ticket.md` | yes | the record; the pasted literal verification output lives here as text |
+| `scripts/` | yes | a repro/verify script is prevention infrastructure - it compounds, so version it |
+| `samples/` `artifacts/` `screenshots/` | **no** (gitignored) | disposable or heavy proof; contained per ticket, never bloats or leaks the repo |
+
+**Tracked-repo hygiene.** The three heavy subfolders are gitignored so the
+management repo stays clean and small, and so nothing under them can ever be
+committed. They exist to CONTAIN working files locally, not to version them.
+
+**External trackers (`tracker: jira | github`).** The ticket of record stays in
+the external tracker, never mirrored here (the one-tracker rule). The folder
+still exists as the working-file home; `ticket.md` shrinks to a pointer plus the
+DoD checklist:
+
+    > Tracked in: JIRA AI-1471 - <url>
+    (then the Definition of Done checklist)
+
+That is not a second copy of the ticket - it is the local artifact home and the
+enforcement gate, keyed by the ticket id.
+
+**Trust drives posture.** Each front's `trust:` is one of `yours | partnered |
+employer | stakeholder`. `yours` / `partnered` carry full detail in the spoke
+(still never secrets); `employer` / `stakeholder` are **confidential** - the
+spoke carries pointers and process only (path, remote, git-memory, tracker,
+posture, a neutral next-action), never payloads: no code, secrets, ticket
+contents, or deliverable text in `_command/`. Name the terrain (that an IAM
+role or a pipeline exists and is sensitive) without recording the payload.
+
+**Confidential fronts (`trust: employer | stakeholder`).** Because the
+management repo is shareable, an employer's or partner's artifacts must not sit
+under it, even gitignored. For these fronts the working subfolders redirect to
+the project repo's own gitignored scratch,
+`<repo>/.tickets/<ID>-<slug>/{scripts,samples,artifacts,screenshots}/`; the
+management-side `ticket.md` keeps only the sanitized pointer. No payloads in
+`_command/` - the confidentiality floor holds.
+
+## The Definition of Done checklist (the integration-truth floor)
+
+Every `ticket.md` carries this checklist; a ticket does not reach `done` until
+each line is satisfied with evidence, or explicitly marked not-applicable with a
+reason. It is the floor from `engineering-standard.md` made per-ticket and
+enforceable; an instance may bind a sharper version in
+`_command/CONSTITUTION.local.md`.
+
+- [ ] **Real path, end to end.** No stub or mock on the critical path.
+  "Compiles + unit-green" is a checkpoint, not done; every external boundary got
+  one live integration pass. Any remaining stub is labelled `[STUB]` and the
+  ticket stays open.
+- [ ] **Whole vertical slice.** Both sides wired and verified against the
+  acceptance criteria, proven by at least one test exercising the actual
+  serialized request across the boundary (not two independent mocks of the same
+  idea), with request validation so a contract violation is a clean 4xx.
+- [ ] **Terminal artifact verified.** The thing the user consumes (the index,
+  the rendered file, the row) was queried directly, broken down by the unit that
+  can partially fail. A green checkpoint is a promise, not a receipt.
+- [ ] **Designed for scale.** Bulk semantics, idempotency, and backpressure
+  considered; an action over N rows is one bulk call plus a queue, never N
+  requests.
+- [ ] **Tested at the altitude of the risk.** User-critical flows have e2e
+  coverage; unit is the floor, not the ceiling. The plan named the altitude.
+- [ ] **No guess worn as a finding.** Root cause shown with literal evidence;
+  assumptions labelled `[ASSUMPTION]`; external artifacts read as an engineer
+  authored them, with zero process vocabulary.
 
 ## The board file (the view)
 
