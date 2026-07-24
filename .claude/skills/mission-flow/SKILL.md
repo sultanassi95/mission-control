@@ -82,6 +82,26 @@ requirements, and shape before writing code. Produce a short agreed
 approach (what's in scope, what's not, one or two concrete design
 choices).
 
+**Production-execution reality (decide HOW it runs in prod, at ticket time).**
+Before settling the approach, establish how the change will actually execute in
+the DEPLOYED environment, not just locally - the runtime path and its
+constraints. A solution that works on the laptop but cannot run in prod is a
+planning defect, and the cheapest place to catch it is here, not in review or
+after merge. If the work touches prod data, infra, a job, or anything beyond a
+pure code change, name the execution mechanism in the ticket and design to it:
+- **Reachability:** is the prod datastore VPC-private (reachable only in-VPC),
+  behind a bastion, or public? A one-off prod data change on a VPC-private RDS
+  is a data MIGRATION run by the migrate-on-deploy mechanism, never a laptop
+  `npm run` script that has no route to it.
+- **Where it runs:** a job runs where the scheduler/worker runs; a migration
+  runs via the deploy path; a backfill uses the project's established in-VPC
+  path. Match the design to that, not to local convenience.
+- **What exists:** the secrets, roles, network, and deploy hooks the change
+  will rely on. If you don't know the deployed topology, read the infra
+  (`infra/`, the spoke, machine profile) BEFORE choosing the design.
+The failure this prevents: shipping a prod backfill as an unrunnable laptop
+script because the ticket never asked "how does this reach prod?" (AI-1508).
+
 **Blast radius (mapped fronts):** if the project's front has a
 `_map.md`, read it. A change touching a surface on any INBOUND edge is a
 **breaking-risk change**: name the impacted dependents in the ticket,
@@ -135,7 +155,9 @@ Draft with:
   mirrors the eventual PR title.
 - **Comprehensive description** - context / evidence / repro / expected /
   actual / proposed fix / test plan / acceptance criteria / out-of-scope /
-  references. No placeholders. (See
+  references, plus a **rollout/execution mechanism** whenever the work runs in
+  or against prod (how it deploys and runs there - migration, job, backfill
+  path - per the Phase-1 production-execution check). No placeholders. (See
   `framework/learning-seed/11-delivery-hygiene.md`.)
 
 ### PAUSE POINT 1 - before creating the ticket
