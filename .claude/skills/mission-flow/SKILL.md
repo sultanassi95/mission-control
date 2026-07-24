@@ -31,7 +31,11 @@ skip a phase, never reorder, never invent new phases.
     `framework/task-board.md`) instead.
 - **`--full-auto` (optional flag; alias: `--auto`).** Skips both default
   pause points; the flow runs end-to-end without stopping. Default (no
-  flag) = partial autonomy with pauses.
+  flag) = partial autonomy with pauses. `--auto` waives the approval
+  PAUSES, not design judgment: a genuine design fork - a data-model /
+  schema choice, a cross-cutting behaviour matrix (see Phase 1), or a
+  founder mechanism the evidence shows is unsafe or ineffective - is still
+  surfaced for a decision before it ships.
 - **`--spend <lean|standard|deep>` (optional).** lean = reviewer cap 1,
   tightest prose; standard (default) = the Phase-5 sizing table as-is;
   deep = the full multi-angle review sweep. **`--deep-review` remains as
@@ -81,6 +85,17 @@ keep any confidential payloads in the session scratch, never in `_command/`.
 requirements, and shape before writing code. Produce a short agreed
 approach (what's in scope, what's not, one or two concrete design
 choices).
+
+**Cross-cutting behaviour change (audit before you --auto).** When a ticket
+expands from a point fix into a change across a MATRIX - every status x role, a
+whole permission surface, controls that must match state - the design fork is
+not one choice, it is the entire target matrix. Do not --auto a fix whose
+correct end-state is still an undecided product decision. First AUDIT the
+actual current behaviour from real evidence (read the gating code; drive the
+running UI), present a current-state-vs-target matrix, and get the founder's
+per-cell sign-off. THEN implement the agreed matrix. (Lived: a narrow "closed
+cases are read-only" fix the founder expanded into a full controls-leak pass
+across every case status x viewer role.)
 
 **Production-execution reality (decide HOW it runs in prod, at ticket time).**
 Before settling the approach, establish how the change will actually execute in
@@ -274,13 +289,29 @@ mocked boundary is not "verified". Stand up the real stack locally and:
   contract proven only by a mocked unit test is not proven (hard rule 2).
 - **Full flow (browser / Playwright):** drive the real UI through the
   user-visible path the ticket describes, INCLUDING the failure path the fix
-  targets - use route interception to inject the error and confirm the UI
-  recovers. Paste/screenshot the outcome and any relevant server log line.
+  targets. Inject the failure client-side (a `window.fetch` override returning
+  the exact status + body) - it reaches error states the UI itself gates
+  against reaching, and lets you assert BOTH the friendly message AND the
+  absence of any raw server detail on the page. Before asserting anything
+  role-gated, assert the acting identity first (the dev-user switcher /
+  logged-in user - a wrong-role default reads as a bug). Prefer seeding an
+  exact precondition via the API/DB over clicking the UI into it.
+  Paste/screenshot the outcome and any relevant server log line.
 
 If the local stack genuinely cannot be brought up, that is a STOP-and-report
 blocker (the founder decides to unblock or waive) - never a silent skip, and
 never inferred-done from unit green. This is the Phase-6 manual smoke made a
 firm gate; it was under-specified and got skipped once (AI-1502).
+
+**The local stack is shared.** It is the founder's stack too, and it is often
+running while they test. Do NOT switch branches or edit watched files while the
+founder is live-testing without flagging it: a `--watch` dev server restarts
+under the change and every in-flight request fails with a network-level error
+that looks like a product bug. When a founder reports a network-level failure -
+a raw "Failed to fetch", not a 4xx/5xx - first check the server's own
+restart/health log and reproduce the endpoint over the wire before theorizing
+about the client path; then separate the (often environmental) trigger from any
+real bug it surfaced.
 
 ## Phase 7 - Push + PR
 
