@@ -66,6 +66,17 @@ Announce the classification before Phase 1. If genuinely ambiguous, ask.
 every component boundary, trace to the root cause, paste literal proof.
 **NO fixes yet - the Iron Law.**
 
+**Real telemetry first (deployed fronts).** When the front runs a deployed
+backend with an observability surface - prod logs (CloudWatch / App Runner /
+etc.), an error tracker, or metrics - pull the ACTUAL server error and its
+frequency + latency signature as PRIMARY evidence before theorizing from
+source. The literal error usually names the failing layer in one query and
+refutes the plausible-but-wrong guess (a status-guard theory died this way on
+AI-1502: the guards were fine; the real cause was `raw-body: request aborted`
+500s from instance saturation, visible only in the logs + metrics). Confirm
+read access up front (it may need an interactive cloud login the founder runs);
+keep any confidential payloads in the session scratch, never in `_command/`.
+
 **For tasks/enhancements (via brainstorming):** align on intent,
 requirements, and shape before writing code. Produce a short agreed
 approach (what's in scope, what's not, one or two concrete design
@@ -226,11 +237,28 @@ tool availability per `_command/machine.local.md`:
 <typecheck>                              # tsc, mypy, cargo check, ...
 <lint>                                   # eslint, ruff, clippy, ...
 <tests>                                  # vitest, pytest, cargo test, ...
-[+ manual smoke]                         # if UI / runtime behaviour changed
 ```
 
 Paste the literal terminal output - evidence before claims. Do NOT claim
 green without pasting; do NOT push if anything is red.
+
+**Integration + e2e QA - REQUIRED when API or UI behaviour changed, and NOT
+skipped under `--auto`.** The unit/typecheck/lint gauntlet is the FLOOR, never
+the ceiling, for a user-facing change (hard rules 1 + 5). Unit-green with a
+mocked boundary is not "verified". Stand up the real stack locally and:
+- **Backend (over the wire):** exercise the actual changed endpoints against
+  the running api + db with `curl`/httpie - the happy path AND at least one
+  failure/edge case the change targets. Paste the literal status + body. A
+  contract proven only by a mocked unit test is not proven (hard rule 2).
+- **Full flow (browser / Playwright):** drive the real UI through the
+  user-visible path the ticket describes, INCLUDING the failure path the fix
+  targets - use route interception to inject the error and confirm the UI
+  recovers. Paste/screenshot the outcome and any relevant server log line.
+
+If the local stack genuinely cannot be brought up, that is a STOP-and-report
+blocker (the founder decides to unblock or waive) - never a silent skip, and
+never inferred-done from unit green. This is the Phase-6 manual smoke made a
+firm gate; it was under-specified and got skipped once (AI-1502).
 
 ## Phase 7 - Push + PR
 
