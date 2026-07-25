@@ -58,6 +58,23 @@ Tasks touched this session get their states updated (started =
 merged = `done`) and the affected `_board.md`s regenerated - the queue a
 cold session reads tomorrow must be true tonight.
 
+**Sync the tracker, not just the conversation and local files.** The
+roll-up must leave the SOURCE-OF-TRUTH tracker true - a debrief that only
+tidies `progress.md` and `today.md` while the tracker still reads
+yesterday's state has not landed continuity. For each front touched:
+- **Jira / GitHub Issues fronts:** confirm every ticket touched this
+  session is in the right state (in-progress / in-review / done), its PR
+  link is posted on the ticket, and any scope that changed mid-session is
+  reflected in the ticket description. A ticket still reading "To Do" for
+  work now in review is a stale artifact a teammate or a cold session will
+  act on wrongly. mission-flow syncs this per ticket as it goes; the
+  debrief is the BACKSTOP that catches whatever a mid-session interruption,
+  an added-scope request, or a manual step left un-synced. Reconcile it now
+  (read the ticket, transition/comment as needed), don't assume it is
+  current.
+- **Native-board fronts:** the `tasks/_board.md` regeneration above IS the
+  tracker - no separate system to reconcile.
+
 `_command/daily/today.md` gets rewritten (not appended): tomorrow's next
 action per front + the standing objective, referencing task ids. It is a
 pointer, not a log. If the board (`trackers/fronts.md`) drifted from

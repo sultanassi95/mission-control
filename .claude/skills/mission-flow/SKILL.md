@@ -31,7 +31,11 @@ skip a phase, never reorder, never invent new phases.
     `framework/task-board.md`) instead.
 - **`--full-auto` (optional flag; alias: `--auto`).** Skips both default
   pause points; the flow runs end-to-end without stopping. Default (no
-  flag) = partial autonomy with pauses.
+  flag) = partial autonomy with pauses. `--auto` waives the approval
+  PAUSES, not design judgment: a genuine design fork - a data-model /
+  schema choice, a cross-cutting behaviour matrix (see Phase 1), or a
+  founder mechanism the evidence shows is unsafe or ineffective - is still
+  surfaced for a decision before it ships.
 - **`--spend <lean|standard|deep>` (optional).** lean = reviewer cap 1,
   tightest prose; standard (default) = the Phase-5 sizing table as-is;
   deep = the full multi-angle review sweep. **`--deep-review` remains as
@@ -66,10 +70,52 @@ Announce the classification before Phase 1. If genuinely ambiguous, ask.
 every component boundary, trace to the root cause, paste literal proof.
 **NO fixes yet - the Iron Law.**
 
+**Real telemetry first (deployed fronts).** When the front runs a deployed
+backend with an observability surface - prod logs (CloudWatch / App Runner /
+etc.), an error tracker, or metrics - pull the ACTUAL server error and its
+frequency + latency signature as PRIMARY evidence before theorizing from
+source. The literal error usually names the failing layer in one query and
+refutes the plausible-but-wrong guess (a status-guard theory died this way on
+AI-1502: the guards were fine; the real cause was `raw-body: request aborted`
+500s from instance saturation, visible only in the logs + metrics). Confirm
+read access up front (it may need an interactive cloud login the founder runs);
+keep any confidential payloads in the session scratch, never in `_command/`.
+
 **For tasks/enhancements (via brainstorming):** align on intent,
 requirements, and shape before writing code. Produce a short agreed
 approach (what's in scope, what's not, one or two concrete design
 choices).
+
+**Cross-cutting behaviour change (audit before you --auto).** When a ticket
+expands from a point fix into a change across a MATRIX - every status x role, a
+whole permission surface, controls that must match state - the design fork is
+not one choice, it is the entire target matrix. Do not --auto a fix whose
+correct end-state is still an undecided product decision. First AUDIT the
+actual current behaviour from real evidence (read the gating code; drive the
+running UI), present a current-state-vs-target matrix, and get the founder's
+per-cell sign-off. THEN implement the agreed matrix. (Lived: a narrow "closed
+cases are read-only" fix the founder expanded into a full controls-leak pass
+across every case status x viewer role.)
+
+**Production-execution reality (decide HOW it runs in prod, at ticket time).**
+Before settling the approach, establish how the change will actually execute in
+the DEPLOYED environment, not just locally - the runtime path and its
+constraints. A solution that works on the laptop but cannot run in prod is a
+planning defect, and the cheapest place to catch it is here, not in review or
+after merge. If the work touches prod data, infra, a job, or anything beyond a
+pure code change, name the execution mechanism in the ticket and design to it:
+- **Reachability:** is the prod datastore VPC-private (reachable only in-VPC),
+  behind a bastion, or public? A one-off prod data change on a VPC-private RDS
+  is a data MIGRATION run by the migrate-on-deploy mechanism, never a laptop
+  `npm run` script that has no route to it.
+- **Where it runs:** a job runs where the scheduler/worker runs; a migration
+  runs via the deploy path; a backfill uses the project's established in-VPC
+  path. Match the design to that, not to local convenience.
+- **What exists:** the secrets, roles, network, and deploy hooks the change
+  will rely on. If you don't know the deployed topology, read the infra
+  (`infra/`, the spoke, machine profile) BEFORE choosing the design.
+The failure this prevents: shipping a prod backfill as an unrunnable laptop
+script because the ticket never asked "how does this reach prod?" (AI-1508).
 
 **Blast radius (mapped fronts):** if the project's front has a
 `_map.md`, read it. A change touching a surface on any INBOUND edge is a
@@ -124,7 +170,9 @@ Draft with:
   mirrors the eventual PR title.
 - **Comprehensive description** - context / evidence / repro / expected /
   actual / proposed fix / test plan / acceptance criteria / out-of-scope /
-  references. No placeholders. (See
+  references, plus a **rollout/execution mechanism** whenever the work runs in
+  or against prod (how it deploys and runs there - migration, job, backfill
+  path - per the Phase-1 production-execution check). No placeholders. (See
   `framework/learning-seed/11-delivery-hygiene.md`.)
 
 ### PAUSE POINT 1 - before creating the ticket
@@ -226,11 +274,44 @@ tool availability per `_command/machine.local.md`:
 <typecheck>                              # tsc, mypy, cargo check, ...
 <lint>                                   # eslint, ruff, clippy, ...
 <tests>                                  # vitest, pytest, cargo test, ...
-[+ manual smoke]                         # if UI / runtime behaviour changed
 ```
 
 Paste the literal terminal output - evidence before claims. Do NOT claim
 green without pasting; do NOT push if anything is red.
+
+**Integration + e2e QA - REQUIRED when API or UI behaviour changed, and NOT
+skipped under `--auto`.** The unit/typecheck/lint gauntlet is the FLOOR, never
+the ceiling, for a user-facing change (hard rules 1 + 5). Unit-green with a
+mocked boundary is not "verified". Stand up the real stack locally and:
+- **Backend (over the wire):** exercise the actual changed endpoints against
+  the running api + db with `curl`/httpie - the happy path AND at least one
+  failure/edge case the change targets. Paste the literal status + body. A
+  contract proven only by a mocked unit test is not proven (hard rule 2).
+- **Full flow (browser / Playwright):** drive the real UI through the
+  user-visible path the ticket describes, INCLUDING the failure path the fix
+  targets. Inject the failure client-side (a `window.fetch` override returning
+  the exact status + body) - it reaches error states the UI itself gates
+  against reaching, and lets you assert BOTH the friendly message AND the
+  absence of any raw server detail on the page. Before asserting anything
+  role-gated, assert the acting identity first (the dev-user switcher /
+  logged-in user - a wrong-role default reads as a bug). Prefer seeding an
+  exact precondition via the API/DB over clicking the UI into it.
+  Paste/screenshot the outcome and any relevant server log line.
+
+If the local stack genuinely cannot be brought up, that is a STOP-and-report
+blocker (the founder decides to unblock or waive) - never a silent skip, and
+never inferred-done from unit green. This is the Phase-6 manual smoke made a
+firm gate; it was under-specified and got skipped once (AI-1502).
+
+**The local stack is shared.** It is the founder's stack too, and it is often
+running while they test. Do NOT switch branches or edit watched files while the
+founder is live-testing without flagging it: a `--watch` dev server restarts
+under the change and every in-flight request fails with a network-level error
+that looks like a product bug. When a founder reports a network-level failure -
+a raw "Failed to fetch", not a 4xx/5xx - first check the server's own
+restart/health log and reproduce the endpoint over the wire before theorizing
+about the client path; then separate the (often environmental) trigger from any
+real bug it surfaced.
 
 ## Phase 7 - Push + PR
 

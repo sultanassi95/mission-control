@@ -3,7 +3,7 @@
 ```mermaid
 flowchart LR
   H["_front.md<br/>hub"] --> S["fieldkit-app.md<br/>spoke + git-memory + tracker"]
-  S --> T["tasks/<br/>_board.md + T-NNN files"]
+  S --> T["tasks/<br/>_board.md + one folder per ticket"]
 ```
 
 A fictional single-project front - **fieldkit**, run by a fictional solo
@@ -16,7 +16,8 @@ in the spoke, the board is derived from the task files.
 | `fieldkit/_front.md` | a hub: big picture, posture, trust, project map |
 | `fieldkit/fieldkit-app.md` | a spoke: deep context, git-memory, `tracker:`, the dispatch identity header |
 | `fieldkit/tasks/_board.md` | a board mid-week (derived view) |
-| `fieldkit/tasks/T-001-...md`, `T-002-...md` | task files meeting the description floor |
+| `fieldkit/tasks/T-001-.../ticket.md` + `scripts/` | a ticket as a folder: the record with its Definition-of-Done checklist, plus a tracked repro script (the working-file convention) |
+| `fieldkit/tasks/T-002-.../ticket.md` | a backlog ticket meeting the description floor |
 
 This is the single-project form (spoke beside the hub). A multi-project
 front houses each project in its own directory - structure and promotion
