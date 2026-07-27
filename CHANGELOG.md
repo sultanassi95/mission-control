@@ -7,7 +7,7 @@ changes should never reach you silently.
 ## Unreleased (pre-publish)
 
 - 2026-07-24: Liftoff conventions distilled into the foundation (the staging
-  record `framework/liftoff-conventions.md` is retired). Front placement
+  record `liftoff-conventions.md` is retired). Front placement
   (register / move / copy) + the gitignored `fronts/` container and the
   `yours | partnered | employer | stakeholder` trust taxonomy now live in
   `task-board.md`; the generic Definition-of-Done floor (incl. a

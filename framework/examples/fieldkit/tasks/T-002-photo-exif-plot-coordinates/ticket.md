@@ -35,12 +35,17 @@ if the note link is lost. Agronomists sort by location first.
 - [ ] **No guess worn as a finding** - confirm which strip step drops GPS before
   changing it.
 
-## Working files (this ticket's folder)
+## Working files
 
-- `scripts/` - repro / verify / one-off scripts (tracked; prevention infra).
-- `samples/` - inputs, fixtures, datasets (gitignored).
-- `artifacts/` - generated outputs, exports, dumps, logs (gitignored).
-- `screenshots/` - QA / verification images (gitignored).
+Tracked, beside this file in `tasks/<ID>-<slug>/`:
+
+- `scripts/` - repro / verify / one-off scripts (prevention infrastructure).
+
+Gitignored, in the sibling `.tickets/<ID>-<slug>/` keyed by the same id:
+
+- `samples/` - inputs, fixtures, datasets.
+- `artifacts/` - generated outputs, exports, dumps, logs.
+- `screenshots/` - QA / verification images.
 
 ## Evidence log
 

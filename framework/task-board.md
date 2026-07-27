@@ -88,26 +88,43 @@ sections show only the 10 most recent each.
 
 Real work generates working files: repro scripts, sample inputs, generated
 outputs, QA screenshots. Given no home they sprawl across the workspace root -
-the failure this convention exists to prevent. Each ticket folder owns its mess.
+the failure this convention exists to prevent. Every file a ticket generates is
+owned by that ticket's id, in one of its two folders.
+
+Every front uses the same two-folder split, whatever its `trust:`. The record and
+the scripts are tracked; the heavy payloads sit in a sibling `.tickets/` tree that
+`.gitignore` excludes at any depth, so a tracked folder never contains a
+gitignored hole and one rule covers every front:
 
 ```
-tasks/<ID>-<slug>/
-├─ ticket.md        the record + the Definition-of-Done checklist + evidence log (text)   [tracked]
-├─ scripts/         repro / verify / one-off scripts - prevention infrastructure          [tracked]
-├─ samples/         inputs · fixtures · datasets used to reproduce or verify              [gitignored]
-├─ artifacts/       generated outputs · exports · dumps · logs                            [gitignored]
-└─ screenshots/     QA / verification images                                             [gitignored]
+_command/portfolio/<front>/[<project>/]
+├─ tasks/<ID>-<slug>/
+│  ├─ ticket.md      the record + the Definition-of-Done checklist + evidence log   [tracked]
+│  └─ scripts/       repro / verify / one-off scripts - prevention infrastructure   [tracked]
+└─ .tickets/<ID>-<slug>/
+   ├─ samples/       inputs · fixtures · datasets used to reproduce or verify       [gitignored]
+   ├─ artifacts/     generated outputs · exports · dumps · logs                     [gitignored]
+   └─ screenshots/   QA / verification images                                       [gitignored]
 ```
 
 | Path | Tracked? | Why |
 |---|---|---|
-| `ticket.md` | yes | the record; the pasted literal verification output lives here as text |
-| `scripts/` | yes | a repro/verify script is prevention infrastructure - it compounds, so version it |
-| `samples/` `artifacts/` `screenshots/` | **no** (gitignored) | disposable or heavy proof; contained per ticket, never bloats or leaks the repo |
+| `tasks/<ID>-<slug>/ticket.md` | yes | the record; the pasted literal verification output lives here as text |
+| `tasks/<ID>-<slug>/scripts/` | yes | a repro/verify script is prevention infrastructure - it compounds, so version it |
+| `.tickets/<ID>-<slug>/` | **no** (gitignored) | disposable or heavy proof; contained per ticket, never bloats or leaks the repo |
 
-**Tracked-repo hygiene.** The three heavy subfolders are gitignored so the
-management repo stays clean and small, and so nothing under them can ever be
-committed. They exist to CONTAIN working files locally, not to version them.
+Both halves are keyed by the same `<ID>-<slug>`, so a ticket's record and its
+payloads are always one grep apart, and the promotion rule moves them together.
+
+**Tracked-repo hygiene.** `.tickets/` exists to CONTAIN working files locally, not
+to version them. One ignore rule covers it at any depth, which is why the split is
+uniform rather than per-trust: a single mechanism is auditable, and a rule that
+only applies to some fronts is a rule that gets forgotten on the others. Nothing
+under `.tickets/` can be committed, so no payload can bloat or leak the repo.
+
+**No working file is ever written inside a project repo's own tree.** That repo's
+`.gitignore` belongs to its owner, so a promise made about it is one we have no
+authority to keep. Here the rule is ours, and it already holds.
 
 **External trackers (`tracker: jira | github`).** The ticket of record stays in
 the external tracker, never mirrored here (the one-tracker rule). The folder
@@ -120,21 +137,17 @@ DoD checklist:
 That is not a second copy of the ticket - it is the local artifact home and the
 enforcement gate, keyed by the ticket id.
 
-**Trust drives posture.** Each front's `trust:` is one of `yours | partnered |
-employer | stakeholder`. `yours` / `partnered` carry full detail in the spoke
-(still never secrets); `employer` / `stakeholder` are **confidential** - the
-spoke carries pointers and process only (path, remote, git-memory, tracker,
-posture, a neutral next-action), never payloads: no code, secrets, ticket
-contents, or deliverable text in `_command/`. Name the terrain (that an IAM
-role or a pipeline exists and is sensitive) without recording the payload.
-
-**Confidential fronts (`trust: employer | stakeholder`).** Because the
-management repo is shareable, an employer's or partner's artifacts must not sit
-under it, even gitignored. For these fronts the working subfolders redirect to
-the project repo's own gitignored scratch,
-`<repo>/.tickets/<ID>-<slug>/{scripts,samples,artifacts,screenshots}/`; the
-management-side `ticket.md` keeps only the sanitized pointer. No payloads in
-`_command/` - the confidentiality floor holds.
+**Trust drives what the TRACKED record may say** - not where files live; the
+storage split above is the same for every front. Each front's `trust:` is one of
+`yours | partnered | employer | stakeholder`. `yours` / `partnered` carry full
+detail in the spoke (still never secrets); `employer` / `stakeholder` are
+**confidential** - the spoke and `ticket.md` carry pointers and process only
+(path, remote, git-memory, tracker, posture, a neutral next-action), never
+payloads: no code, secrets, ticket contents, or deliverable text in tracked
+`_command/` content. Name the terrain (that an IAM role or a pipeline exists and
+is sensitive) without recording the payload. A confidential front's heavy files
+are handled by the same `.tickets/` mechanism as everyone else's; trust changes
+the prose, not the paths.
 
 ## The Definition of Done checklist (the integration-truth floor)
 
