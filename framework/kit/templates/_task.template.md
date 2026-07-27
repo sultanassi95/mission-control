@@ -12,10 +12,9 @@ parent:
 
 <!--
 This file instantiates as tasks/<ID>-<slug>/ticket.md - the ticket is a FOLDER.
-Beside it live the working subfolders: scripts/ (tracked) and samples/,
-artifacts/, screenshots/ (gitignored). On a confidential front the three payload
-folders sit in _command/portfolio/<front>/[<project>/].tickets/<ID>-<slug>/
-instead, and only ticket.md + scripts/ stay here. See framework/task-board.md.
+Beside it lives scripts/ (tracked). The heavy payloads - samples, artifacts,
+screenshots - go to the sibling .tickets/<ID>-<slug>/, which is gitignored at any
+depth. Same for every front, whatever its trust. See framework/task-board.md.
 
 External tracker (tracker: jira | github)? Delete Context/Acceptance/Out-of-scope
 below, replace with a one-line pointer:  > Tracked in: JIRA <KEY> - <url>
@@ -54,16 +53,17 @@ An instance may bind a sharper version in `_command/CONSTITUTION.local.md`.
   assumptions labelled; the outward artifacts (commit, PR, tracker) read as an
   engineer authored them, zero process vocabulary.
 
-## Working files (this ticket's folder)
+## Working files
 
-- `scripts/` - repro / verify / one-off scripts (tracked; prevention infra).
-- `samples/` - inputs, fixtures, datasets (gitignored).
-- `artifacts/` - generated outputs, exports, dumps, logs (gitignored).
-- `screenshots/` - QA / verification images (gitignored).
+Tracked, beside this file in `tasks/<ID>-<slug>/`:
 
-On a confidential front (`trust: employer | stakeholder`) the three gitignored
-folders live at `_command/portfolio/<front>/[<project>/].tickets/<ID>-<slug>/`
-instead; `scripts/` stays here so it is still versioned.
+- `scripts/` - repro / verify / one-off scripts (prevention infrastructure).
+
+Gitignored, in the sibling `.tickets/<ID>-<slug>/` keyed by the same id:
+
+- `samples/` - inputs, fixtures, datasets.
+- `artifacts/` - generated outputs, exports, dumps, logs.
+- `screenshots/` - QA / verification images.
 
 ## Evidence log
 
