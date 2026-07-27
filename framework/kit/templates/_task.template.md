@@ -13,7 +13,9 @@ parent:
 <!--
 This file instantiates as tasks/<ID>-<slug>/ticket.md - the ticket is a FOLDER.
 Beside it live the working subfolders: scripts/ (tracked) and samples/,
-artifacts/, screenshots/ (gitignored). See framework/task-board.md.
+artifacts/, screenshots/ (gitignored). On a confidential front the three payload
+folders sit in _command/portfolio/<front>/[<project>/].tickets/<ID>-<slug>/
+instead, and only ticket.md + scripts/ stay here. See framework/task-board.md.
 
 External tracker (tracker: jira | github)? Delete Context/Acceptance/Out-of-scope
 below, replace with a one-line pointer:  > Tracked in: JIRA <KEY> - <url>
@@ -58,6 +60,10 @@ An instance may bind a sharper version in `_command/CONSTITUTION.local.md`.
 - `samples/` - inputs, fixtures, datasets (gitignored).
 - `artifacts/` - generated outputs, exports, dumps, logs (gitignored).
 - `screenshots/` - QA / verification images (gitignored).
+
+On a confidential front (`trust: employer | stakeholder`) the three gitignored
+folders live at `_command/portfolio/<front>/[<project>/].tickets/<ID>-<slug>/`
+instead; `scripts/` stays here so it is still versioned.
 
 ## Evidence log
 

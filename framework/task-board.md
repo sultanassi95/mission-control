@@ -128,13 +128,17 @@ posture, a neutral next-action), never payloads: no code, secrets, ticket
 contents, or deliverable text in `_command/`. Name the terrain (that an IAM
 role or a pipeline exists and is sensitive) without recording the payload.
 
-**Confidential fronts (`trust: employer | stakeholder`).** Because the
-management repo is shareable, an employer's or partner's artifacts must not sit
-under it, even gitignored. For these fronts the working subfolders redirect to
-the project repo's own gitignored scratch,
-`<repo>/.tickets/<ID>-<slug>/{scripts,samples,artifacts,screenshots}/`; the
-management-side `ticket.md` keeps only the sanitized pointer. No payloads in
-`_command/` - the confidentiality floor holds.
+**Confidential fronts (`trust: employer | stakeholder`).** An employer's or
+partner's payloads never enter a project repo's history, and never enter this
+repo's either. For these fronts the three payload subfolders move to
+`_command/portfolio/<front>/[<project>/].tickets/<ID>-<slug>/{samples,artifacts,screenshots}/`,
+which `.gitignore` excludes at any depth; `ticket.md` and `scripts/` stay in the
+tracked `tasks/<ID>-<slug>/` folder, because a repro script is prevention
+infrastructure and has to be versioned somewhere. No working file is ever written
+inside a project repo's own tree: its `.gitignore` belongs to its owner, so a
+promise made about that file is one we have no authority to keep. Here the rule
+is ours, and the confidentiality floor holds by mechanism rather than by
+instruction.
 
 ## The Definition of Done checklist (the integration-truth floor)
 
