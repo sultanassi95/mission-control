@@ -43,11 +43,13 @@ forgive.
 
 ## Working files
 
-Tracked, beside this file in `tasks/<ID>-<slug>/`:
+All of them beside this file, in `tasks/<ID>-<slug>/`.
+
+Tracked:
 
 - `scripts/` - repro / verify / one-off scripts (prevention infrastructure).
 
-Gitignored, in the sibling `.tickets/<ID>-<slug>/` keyed by the same id:
+Gitignored:
 
 - `samples/` - inputs, fixtures, datasets.
 - `artifacts/` - generated outputs, exports, dumps, logs.
