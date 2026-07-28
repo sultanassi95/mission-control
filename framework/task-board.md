@@ -89,7 +89,7 @@ sections show only the 10 most recent each.
 Real work generates working files: repro scripts, sample inputs, generated
 outputs, QA screenshots. Given no home they sprawl across the workspace root -
 the failure this convention exists to prevent. Every file a ticket generates is
-owned by that ticket's id, in one of its two folders.
+owned by that ticket's id, inside that ticket's one folder.
 
 **One folder per ticket.** The ticket IS the task, so there is one directory, not
 two. The record and the scripts are tracked; the payload subfolders are gitignored
