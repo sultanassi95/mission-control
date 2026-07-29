@@ -92,45 +92,59 @@ the failure this convention exists to prevent. Every file a ticket generates is
 owned by that ticket's id, inside that ticket's one folder.
 
 **One folder per ticket.** The ticket IS the task, so there is one directory, not
-two. The record and the scripts are the two things worth versioning; everything
-else the folder accumulates is payload and stays local. Same for every front,
-whatever its `trust:` and whatever its `tracker:`:
+two, and all of it is local. Same for every front, whatever its `trust:` and
+whatever its `tracker:`:
 
 ```
 _command/portfolio/<front>/[<project>/]tasks/<ID>-<slug>/
-├─ ticket.md      the record + the Definition-of-Done checklist + evidence log   [tracked]
-├─ scripts/       repro / verify / one-off scripts - prevention infrastructure   [tracked]
-├─ samples/       inputs · fixtures · datasets used to reproduce or verify       [gitignored]
-├─ artifacts/     generated outputs · exports · dumps · logs                     [gitignored]
-└─ screenshots/   QA / verification images                                       [gitignored]
+├─ ticket.md      the record + the Definition-of-Done checklist + evidence log
+├─ scripts/       repro / verify / one-off scripts
+├─ samples/       inputs · fixtures · datasets used to reproduce or verify
+├─ artifacts/     generated outputs · exports · dumps · logs
+└─ screenshots/   QA / verification images
 ```
 
-Those three payload names are the convention, not the mechanism. Anything else you
-put beside `ticket.md` and `scripts/` is gitignored too.
+**Nothing in it is tracked.** `_command/` is gitignored in full, with no
+exceptions, so the record and the scripts are exactly as local as the payloads.
+Those three payload names are a convention for keeping a folder legible, not a rule
+the repo enforces differently. Everything a ticket owns is under one `<ID>-<slug>`,
+so its record and its payloads are always in the same place and the promotion rule
+moves them together.
 
-| Path | Tracked? | Why |
-|---|---|---|
-| `ticket.md` | yes | the record; the pasted literal verification output lives here as text |
-| `scripts/` | yes | a repro/verify script is prevention infrastructure - it compounds, so version it |
-| everything else beside them - `samples/` `artifacts/` `screenshots/`, or any name a session invents | **no** (gitignored) | disposable or heavy proof; contained per ticket, never bloats or leaks the repo |
+**Scripts are recorded, not versioned.** A repro or verify script is worth keeping
+and worth explaining, and it used to be tracked for exactly that reason. It is not
+any more, because it lives in the instance and the instance does not travel. What
+replaces the git history is a plain record, one per project:
 
-Everything a ticket owns is under one `<ID>-<slug>`, so its record and its payloads
-are always in the same place and the promotion rule moves them together.
+```
+_command/portfolio/<front>/[<project>/]scripts.md
+```
+
+One entry per script that still exists: its path, what it does, why it was written,
+and how to run it. That is the part a later session actually needs and the part a
+bare file in an ignored directory does not carry. Write the entry when you write
+the script, delete the entry when you delete the script, and link the record from
+the front hub's Repo map so it is reachable without already knowing it is there. A
+script nobody can explain gets rebuilt from scratch, which is the waste this
+replaces.
 
 **Tracked-repo hygiene - two rules that compose.**
 
 First, the instance is local in full. `_command/` is gitignored by this repo, so
 nothing under it, ticket records included, can be committed from a clone. The
 product is `framework/` plus the skills; your instance is yours. Want history for
-it? Keep `_command/` in a private repo of your own, which is where the Tracked
-column above starts to bite, and carry two rules into that repo's `.gitignore`:
-the payload rule below, and `_command/machine.local.md`, which this repo no longer
+it? Keep `_command/` in a private repo of your own, and carry two rules into that
+repo's `.gitignore`: the payload rule below, and `_command/machine.local.md`, which
+this repo no longer
 needs to name because the whole tree is excluded here but which must stay local
 everywhere (a second machine inheriting the first machine's tool inventory is the
 defect `platform.md` exists to prevent).
 
-Second, inside a ticket folder the payload never travels. The rule excludes the
-folder's contents and re-includes exactly `ticket.md` and `scripts/`
+Second, a ticket folder that sits in a TRACKED tree carries only its record and its
+scripts. That case is never the instance, which rule one covers wholesale. It is
+the worked examples shipped under `framework/examples/`, and any private repo where
+you choose to version your own instance. The rule excludes the folder's contents
+and re-includes exactly `ticket.md` and `scripts/`
 (`**/tasks/*/*` plus two negations), rather than listing `samples/`, `artifacts/`
 and `screenshots/` by name. A named list fails open on the first payload directory
 nobody thought of, and for a confidential front failing open means committing
@@ -145,11 +159,6 @@ a directory-only pattern cannot match a path git cannot resolve as a directory, 
 asking whether a bare directory is ignored returns an answer that flips with
 whether it happens to exist. That is how `_command/` came to be documented as
 gitignored in two places while the rules tracked it.
-
-Scripts stay tracked on purpose. Putting them in the ignored half was considered
-and rejected: an unversioned repro script is lost on a fresh clone, cannot be
-reviewed, and gets rebuilt from scratch by the next session, which defeats the
-reason for writing it down.
 
 **No working file is ever written inside a project repo's own tree.** That repo's
 `.gitignore` belongs to its owner, so a promise made about it is one we have no

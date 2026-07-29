@@ -27,10 +27,14 @@ $mustIgnore = @(
   "_command/learning/01-a-lesson.md",
   "_command/portfolio/acme/_front.md",
   "_command/portfolio/acme/api/api.md",
-  # a ticket folder inside the instance is instance state too, record included
+  # a ticket folder inside the instance is instance state too, with NO exceptions:
+  # the record and the scripts are as local as the payload, which is why a project
+  # keeps a scripts.md record instead of relying on git to remember them
   "_command/portfolio/acme/api/tasks/T-001-a-ticket/ticket.md",
   "_command/portfolio/acme/api/tasks/T-001-a-ticket/scripts/local_stack.py",
+  "_command/portfolio/acme/api/tasks/T-001-a-ticket/scripts/repro.sh",
   "_command/portfolio/acme/api/tasks/T-001-a-ticket/samples/input.bin",
+  "_command/portfolio/acme/api/scripts.md",
   # ticket payloads anywhere, including a name nobody thought to enumerate
   "framework/examples/fieldkit/tasks/T-001-offline-sync-conflict-merge/samples/input.bin",
   "framework/examples/fieldkit/tasks/T-001-offline-sync-conflict-merge/artifacts/dump.log",

@@ -21,6 +21,14 @@ changes should never reach you silently.
   list failed open on the first payload directory nobody thought of. New gate
   `tools/check-ignores.ps1` asserts both properties on file paths rather than
   directory names, and `/preflight` step 6 runs it.
+  **`scripts/` is no longer tracked either**, and the Tracked column that implied
+  otherwise is gone: `_command/` means `_command/`, records and scripts included.
+  A repro script was tracked so its value would compound, which no longer works
+  once it lives in the instance, so the value is carried by a record instead.
+  Each project keeps `_command/portfolio/<front>/[<project>/]scripts.md` naming
+  every script it still has, what it does, why it was written and how to run it,
+  linked from the front hub's Repo map. New template
+  `framework/kit/templates/_scripts.template.md`.
 - 2026-07-24: Liftoff conventions distilled into the foundation (the staging
   record `liftoff-conventions.md` is retired). Front placement
   (register / move / copy) + the gitignored `fronts/` container and the

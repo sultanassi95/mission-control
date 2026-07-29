@@ -42,16 +42,17 @@ tools/leak-sweep.private.txt
 # for clarity. See framework/task-board.md (front placement).
 fronts/
 
-# Ticket payloads. A ticket folder is tasks/<ID>-<slug>/, and only two things in
-# it are ever worth versioning: the record and the scripts. Everything else it
-# accumulates - samples, artifacts, screenshots, and whatever name a future
-# session invents - is payload and stays local.
+# Ticket payloads, for a ticket folder that sits in a TRACKED tree. That is never
+# _command/, which is excluded wholesale above with no exceptions, its records and
+# scripts included. It is the worked examples under framework/examples/, and any
+# private repo where an operator versions their own instance and copies this rule
+# across.
 #
-# So exclude the folder's contents and re-include those two, rather than listing
-# the payload directories by name. A named list fails open on the first name
-# nobody thought of, and this rule has to hold for confidential fronts, where
-# failing open means committing someone else's data. Same shape as the .claude/
-# rule above.
+# Inside such a folder only the record and the scripts are worth versioning, so
+# exclude the folder's contents and re-include those two, rather than listing the
+# payload directories by name. A named list fails open on the first name nobody
+# thought of, and for a confidential front failing open means committing someone
+# else's data. Same shape as the .claude/ rule above.
 #
 # The scope is the children of any directory named tasks, one level down. So
 # tasks/_board.md is untouched, and a samples/ or artifacts/ directory anywhere

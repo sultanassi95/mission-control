@@ -12,11 +12,10 @@ parent:
 
 <!--
 This file instantiates as tasks/<ID>-<slug>/ticket.md - the ticket is a FOLDER, and
-everything the ticket owns lives in it. This file and scripts/ are the two names
-worth versioning; anything else you put beside them is payload and is gitignored,
-whatever you call it. Same for every front, whatever its trust or tracker. Note
-that inside _command/ the whole instance is local, this record included. See
-framework/task-board.md.
+everything the ticket owns lives in it. None of it is tracked: _command/ is
+gitignored in full, this record included. Scripts stay discoverable through the
+project's scripts.md record rather than through git history. Same for every front,
+whatever its trust or tracker. See framework/task-board.md.
 
 External tracker (tracker: jira | github)? Delete Context/Acceptance/Out-of-scope
 below, replace with a one-line pointer:  > Tracked in: JIRA <KEY> - <url>
@@ -57,14 +56,12 @@ An instance may bind a sharper version in `_command/CONSTITUTION.local.md`.
 
 ## Working files
 
-All of them beside this file, in `tasks/<ID>-<slug>/`.
+All of them beside this file, in `tasks/<ID>-<slug>/`. None of them is tracked,
+because `_command/` is gitignored in full.
 
-Tracked:
-
-- `scripts/` - repro / verify / one-off scripts (prevention infrastructure).
-
-Gitignored - these three by convention, and anything else placed beside them:
-
+- `scripts/` - repro / verify / one-off scripts. Add an entry to the project's
+  `scripts.md` saying what each one does and why it exists, since git will not
+  remember it for you.
 - `samples/` - inputs, fixtures, datasets.
 - `artifacts/` - generated outputs, exports, dumps, logs.
 - `screenshots/` - QA / verification images.
