@@ -89,38 +89,54 @@ sections show only the 10 most recent each.
 Real work generates working files: repro scripts, sample inputs, generated
 outputs, QA screenshots. Given no home they sprawl across the workspace root -
 the failure this convention exists to prevent. Every file a ticket generates is
-owned by that ticket's id, in one of its two folders.
+owned by that ticket's id, inside that ticket's one folder.
 
-Every front uses the same two-folder split, whatever its `trust:`. The record and
-the scripts are tracked; the heavy payloads sit in a sibling `.tickets/` tree that
-`.gitignore` excludes at any depth, so a tracked folder never contains a
-gitignored hole and one rule covers every front:
+**One folder per ticket.** The ticket IS the task, so there is one directory, not
+two, and all of it is local. Same for every front, whatever its `trust:` and
+whatever its `tracker:`:
 
 ```
-_command/portfolio/<front>/[<project>/]
-├─ tasks/<ID>-<slug>/
-│  ├─ ticket.md      the record + the Definition-of-Done checklist + evidence log   [tracked]
-│  └─ scripts/       repro / verify / one-off scripts - prevention infrastructure   [tracked]
-└─ .tickets/<ID>-<slug>/
-   ├─ samples/       inputs · fixtures · datasets used to reproduce or verify       [gitignored]
-   ├─ artifacts/     generated outputs · exports · dumps · logs                     [gitignored]
-   └─ screenshots/   QA / verification images                                       [gitignored]
+_command/portfolio/<front>/[<project>/]tasks/<ID>-<slug>/
+├─ ticket.md      the record + the Definition-of-Done checklist + evidence log
+├─ scripts/       repro / verify / one-off scripts
+├─ samples/       inputs · fixtures · datasets used to reproduce or verify
+├─ artifacts/     generated outputs · exports · dumps · logs
+└─ screenshots/   QA / verification images
 ```
 
-| Path | Tracked? | Why |
-|---|---|---|
-| `tasks/<ID>-<slug>/ticket.md` | yes | the record; the pasted literal verification output lives here as text |
-| `tasks/<ID>-<slug>/scripts/` | yes | a repro/verify script is prevention infrastructure - it compounds, so version it |
-| `.tickets/<ID>-<slug>/` | **no** (gitignored) | disposable or heavy proof; contained per ticket, never bloats or leaks the repo |
+**Nothing in it is tracked.** `_command/` is gitignored in full, with no
+exceptions: the record and the scripts are as local as the payloads, and those three
+payload names are a convention for keeping a folder legible, not a rule the repo
+enforces differently. Everything a ticket owns sits under one `<ID>-<slug>`, so the
+promotion rule moves it all together.
 
-Both halves are keyed by the same `<ID>-<slug>`, so a ticket's record and its
-payloads are always one grep apart, and the promotion rule moves them together.
+Want history for your instance? Keep `_command/` in a private repo of your own, and
+carry two rules into its `.gitignore`: the ticket-payload rule, and
+`_command/machine.local.md`, which must stay local everywhere, since a second
+machine inheriting the first machine's tool inventory is the defect `platform.md`
+exists to prevent.
 
-**Tracked-repo hygiene.** `.tickets/` exists to CONTAIN working files locally, not
-to version them. One ignore rule covers it at any depth, which is why the split is
-uniform rather than per-trust: a single mechanism is auditable, and a rule that
-only applies to some fronts is a rule that gets forgotten on the others. Nothing
-under `.tickets/` can be committed, so no payload can bloat or leak the repo.
+**Scripts are recorded, not versioned.** A repro script used to be tracked because
+prevention infrastructure compounds. That reason does not survive living in the
+instance, so the value is carried by a record instead, one per project:
+
+```
+_command/portfolio/<front>/[<project>/]scripts.md
+```
+
+One entry per script that still exists: what it does, why it was written, how to run
+it, and what would surprise the next person. The why is the part git never carried
+anyway. Write the entry with the script, delete it with the script, and link the
+record from the front hub's Repo map. A script nobody can explain gets rebuilt from
+scratch, which is the waste this replaces.
+
+**Tracked-repo hygiene.** The payload rule in `.gitignore` applies only where a
+ticket folder sits in a tracked tree, which means the worked examples under
+`framework/examples/` and a private instance repo, never `_command/`. It excludes a
+ticket folder's contents and re-includes only `ticket.md` and `scripts/`, so a
+payload directory nobody anticipated is ignored by default rather than committed.
+`tools/check-ignores.ps1` asserts that and the instance exclusion together, which is
+what makes either one a guarantee instead of a claim.
 
 **No working file is ever written inside a project repo's own tree.** That repo's
 `.gitignore` belongs to its owner, so a promise made about it is one we have no
@@ -145,9 +161,9 @@ detail in the spoke (still never secrets); `employer` / `stakeholder` are
 (path, remote, git-memory, tracker, posture, a neutral next-action), never
 payloads: no code, secrets, ticket contents, or deliverable text in tracked
 `_command/` content. Name the terrain (that an IAM role or a pipeline exists and
-is sensitive) without recording the payload. A confidential front's heavy files
-are handled by the same `.tickets/` mechanism as everyone else's; trust changes
-the prose, not the paths.
+is sensitive) without recording the payload. A confidential front's heavy files sit
+in the same ignored payload subfolders as everyone else's; trust changes the prose,
+not the paths.
 
 ## The Definition of Done checklist (the integration-truth floor)
 
@@ -183,7 +199,7 @@ enforceable; an instance may bind a sharper version in
 
 ## One tracker per project (hard rule)
 
-The project's spoke carries a `tracker:` field: `tasks` (this board governs) or `jira` / `github` (the external tracker governs and `tasks/` stays unused for that project). Never mirror - no two layers, one job. A front can mix: a Jira-governed client project beside a native-board side project.
+The project's spoke carries a `tracker:` field: `tasks` (this board governs) or `jira` / `github` (the external tracker governs, so `_board.md` does not - see External trackers above, where the ticket FOLDER still exists as the working-file home). Never mirror - no two layers, one job. A front can mix: a Jira-governed client project beside a native-board side project.
 
 ## Cross-front changes
 

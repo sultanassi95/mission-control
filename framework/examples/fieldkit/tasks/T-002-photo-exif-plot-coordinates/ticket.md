@@ -37,15 +37,13 @@ if the note link is lost. Agronomists sort by location first.
 
 ## Working files
 
-Tracked, beside this file in `tasks/<ID>-<slug>/`:
+All of them beside this file, in `tasks/<ID>-<slug>/`. None of them is tracked,
+because `_command/` is gitignored in full.
 
-- `scripts/` - repro / verify / one-off scripts (prevention infrastructure).
-
-Gitignored, in the sibling `.tickets/<ID>-<slug>/` keyed by the same id:
-
-- `samples/` - inputs, fixtures, datasets.
-- `artifacts/` - generated outputs, exports, dumps, logs.
-- `screenshots/` - QA / verification images.
+- `scripts/` - none yet; record any in the project's `scripts.md`.
+- `samples/` - the three photos whose EXIF disagrees with the plot record.
+- `artifacts/` - the extracted coordinate table.
+- `screenshots/` - the map view putting a plot in the wrong field.
 
 ## Evidence log
 

@@ -20,6 +20,7 @@ flowchart LR
 | <repo> | <one line> | [<repo>](./<repo>.md) |
 
 > `base_branch` and all git facts live in each **spoke**, not here (dedup - the hub points, the spoke owns).
+> Scripts a project accumulates live in gitignored ticket folders, so its `scripts.md` record is what remembers them: [<project> scripts](./<project>/scripts.md).
 
 ## Cross-repo constraints
 - <write posture, stakeholder / employer notes>

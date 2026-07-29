@@ -43,15 +43,13 @@ forgive.
 
 ## Working files
 
-Tracked, beside this file in `tasks/<ID>-<slug>/`:
+All of them beside this file, in `tasks/<ID>-<slug>/`. None of them is tracked,
+because `_command/` is gitignored in full.
 
-- `scripts/` - repro / verify / one-off scripts (prevention infrastructure).
-
-Gitignored, in the sibling `.tickets/<ID>-<slug>/` keyed by the same id:
-
-- `samples/` - inputs, fixtures, datasets.
-- `artifacts/` - generated outputs, exports, dumps, logs.
-- `screenshots/` - QA / verification images.
+- `scripts/` - `repro-sync-conflict.sh`, recorded in the project's `scripts.md`.
+- `samples/` - two exported note rows that reproduce the collision.
+- `artifacts/` - the merged output the script writes for comparison.
+- `screenshots/` - the field report showing the lost edit.
 
 ## Evidence log
 

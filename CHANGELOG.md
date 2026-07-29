@@ -6,6 +6,25 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-07-29: The instance is local, and it is now enforced rather than
+  described. `_command/` was documented as gitignored in `task-board.md` and in
+  the spoke template while `.gitignore` re-included it with a negation, so an
+  operator's instance - doctrine overlay, founder profile, spokes for
+  confidential fronts, boards, learning log - was untracked but not ignored, one
+  `git add -A` from a commit in a public repo. The negation is gone and the
+  exclusion is restated below the allowlist, where a stray negation cannot undo
+  it. **If you were relying on this repo to version your `_command/`, it no
+  longer does: keep it in a private repo of your own** (`CONSTITUTION.md`, the
+  git rule). Ticket payload rules move from three names
+  (`**/tasks/*/samples/` and siblings) to the folder-contents idiom
+  `**/tasks/*/*` plus negations for `ticket.md` and `scripts/`, because a named
+  list failed open on the first payload directory nobody thought of. New gate
+  `tools/check-ignores.ps1` asserts both properties on file paths rather than
+  directory names, and `/preflight` step 6 runs it.
+  **`scripts/` is no longer tracked either** and the Tracked column that implied
+  otherwise is gone: `_command/` means `_command/`. Each project now keeps a
+  `scripts.md` record naming every script it still has and why, linked from the
+  front hub's Repo map (`framework/kit/templates/_scripts.template.md`).
 - 2026-07-24: Liftoff conventions distilled into the foundation (the staging
   record `liftoff-conventions.md` is retired). Front placement
   (register / move / copy) + the gitignored `fronts/` container and the

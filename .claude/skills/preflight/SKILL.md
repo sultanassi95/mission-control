@@ -20,7 +20,8 @@ with evidence; a preflight that only says "looks good" has not run.
 `--front <name>`: check only that front's wiring, spokes, and boards
 (checks 2-3 below, scoped). Unscoped (default): the whole instance.
 
-**Dials:** `--spend lean` = checks 1 only (imports + machine profile) ·
+**Dials:** `--spend lean` = checks 1 and 6 only (imports + machine profile, and
+the ignore gate, which is one script and never skipped) ·
 `standard` (default) = all checks · `deep` = adds the full
 board-consistency scan and the cold-read self-summary. `--verbosity` per
 the universal grammar - PASS/FAIL evidence is discipline at every tier.
@@ -59,7 +60,13 @@ the universal grammar - PASS/FAIL evidence is discipline at every tier.
 5. **No leftover placeholders.** Run the instance-mode sweep:
    `powershell -Command ".\tools\leak-sweep.ps1 -Mode instance -Path _command,CLAUDE.md"`
    (or `tools/leak-sweep.sh instance`). Exit 0 required; paste the output.
-6. **Doctrine currency.** If `framework/` was recently pulled, read
+6. **The instance cannot be committed.** Run
+   `powershell -Command ".\tools\check-ignores.ps1"`. Exit 0 required; paste the
+   output. Then two things the gate cannot see, being about this clone rather than
+   the rules: `git ls-files _command` must print nothing (anything listed is
+   already in the index) and `git status --porcelain _command` must print nothing
+   either (a `??` is untracked but not ignored, one `git add -A` from a commit).
+7. **Doctrine currency.** If `framework/` was recently pulled, read
    `CHANGELOG.md`'s new entries for anything that contradicts
    `CONSTITUTION.local.md`; name conflicts rather than silently
    preferring either side.

@@ -45,3 +45,9 @@ disk (exit 0 clean / 1 with the broken references). It exists because
 removing a subsystem once left prose references to deleted files that a
 filename grep could not catch. Windows-native; run it with the sweep
 before any publish.
+
+`tools/check-ignores.ps1` is the third gate: the paths that must be
+gitignored are, and the paths that must ship still can be (exit 0 clean /
+1 listing each problem). Where the sweep reads file contents, this one
+reads the rules, because a doc claiming a path is ignored proves nothing
+about what git will do. `/preflight` step 6 runs it at every spend tier.
