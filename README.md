@@ -125,15 +125,14 @@ doctrine changes never reach you silently.
 Two notes on pulls: enable `git config merge.ours.driver true` once (the
 shipped `.gitattributes` then keeps YOUR rewritten CLAUDE.md over the
 bootstrap on every pull - and if a CLAUDE.md conflict ever appears
-anyway, keep yours). And your instance does not travel in this repo:
-`_command/` is gitignored, because this repo is the product and your
-instance is yours, and a spoke for a confidential front describes work
-under someone else's NDA (the git rule in
-[CONSTITUTION.md](framework/CONSTITUTION.md)). To have your state on a
-second machine, keep `_command/` in a private repo of your own, and carry
-two rules into that repo's `.gitignore`: the ticket-payload rule from
-[task-board.md](framework/task-board.md), and `_command/machine.local.md`,
-because each machine keeps its own auto-detected platform profile,
+anyway, keep yours). `CLAUDE.md` does stay tracked, and after liftoff it
+carries your name and your front list, so read it before pushing to a
+remote you do not control. Your instance does not travel here at all:
+`_command/` is gitignored (the git rule in
+[CONSTITUTION.md](framework/CONSTITUTION.md)). For your state on a second
+machine, keep `_command/` in a private repo of your own
+([task-board.md](framework/task-board.md) names the rules to carry into
+it); each machine still keeps its own auto-detected platform profile,
 regenerated on the first session there so commands are always composed for
 the OS and shell actually under them.
 

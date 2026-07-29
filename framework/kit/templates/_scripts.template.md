@@ -6,13 +6,9 @@
 > exists; delete the entry when you delete the script. Linked from the front hub's
 > Repo map.
 
-| Script | Ticket | What it does |
-|---|---|---|
-| `tasks/<ID>-<slug>/scripts/<name>` | <ID> | <one line> |
-
----
-
 ## `<name>` (<ID>)
+
+Path: `tasks/<ID>-<slug>/scripts/<name>`
 
 **Run:** `<the exact command, composed for this machine>`
 

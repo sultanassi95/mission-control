@@ -40,8 +40,7 @@ if the note link is lost. Agronomists sort by location first.
 All of them beside this file, in `tasks/<ID>-<slug>/`. None of them is tracked,
 because `_command/` is gitignored in full.
 
-- `scripts/` - none yet; if one is written, record it in the project's `scripts.md`
-  with what it does and why, since git will not remember it.
+- `scripts/` - none yet; record any in the project's `scripts.md`.
 - `samples/` - the three photos whose EXIF disagrees with the plot record.
 - `artifacts/` - the extracted coordinate table.
 - `screenshots/` - the map view putting a plot in the wrong field.

@@ -105,60 +105,38 @@ _command/portfolio/<front>/[<project>/]tasks/<ID>-<slug>/
 ```
 
 **Nothing in it is tracked.** `_command/` is gitignored in full, with no
-exceptions, so the record and the scripts are exactly as local as the payloads.
-Those three payload names are a convention for keeping a folder legible, not a rule
-the repo enforces differently. Everything a ticket owns is under one `<ID>-<slug>`,
-so its record and its payloads are always in the same place and the promotion rule
-moves them together.
+exceptions: the record and the scripts are as local as the payloads, and those three
+payload names are a convention for keeping a folder legible, not a rule the repo
+enforces differently. Everything a ticket owns sits under one `<ID>-<slug>`, so the
+promotion rule moves it all together.
 
-**Scripts are recorded, not versioned.** A repro or verify script is worth keeping
-and worth explaining, and it used to be tracked for exactly that reason. It is not
-any more, because it lives in the instance and the instance does not travel. What
-replaces the git history is a plain record, one per project:
+Want history for your instance? Keep `_command/` in a private repo of your own, and
+carry two rules into its `.gitignore`: the ticket-payload rule, and
+`_command/machine.local.md`, which must stay local everywhere, since a second
+machine inheriting the first machine's tool inventory is the defect `platform.md`
+exists to prevent.
+
+**Scripts are recorded, not versioned.** A repro script used to be tracked because
+prevention infrastructure compounds. That reason does not survive living in the
+instance, so the value is carried by a record instead, one per project:
 
 ```
 _command/portfolio/<front>/[<project>/]scripts.md
 ```
 
-One entry per script that still exists: its path, what it does, why it was written,
-and how to run it. That is the part a later session actually needs and the part a
-bare file in an ignored directory does not carry. Write the entry when you write
-the script, delete the entry when you delete the script, and link the record from
-the front hub's Repo map so it is reachable without already knowing it is there. A
-script nobody can explain gets rebuilt from scratch, which is the waste this
-replaces.
+One entry per script that still exists: what it does, why it was written, how to run
+it, and what would surprise the next person. The why is the part git never carried
+anyway. Write the entry with the script, delete it with the script, and link the
+record from the front hub's Repo map. A script nobody can explain gets rebuilt from
+scratch, which is the waste this replaces.
 
-**Tracked-repo hygiene - two rules that compose.**
-
-First, the instance is local in full. `_command/` is gitignored by this repo, so
-nothing under it, ticket records included, can be committed from a clone. The
-product is `framework/` plus the skills; your instance is yours. Want history for
-it? Keep `_command/` in a private repo of your own, and carry two rules into that
-repo's `.gitignore`: the payload rule below, and `_command/machine.local.md`, which
-this repo no longer
-needs to name because the whole tree is excluded here but which must stay local
-everywhere (a second machine inheriting the first machine's tool inventory is the
-defect `platform.md` exists to prevent).
-
-Second, a ticket folder that sits in a TRACKED tree carries only its record and its
-scripts. That case is never the instance, which rule one covers wholesale. It is
-the worked examples shipped under `framework/examples/`, and any private repo where
-you choose to version your own instance. The rule excludes the folder's contents
-and re-includes exactly `ticket.md` and `scripts/`
-(`**/tasks/*/*` plus two negations), rather than listing `samples/`, `artifacts/`
-and `screenshots/` by name. A named list fails open on the first payload directory
-nobody thought of, and for a confidential front failing open means committing
-someone else's data. The scope is the children of any directory named `tasks`, one
-level down: `tasks/_board.md` stays tracked, and a `samples/` directory anywhere
-else in product code is left alone. The cost of that shape is worth stating: do
-not put product code two levels under a directory named `tasks`, because
-`framework/tasks/queue/worker.py` would be ignored.
-
-`tools/check-ignores.ps1` asserts both, on file paths rather than directory names:
-a directory-only pattern cannot match a path git cannot resolve as a directory, so
-asking whether a bare directory is ignored returns an answer that flips with
-whether it happens to exist. That is how `_command/` came to be documented as
-gitignored in two places while the rules tracked it.
+**Tracked-repo hygiene.** The payload rule in `.gitignore` applies only where a
+ticket folder sits in a tracked tree, which means the worked examples under
+`framework/examples/` and a private instance repo, never `_command/`. It excludes a
+ticket folder's contents and re-includes only `ticket.md` and `scripts/`, so a
+payload directory nobody anticipated is ignored by default rather than committed.
+`tools/check-ignores.ps1` asserts that and the instance exclusion together, which is
+what makes either one a guarantee instead of a claim.
 
 **No working file is ever written inside a project repo's own tree.** That repo's
 `.gitignore` belongs to its owner, so a promise made about it is one we have no

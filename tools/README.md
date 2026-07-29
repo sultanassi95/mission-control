@@ -50,9 +50,4 @@ before any publish.
 gitignored are, and the paths that must ship still can be (exit 0 clean /
 1 listing each problem). Where the sweep reads file contents, this one
 reads the rules, because a doc claiming a path is ignored proves nothing
-about what git will do. It exists because `_command/` was documented as
-gitignored in two places while `.gitignore` re-included it, leaving an
-operator's private instance one `git add -A` from a public commit. Every
-case it checks is a file path rather than a directory name, since a
-directory-only pattern cannot match a path git cannot resolve as a
-directory. `/preflight` step 6 runs it, at every spend tier.
+about what git will do. `/preflight` step 6 runs it at every spend tier.

@@ -3,17 +3,14 @@ param(
 )
 $ErrorActionPreference = "Stop"
 
-# Assert that the ignore rules deliver what the docs promise. The rules are the
-# only thing git obeys, so a doc that claims a path is ignored proves nothing:
-# _command/ was documented as gitignored in two places while `.gitignore` held an
-# explicit negation that tracked it, and the private instance of a public repo sat
-# one `git add -A` from being published.
+# Assert that the ignore rules deliver what the docs promise. The rules are the only
+# thing git obeys, so a doc claiming a path is ignored proves nothing about it.
 #
-# Every entry below is a FILE path, never a bare directory. A directory-only
-# pattern (one ending in `/`) cannot match a path git is unable to resolve as a
-# directory, so asking about a bare directory name gives an answer that flips
-# depending on whether it happens to exist on disk. That is precisely how the
-# original defect stayed invisible.
+# Every entry below is a FILE path, never a bare directory. A directory-only pattern
+# (one ending in `/`) cannot match a path git is unable to resolve as a directory, so
+# asking about a bare directory name gives an answer that flips with whether it
+# happens to exist on disk. That is how the defect this gate exists for stayed
+# invisible, so keep new entries as file paths.
 
 # Must be ignored. If any of these becomes trackable, private material can be
 # committed from a clone of a public repo.
@@ -27,9 +24,8 @@ $mustIgnore = @(
   "_command/learning/01-a-lesson.md",
   "_command/portfolio/acme/_front.md",
   "_command/portfolio/acme/api/api.md",
-  # a ticket folder inside the instance is instance state too, with NO exceptions:
-  # the record and the scripts are as local as the payload, which is why a project
-  # keeps a scripts.md record instead of relying on git to remember them
+  # a ticket folder in the instance is instance state too, with NO exceptions: the
+  # record and the scripts are as local as the payload
   "_command/portfolio/acme/api/tasks/T-001-a-ticket/ticket.md",
   "_command/portfolio/acme/api/tasks/T-001-a-ticket/scripts/local_stack.py",
   "_command/portfolio/acme/api/tasks/T-001-a-ticket/scripts/repro.sh",

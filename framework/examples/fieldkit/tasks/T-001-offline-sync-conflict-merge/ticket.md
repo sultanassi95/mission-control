@@ -46,8 +46,7 @@ forgive.
 All of them beside this file, in `tasks/<ID>-<slug>/`. None of them is tracked,
 because `_command/` is gitignored in full.
 
-- `scripts/` - `repro-sync-conflict.sh`, recorded in the project's `scripts.md`
-  with what it does and why, since git will not remember it.
+- `scripts/` - `repro-sync-conflict.sh`, recorded in the project's `scripts.md`.
 - `samples/` - two exported note rows that reproduce the collision.
 - `artifacts/` - the merged output the script writes for comparison.
 - `screenshots/` - the field report showing the lost edit.

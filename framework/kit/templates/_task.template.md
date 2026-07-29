@@ -59,9 +59,8 @@ An instance may bind a sharper version in `_command/CONSTITUTION.local.md`.
 All of them beside this file, in `tasks/<ID>-<slug>/`. None of them is tracked,
 because `_command/` is gitignored in full.
 
-- `scripts/` - repro / verify / one-off scripts. Add an entry to the project's
-  `scripts.md` saying what each one does and why it exists, since git will not
-  remember it for you.
+- `scripts/` - repro / verify / one-off scripts. Record each one in the project's
+  `scripts.md`, with why it exists.
 - `samples/` - inputs, fixtures, datasets.
 - `artifacts/` - generated outputs, exports, dumps, logs.
 - `screenshots/` - QA / verification images.
