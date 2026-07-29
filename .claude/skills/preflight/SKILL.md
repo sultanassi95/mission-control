@@ -20,7 +20,8 @@ with evidence; a preflight that only says "looks good" has not run.
 `--front <name>`: check only that front's wiring, spokes, and boards
 (checks 2-3 below, scoped). Unscoped (default): the whole instance.
 
-**Dials:** `--spend lean` = checks 1 only (imports + machine profile) ·
+**Dials:** `--spend lean` = checks 1 and 6 only (imports + machine profile, and
+the ignore gate, which is one script and never skipped) ·
 `standard` (default) = all checks · `deep` = adds the full
 board-consistency scan and the cold-read self-summary. `--verbosity` per
 the universal grammar - PASS/FAIL evidence is discipline at every tier.
@@ -59,14 +60,20 @@ the universal grammar - PASS/FAIL evidence is discipline at every tier.
 5. **No leftover placeholders.** Run the instance-mode sweep:
    `powershell -Command ".\tools\leak-sweep.ps1 -Mode instance -Path _command,CLAUDE.md"`
    (or `tools/leak-sweep.sh instance`). Exit 0 required; paste the output.
-6. **Nothing private is committable.** Run
+6. **The instance cannot be committed.** Run
    `powershell -Command ".\tools\check-ignores.ps1"`. Exit 0 required; paste the
    output. This is the check that `_command/` and every ticket payload are
    actually excluded rather than merely documented as excluded, so run it after
-   any `.gitignore` change and after any framework pull. Then confirm the
-   instance is genuinely absent from the index:
-   `git status --porcelain _command` must print nothing. A `??` there means the
-   instance is untracked but not ignored, which is one `git add -A` from a commit.
+   any `.gitignore` change and after any framework pull. Then two questions the
+   gate cannot answer, because they are about this clone rather than the rules:
+   `git ls-files _command` must print nothing (anything listed is already IN the
+   index, and history has it), and `git status --porcelain _command` must print
+   nothing either (a `??` means untracked but not ignored, one `git add -A` from
+   a commit). Note what is deliberately NOT covered: the root `CLAUDE.md` stays
+   tracked, because the product ships it as the liftoff bootstrap and
+   `.gitattributes` keeps your version on pulls. After liftoff it carries your
+   name and your front list, so read it before pushing to any remote you do not
+   control.
 7. **Doctrine currency.** If `framework/` was recently pulled, read
    `CHANGELOG.md`'s new entries for anything that contradicts
    `CONSTITUTION.local.md`; name conflicts rather than silently

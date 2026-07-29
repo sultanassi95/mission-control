@@ -51,9 +51,13 @@ fronts/
 # the payload directories by name. A named list fails open on the first name
 # nobody thought of, and this rule has to hold for confidential fronts, where
 # failing open means committing someone else's data. Same shape as the .claude/
-# rule above. Scoped to tasks/<ID>/ so a samples/ or artifacts/ directory
-# belonging to product code is never swallowed, and reaching only one level below
-# tasks/ so tasks/_board.md is untouched.
+# rule above.
+#
+# The scope is the children of any directory named tasks, one level down. So
+# tasks/_board.md is untouched, and a samples/ or artifacts/ directory anywhere
+# ELSE in product code is untouched. It does mean product code must not sit two
+# levels under a directory named tasks: framework/tasks/queue/worker.py would be
+# ignored. tools/check-ignores.ps1 asserts both directions.
 **/tasks/*/*
 !**/tasks/*/ticket.md
 !**/tasks/*/scripts/

@@ -43,7 +43,7 @@ Tracked:
 
 - `scripts/` - repro / verify / one-off scripts (prevention infrastructure).
 
-Gitignored:
+Gitignored - these three by convention, and anything else placed beside them:
 
 - `samples/` - inputs, fixtures, datasets.
 - `artifacts/` - generated outputs, exports, dumps, logs.

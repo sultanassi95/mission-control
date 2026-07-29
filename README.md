@@ -125,13 +125,17 @@ doctrine changes never reach you silently.
 Two notes on pulls: enable `git config merge.ours.driver true` once (the
 shipped `.gitattributes` then keeps YOUR rewritten CLAUDE.md over the
 bootstrap on every pull - and if a CLAUDE.md conflict ever appears
-anyway, keep yours). And your portfolio travels whole: clone your private
-origin on any machine and the OS, the skills, and your state all arrive -
-`_command/`, `CLAUDE.md`, and `.claude/skills/` are all tracked. Each
-machine keeps its own auto-detected platform profile
-(`machine.local.md`, gitignored) - regenerated on the first session
-there, so commands are always composed for the OS and shell actually
-under them.
+anyway, keep yours). And your instance does not travel in this repo:
+`_command/` is gitignored, because this repo is the product and your
+instance is yours, and a spoke for a confidential front describes work
+under someone else's NDA (the git rule in
+[CONSTITUTION.md](framework/CONSTITUTION.md)). To have your state on a
+second machine, keep `_command/` in a private repo of your own, and carry
+two rules into that repo's `.gitignore`: the ticket-payload rule from
+[task-board.md](framework/task-board.md), and `_command/machine.local.md`,
+because each machine keeps its own auto-detected platform profile,
+regenerated on the first session there so commands are always composed for
+the OS and shell actually under them.
 
 ## Requirements
 

@@ -122,18 +122,23 @@ are always in the same place and the promotion rule moves them together.
 First, the instance is local in full. `_command/` is gitignored by this repo, so
 nothing under it, ticket records included, can be committed from a clone. The
 product is `framework/` plus the skills; your instance is yours. Want history for
-it? Keep `_command/` in a private repo of your own and carry the payload rule
-below into that repo's `.gitignore`, which is where the Tracked column above
-starts to bite.
+it? Keep `_command/` in a private repo of your own, which is where the Tracked
+column above starts to bite, and carry two rules into that repo's `.gitignore`:
+the payload rule below, and `_command/machine.local.md`, which this repo no longer
+needs to name because the whole tree is excluded here but which must stay local
+everywhere (a second machine inheriting the first machine's tool inventory is the
+defect `platform.md` exists to prevent).
 
 Second, inside a ticket folder the payload never travels. The rule excludes the
 folder's contents and re-includes exactly `ticket.md` and `scripts/`
 (`**/tasks/*/*` plus two negations), rather than listing `samples/`, `artifacts/`
 and `screenshots/` by name. A named list fails open on the first payload directory
 nobody thought of, and for a confidential front failing open means committing
-someone else's data. It is scoped to `tasks/<ID>/`, so a `samples/` directory that
-belongs to product code is left alone, and it reaches one level below `tasks/`, so
-`tasks/_board.md` stays tracked.
+someone else's data. The scope is the children of any directory named `tasks`, one
+level down: `tasks/_board.md` stays tracked, and a `samples/` directory anywhere
+else in product code is left alone. The cost of that shape is worth stating: do
+not put product code two levels under a directory named `tasks`, because
+`framework/tasks/queue/worker.py` would be ignored.
 
 `tools/check-ignores.ps1` asserts both, on file paths rather than directory names:
 a directory-only pattern cannot match a path git cannot resolve as a directory, so

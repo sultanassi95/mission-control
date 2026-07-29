@@ -73,13 +73,31 @@ $mustTrack = @(
 )
 
 function Test-Ignored([string]$relative) {
-  # check-ignore reports the deciding pattern and reports negations too, so its
+  # check-ignore reports the deciding pattern, and reports negations too, so its
   # exit code cannot answer this on its own: a path whose last match is "!..." is
-  # NOT ignored even though a pattern matched. Decide on the pattern text.
-  $output = & git -C $Root check-ignore -v --no-index -- $relative 2>$null
+  # NOT ignored even though a pattern matched. Decide on the pattern text. The
+  # non-greedy prefix anchors on <source>:<line>:, so a pattern containing a colon
+  # survives, and a "!" can only ever be character zero of a negation.
+  #
+  # stderr is deliberately NOT redirected. Redirecting a native command's stderr
+  # on this platform wraps each line in an ErrorRecord, which under
+  # $ErrorActionPreference = Stop turns a wrong -Root into an opaque .NET failure
+  # instead of the message below (framework/platform.md). Exit 0 means a pattern
+  # matched, 1 means none did, anything higher is git failing to answer at all.
+  $output = & git -C $Root check-ignore -v --no-index -- $relative
+  if ($LASTEXITCODE -gt 1) {
+    throw "git check-ignore could not evaluate '$relative' under -Root '$Root'."
+  }
   if (-not $output) { return $false }
   $pattern = ((@($output)[0]) -split "`t")[0] -replace '^.*?:\d+:', ''
   return -not $pattern.StartsWith('!')
+}
+
+function Get-TrackedPaths {
+  # quotePath off, or git C-quotes any non-ASCII path and wraps it in literal
+  # double quotes, which check-ignore would then read as part of the filename and
+  # resolve against the root allowlist instead of the real leading directory.
+  return @(& git -c core.quotePath=false -C $Root ls-files)
 }
 
 $failures = New-Object System.Collections.Generic.List[string]
@@ -98,9 +116,10 @@ foreach ($path in $mustTrack) {
 # A tracked file the rules would ignore is a trap rather than an error: it stays
 # tracked in this clone because the index wins, so nothing looks wrong, while a
 # fresh clone that ever removes and re-adds it loses it silently.
-foreach ($tracked in @(& git -C $Root ls-files)) {
-  if (Test-Ignored $tracked) {
-    $failures.Add("TRACKED but the rules would ignore it: $tracked")
+$tracked = Get-TrackedPaths
+foreach ($path in $tracked) {
+  if (Test-Ignored $path) {
+    $failures.Add("TRACKED but the rules would ignore it: $path")
   }
 }
 
@@ -109,8 +128,12 @@ if ($failures.Count -gt 0) {
   Write-Output ("CHECK-IGNORES FAILED: {0} problem(s)." -f $failures.Count)
   exit 1
 }
+# The two lists brace each other, which is why this gate needs no test of its own:
+# a verdict function stuck at $false fails every must-ignore entry, stuck at $true
+# fails every must-track entry, and a wrong -Root now throws rather than reporting
+# a clean run. There is no way for it to pass while asserting nothing.
 Write-Output (
   "CHECK-IGNORES CLEAN: {0} must-ignore, {1} must-track, {2} tracked file(s) verified." -f
-    $mustIgnore.Count, $mustTrack.Count, @(& git -C $Root ls-files).Count
+    $mustIgnore.Count, $mustTrack.Count, $tracked.Count
 )
 exit 0
