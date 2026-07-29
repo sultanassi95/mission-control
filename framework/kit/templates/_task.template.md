@@ -12,9 +12,11 @@ parent:
 
 <!--
 This file instantiates as tasks/<ID>-<slug>/ticket.md - the ticket is a FOLDER, and
-everything the ticket owns lives in it. Beside this file: scripts/ (tracked), plus
-samples/ artifacts/ screenshots/ for the heavy payloads, which are gitignored.
-Same for every front, whatever its trust or tracker. See framework/task-board.md.
+everything the ticket owns lives in it. This file and scripts/ are the two names
+worth versioning; anything else you put beside them is payload and is gitignored,
+whatever you call it. Same for every front, whatever its trust or tracker. Note
+that inside _command/ the whole instance is local, this record included. See
+framework/task-board.md.
 
 External tracker (tracker: jira | github)? Delete Context/Acceptance/Out-of-scope
 below, replace with a one-line pointer:  > Tracked in: JIRA <KEY> - <url>
@@ -61,7 +63,7 @@ Tracked:
 
 - `scripts/` - repro / verify / one-off scripts (prevention infrastructure).
 
-Gitignored:
+Gitignored - these three by convention, and anything else placed beside them:
 
 - `samples/` - inputs, fixtures, datasets.
 - `artifacts/` - generated outputs, exports, dumps, logs.

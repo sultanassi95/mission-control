@@ -92,8 +92,9 @@ the failure this convention exists to prevent. Every file a ticket generates is
 owned by that ticket's id, inside that ticket's one folder.
 
 **One folder per ticket.** The ticket IS the task, so there is one directory, not
-two. The record and the scripts are tracked; the payload subfolders are gitignored
-by name. Same for every front, whatever its `trust:` and whatever its `tracker:`:
+two. The record and the scripts are the two things worth versioning; everything
+else the folder accumulates is payload and stays local. Same for every front,
+whatever its `trust:` and whatever its `tracker:`:
 
 ```
 _command/portfolio/<front>/[<project>/]tasks/<ID>-<slug>/
@@ -104,19 +105,41 @@ _command/portfolio/<front>/[<project>/]tasks/<ID>-<slug>/
 └─ screenshots/   QA / verification images                                       [gitignored]
 ```
 
+Those three payload names are the convention, not the mechanism. Anything else you
+put beside `ticket.md` and `scripts/` is gitignored too.
+
 | Path | Tracked? | Why |
 |---|---|---|
 | `ticket.md` | yes | the record; the pasted literal verification output lives here as text |
 | `scripts/` | yes | a repro/verify script is prevention infrastructure - it compounds, so version it |
-| `samples/` `artifacts/` `screenshots/` | **no** (gitignored) | disposable or heavy proof; contained per ticket, never bloats or leaks the repo |
+| everything else beside them - `samples/` `artifacts/` `screenshots/`, or any name a session invents | **no** (gitignored) | disposable or heavy proof; contained per ticket, never bloats or leaks the repo |
 
 Everything a ticket owns is under one `<ID>-<slug>`, so its record and its payloads
 are always in the same place and the promotion rule moves them together.
 
-**Tracked-repo hygiene.** The three payload names are ignored only inside a ticket
-folder (`**/tasks/*/samples/` and siblings), never globally, so a `samples/` or
-`artifacts/` directory that belongs to product code is left alone. Nothing under
-those three can be committed, so no payload can bloat or leak the repo.
+**Tracked-repo hygiene - two rules that compose.**
+
+First, the instance is local in full. `_command/` is gitignored by this repo, so
+nothing under it, ticket records included, can be committed from a clone. The
+product is `framework/` plus the skills; your instance is yours. Want history for
+it? Keep `_command/` in a private repo of your own and carry the payload rule
+below into that repo's `.gitignore`, which is where the Tracked column above
+starts to bite.
+
+Second, inside a ticket folder the payload never travels. The rule excludes the
+folder's contents and re-includes exactly `ticket.md` and `scripts/`
+(`**/tasks/*/*` plus two negations), rather than listing `samples/`, `artifacts/`
+and `screenshots/` by name. A named list fails open on the first payload directory
+nobody thought of, and for a confidential front failing open means committing
+someone else's data. It is scoped to `tasks/<ID>/`, so a `samples/` directory that
+belongs to product code is left alone, and it reaches one level below `tasks/`, so
+`tasks/_board.md` stays tracked.
+
+`tools/check-ignores.ps1` asserts both, on file paths rather than directory names:
+a directory-only pattern cannot match a path git cannot resolve as a directory, so
+asking whether a bare directory is ignored returns an answer that flips with
+whether it happens to exist. That is how `_command/` came to be documented as
+gitignored in two places while the rules tracked it.
 
 Scripts stay tracked on purpose. Putting them in the ignored half was considered
 and rejected: an unversioned repro script is lost on a fresh clone, cannot be

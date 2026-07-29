@@ -59,7 +59,15 @@ the universal grammar - PASS/FAIL evidence is discipline at every tier.
 5. **No leftover placeholders.** Run the instance-mode sweep:
    `powershell -Command ".\tools\leak-sweep.ps1 -Mode instance -Path _command,CLAUDE.md"`
    (or `tools/leak-sweep.sh instance`). Exit 0 required; paste the output.
-6. **Doctrine currency.** If `framework/` was recently pulled, read
+6. **Nothing private is committable.** Run
+   `powershell -Command ".\tools\check-ignores.ps1"`. Exit 0 required; paste the
+   output. This is the check that `_command/` and every ticket payload are
+   actually excluded rather than merely documented as excluded, so run it after
+   any `.gitignore` change and after any framework pull. Then confirm the
+   instance is genuinely absent from the index:
+   `git status --porcelain _command` must print nothing. A `??` there means the
+   instance is untracked but not ignored, which is one `git add -A` from a commit.
+7. **Doctrine currency.** If `framework/` was recently pulled, read
    `CHANGELOG.md`'s new entries for anything that contradicts
    `CONSTITUTION.local.md`; name conflicts rather than silently
    preferring either side.
