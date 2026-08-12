@@ -163,15 +163,26 @@ stores above), then write it.
   **Context:** <where it came from - phase, task, model/effort used>
   **What happened:** <the observation, with the evidence>
   **Transferable rule:** <the method to reuse on the next project of this class>
-  **Confidence:** low | medium | high   ·   **Promote?** yes | no
+  **Confidence:** low | medium | high   ·   **Destination:** doctrine | <front> context
   ```
 - If the lesson clearly fits an existing file in `_command/learning/`
   (per the Phase 2 read), APPEND the entry to that file. Otherwise create
   a new standalone file `_command/learning/<NN>-<kebab-slug>.md` using the
   next available `NN-` number, opening with a one-line
   `> Captured <date> from <trigger>` note, then the schema entry.
-- Set **Promote?** honestly: `yes` marks it as a candidate that
-  `/promote-learnings` should later weigh for standing doctrine.
+- Set **Destination** honestly. Every lesson has one; the field records
+  where it should travel, not whether it deserves to. A lesson about METHOD
+  that holds across fronts proposes `doctrine`. A lesson about how one
+  front deploys, connects, authenticates or fails proposes that front's
+  context (`smileshape context`, `ytkit context`). `/promote-learnings`
+  makes the final call and can re-route it.
+- **Most lessons have two halves, so split them.** The portable half is the
+  method ("find how this codebase already performs a privileged bulk action
+  and copy it"); the local half is the mechanism ("this front reaches its
+  database only through the migration Lambda"). Write them as separate
+  entries with separate destinations. A lesson written as one blob loses
+  whichever half the reader does not need, and the local half is the one
+  that gets dropped.
 
 ### If it genuinely warrants both
 

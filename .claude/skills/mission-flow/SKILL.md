@@ -188,9 +188,17 @@ From the repo root:
 ```
 git status                                # must be clean, or founder-approved to stash
 git fetch origin
-git checkout -b <type>/<key>-<kebab-slug> origin/<base-branch>
+git switch -c <type>/<key>-<kebab-slug> --no-track origin/<base-branch>
+git rev-parse --abbrev-ref '@{upstream}'  # must NOT name the base branch
 ```
 
+- **`--no-track` is not optional.** `git checkout -b <name> origin/<base>`
+  sets the new branch's upstream to BASE, so every later `git push` from it
+  aims at the base branch. Where the base also triggers a deploy, that push
+  is an unreviewed production release. The `rev-parse` above must either
+  error with "no upstream configured" or name the new branch; if it prints
+  the base branch, stop and re-point before doing any work. Say out loud
+  which branch the upstream names before leaving this phase.
 - `base-branch` comes from the repo's spoke
   (`_command/portfolio/<front>/[<project>/]<project>.md`) if one exists;
   fallback = `origin/main`. Native-board tickets: fill the task's

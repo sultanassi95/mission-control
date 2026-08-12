@@ -23,14 +23,16 @@ The test: a fact that only helps a future session ACT correctly is memory; a met
 **Context:** <where it came from - phase, task, model/effort used>
 **What happened:** <the observation, with the evidence>
 **Transferable rule:** <the method to reuse on the next project of this class>
-**Confidence:** low | medium | high   ·   **Promote?** yes | no
+**Confidence:** low | medium | high   ·   **Destination:** doctrine | <front> context
 ```
+
+Every lesson has a destination; the field records where it should travel, not whether it deserves to. A lesson about METHOD that holds across fronts goes to `doctrine`. A lesson about how one front deploys, connects, authenticates or fails goes to that front's context under `_command/portfolio/<front>/`. Most lessons have both halves: write them as separate entries, or the local half is the one that gets dropped.
 
 ## The growth loop
 
 1. Work happens; things are learned.
 2. At wind-down, `/debrief` invokes `/learn-from-session`: candidates pass an 8-rule critique gate (no dups, no useless learning, no destructive habits, no over-generalized one-offs, actual intent only, evidence-cited, scoped truth, no confidential content) before anything is written.
-3. Periodically, `/promote-learnings` reviews both stores and proposes the repeatedly-reinforced, high-stakes rules for promotion into `_command/CONSTITUTION.local.md`, so they bind every session. Always with founder sign-off.
+3. Periodically, `/promote-learnings` reviews both stores and routes each lesson to its destination: portfolio doctrine in `_command/CONSTITUTION.local.md` (or the product file that carries the method), or the front's own context under `_command/portfolio/<front>/`. It also repairs the artifact that would otherwise keep emitting the failure, since a rule written while its file still emits the defect changes nothing. Always with founder sign-off.
 
 ## The seed (read in any order)
 
