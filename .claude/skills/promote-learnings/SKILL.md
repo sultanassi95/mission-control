@@ -133,10 +133,16 @@ field is not ready to present.
   grep the flows, templates and checklists for the command, step or wording
   the lesson contradicts. A lesson about a git command has a git command
   somewhere in a flow; a lesson about a test has a test checklist. If the
-  artifact sits under `framework/`, it is upstream here, so write the
-  amendment as a dated gated item addressed to the product repo rather than
-  an edit. If you cannot name an artifact, write `none` followed by the
-  files and patterns you searched, so the claim is checkable.
+  artifact is a product file (`framework/**`, `.claude/skills/**`,
+  `tools/**`), most instances cannot repair it, because a local patch is
+  clobbered by the next pull. Write the amendment as a **binding local
+  override** instead: wording that names the artifact and the corrected
+  behaviour, to be placed in `_command/CONSTITUTION.local.md`, which
+  outranks `framework/` doctrine by precedence. Say plainly whether this
+  instance also maintains the product, since that is the only case where
+  the file itself can be repaired. If you cannot name an artifact, write
+  `none` followed by the files and patterns you searched, so the claim is
+  checkable.
 - **Rationale** - one line, tied to the Phase 2 criteria.
 - **Source lesson** - the memory file and/or learning-log entry it is drawn
   from.
@@ -163,21 +169,32 @@ For each approved item only:
 - For a `front context` destination, write the entry into that front's hub
   or spoke under `_command/portfolio/<front>/`, in the instance, in this
   pass. Keep it to the pointer style those files already use.
-- Apply the approved **artifact amendment**, routed by where the artifact
-  lives. An artifact under `_command/**` is this instance's own and is
-  edited here. An artifact that is part of the product (`framework/**`,
-  `.claude/skills/**`, `tools/**`) is authored in the product repo on a
-  branch, never patched in place in an operating instance, where the next
-  pull would clobber it and no one else would ever receive it. An artifact
-  you do not maintain goes to the founder as a dated gated item. Name which
-  of the three routes each amendment took.
+- Apply the approved **artifact amendment** by the route this instance
+  actually has. Most instances run mission-control as a pulled product they
+  do not maintain, so the override route below is the normal one, not the
+  fallback.
+  - An artifact under `_command/**` is this instance's own: edit it here.
+  - A product file, in an instance that does NOT maintain the product:
+    never patch it, the next pull clobbers it and no other instance gets
+    it. Write the correction into `_command/CONSTITUTION.local.md` as an
+    override that names the artifact and the corrected behaviour. This
+    binds: precedence puts the local overlay above `framework/` doctrine,
+    and the ticket template says in so many words that an instance may bind
+    a sharper Definition of Done there. Reporting the defect upstream as
+    well is welcome, and is never what the instance waits on.
+  - A product file, in an instance that DOES maintain the product: author
+    it in the product repo on a branch, merge, and pull it back.
+  Name which route each amendment took.
 - **Never edit a repo under `fronts/` to carry a promotion.** A defect in a
   front's own code is a ticket for that front, raised through its flow. If
   a promotion seems to need one, the lesson was routed wrong: record the
   front-context entry, and name the ticket the code fix belongs to.
-- If the approved tier is `binding`, add its Definition-of-Done line to
-  `framework/kit/templates/_task.template.md` by that same product route,
-  so the ticket gate enforces the rule instead of merely recording it.
+- If the approved tier is `binding`, put its Definition-of-Done line where
+  this instance can actually bind it: the product template if you maintain
+  the product, otherwise a sharper Definition of Done in
+  `_command/CONSTITUTION.local.md`, which the template itself defers to.
+  Either way the ticket checklist has to end up carrying it, or the tier is
+  `advisory` and should be labelled that instead.
 - No em dashes, no en dashes, anywhere in the inserted text.
 - Do not touch, remove, or renumber anything the founder did not approve.
 - Go back to each source lesson - the memory file and/or the learning-log
