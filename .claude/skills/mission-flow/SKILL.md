@@ -35,7 +35,8 @@ skip a phase, never reorder, never invent new phases.
   you want to see the draft before it lands, not as routine practice.
 - **`--full-auto` (optional flag; alias: `--auto`).** Accepted and has no
   effect: autonomous execution is the default. Retained so existing
-  invocations keep parsing.
+  invocations keep parsing. It does not affect the triggers in "When the
+  flow stops", which apply regardless of any flag.
 - **`--spend <lean|standard|deep>` (optional).** lean = reviewer cap 1,
   tightest prose; standard (default) = the Phase-5 sizing table as-is;
   deep = the full multi-angle review sweep. **`--deep-review` remains as
@@ -60,7 +61,7 @@ PR body the flow is confident in gets opened.
 It stops for exactly two reasons.
 
 **Critical misalignment** - what is about to ship diverges from what was
-asked. Stop, name which of the four it contradicts, present the choice, and
+asked. STOP, name which of the four it contradicts, present the choice, and
 wait. The triggers are exhaustive:
 
 | Trigger | What it contradicts |
@@ -71,14 +72,15 @@ wait. The triggers are exhaustive:
 | Scope found mid-flow materially exceeds what was described | the idea for the ticket |
 | An irreversible or outward-facing action is required that this invocation does not cover: a merge, a production write, a message to a third party | the prompt |
 
-**A blocking impediment** - the flow cannot proceed at all. Stop and report.
-These are not requests for permission and are not waivable:
+**A blocking impediment** - the flow cannot proceed at all. STOP and report.
+These report an obstacle rather than asking to proceed, so no flag waives
+them. The founder may unblock or waive one after it is reported, which is
+their call on a reported obstacle, never a gate the flow opens on its own:
 
 | Phase | Impediment |
 |---|---|
 | 0 | the description is missing, or the tracker situation is unclear |
 | 2 | Jira path with no parent and no existing ticket |
-| 3 | the new branch's upstream names the base branch |
 | 6 | the local stack genuinely cannot be brought up |
 | any | a phase's gate fails |
 
@@ -249,8 +251,10 @@ git rev-parse --abbrev-ref '@{upstream}'  # must NOT name the base branch
   aims at the base branch. Where the base also triggers a deploy, that push
   is an unreviewed production release. The `rev-parse` above must either
   error with "no upstream configured" or name the new branch; if it prints
-  the base branch, stop and re-point before doing any work. Say out loud
-  which branch the upstream names before leaving this phase.
+  the base branch, re-point it before doing any work. This is a correction
+  the flow makes on its own and notes in the Phase-8 report, not a stop; if
+  it cannot be re-pointed, that is a failed gate. Say out loud which branch
+  the upstream names before leaving this phase.
 - `base-branch` comes from the repo's spoke
   (`_command/portfolio/<front>/[<project>/]<project>.md`) if one exists;
   fallback = `origin/main`. Native-board tickets: fill the task's
