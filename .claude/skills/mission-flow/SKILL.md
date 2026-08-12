@@ -157,13 +157,32 @@ assignee. Move to the In Progress column if a project board exists.
 
 ### Trackerless path (the native board)
 
-Create `T-NNN-<slug>.md` from `framework/kit/templates/_task.template.md`
-in the project's `tasks/` folder - NNN is that board's next number, state
-`ready` (this flow is about to work it), the full description as the body
-per the floor below. Regenerate `_board.md`. The task id `T-NNN` is the
-`<key>` for branches, commits, and the PR.
+The task id is `T-NNN` at that board's next number, and it is the `<key>`
+for branches, commits, and the PR. State `ready` (this flow is about to
+work it), the full description as the body per the floor below. Regenerate
+`_board.md`. The ticket folder itself is created by the step in "All
+paths" below, which applies here too.
 
 ### All paths
+
+**Create the local ticket folder. Every path, every tracker.** From
+`framework/kit/templates/_task.template.md`, create
+
+```
+_command/portfolio/<front>/[<project>/]tasks/<ID>-<slug>/ticket.md
+```
+
+where `<ID>` is the tracker key (`AI-1639`, `#214`) or the native task id
+(`T-NNN`). See `framework/task-board.md` for the folder layout.
+
+With an external tracker, replace Context / Acceptance criteria /
+Out-of-scope with the one-line pointer `> Tracked in: JIRA <KEY> - <url>`
+and **keep the Definition of Done checklist**. The remote issue is where
+the work is tracked; this folder is where the work is measured, and the
+checklist is the only thing that makes the integration-truth floor
+enforceable per ticket rather than remembered. A ticket folder without
+`ticket.md` leaves that floor unenforced for that ticket, which is the
+common way a front ends up with tasks and no checklist at all.
 
 Draft with:
 - **Specific title** - a Conventional-Commits-friendly imperative that
@@ -188,9 +207,17 @@ From the repo root:
 ```
 git status                                # must be clean, or founder-approved to stash
 git fetch origin
-git checkout -b <type>/<key>-<kebab-slug> origin/<base-branch>
+git switch -c <type>/<key>-<kebab-slug> --no-track origin/<base-branch>
+git rev-parse --abbrev-ref '@{upstream}'  # must NOT name the base branch
 ```
 
+- **`--no-track` is not optional.** `git checkout -b <name> origin/<base>`
+  sets the new branch's upstream to BASE, so every later `git push` from it
+  aims at the base branch. Where the base also triggers a deploy, that push
+  is an unreviewed production release. The `rev-parse` above must either
+  error with "no upstream configured" or name the new branch; if it prints
+  the base branch, stop and re-point before doing any work. Say out loud
+  which branch the upstream names before leaving this phase.
 - `base-branch` comes from the repo's spoke
   (`_command/portfolio/<front>/[<project>/]<project>.md`) if one exists;
   fallback = `origin/main`. Native-board tickets: fill the task's
@@ -341,6 +368,20 @@ deliverable, not just stale prose. This applies on every run, including
   the WL id for trackerless).
 - Title: identical Conventional-Commits shape to the primary commit
   (`<type>(<key>): <lowercase description>`).
+
+### Settle the Definition of Done checklist first
+
+Before drafting the PR, open the ticket's `ticket.md` and resolve every line
+of its Definition of Done checklist. Each line is either ticked with the
+evidence that satisfies it (the literal output, the query, the request and
+response - Phase 6 produced most of it), or marked `N/A` with the reason it
+does not apply. A line left blank is an open ticket, not a finished one, and
+`Real path, end to end` in particular stays unticked while any `[STUB]`
+remains.
+
+This is the step that makes the checklist enforceable instead of decorative.
+Writing the file at Phase 2 and never reading it back leaves the whole floor
+resting on recall.
 
 ### PAUSE POINT 2 - before creating the PR
 
