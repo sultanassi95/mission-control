@@ -5,7 +5,8 @@ description: >-
   merged-ready PR on any front. Runs the fixed 8-phase sequence: classify,
   triage (systematic debugging OR brainstorming), ticket, branch,
   phase-commits, code review with fixes, local verification gauntlet, PR,
-  link back. Works with Jira, GitHub Issues, or no tracker at all. Runs
+  link back and capture what the ticket taught about the front. Works with
+  Jira, GitHub Issues, or no tracker at all. Runs
   autonomously end to end within the invocation's scope, stopping only on
   critical misalignment or a blocking impediment. Use whenever the founder
   types /mission-flow - with or without flags - and gives a description of
@@ -428,16 +429,61 @@ Once created: do NOT request review, tag reviewers, mark ready, or
 auto-merge - those stay with the founder. Merging is outward-facing and
 outside every invocation's scope.
 
-## Phase 8 - Link back (produces: two-way traceability)
+## Phase 8 - Link back + capture (produces: two-way traceability, current front context)
+
+### Link back
 
 - Jira: post a comment on the ticket with the PR URL. GitHub Issues: the
   closing keyword already links; add a one-line comment if the issue is a
   long-running tracker. Native board: fill the task's `pr:` field, set
   state `review`, regenerate `_board.md` (state `done` comes when the
   founder merges).
+
+### Update the front's context
+
+A ticket teaches things about the front it ran on: how the project deploys,
+which path reaches its data, which branch is a deploy trigger, which
+constraint bit this time. None of that survives unless it lands where the
+next session reads it before touching the project.
+
+Choose ONE destination per fact, by what the fact binds:
+
+| The fact binds | Destination |
+|---|---|
+| every project on the front | the hub, `_command/portfolio/<front>/_front.md` |
+| this repo only | the spoke, `_command/portfolio/<front>/[<project>/]<project>.md`, in `gotchas` or "How to work in it" |
+
+**The bar is structural, not eventful.** A fact belongs here only if it
+changes when the PROJECT's shape changes, never when you merely do work -
+the reference-versus-state split in `framework/continuity-stack.md`. "The
+RDS is VPC-private, so a data change ships as a migration" is structural.
+"AI-1628 shipped on Tuesday" is state and belongs in `progress.md`. If a
+future session would not act differently for knowing it, do not write it.
+
+This step is the reference layer only. `progress.md` still takes state at
+`/debrief`, and transferable method still goes to the learning log at
+`/learn-from-session`. One fact, one layer.
+
+Read the destination before writing. Where an entry already covers the
+ground, sharpen that entry rather than appending a near-duplicate.
+
+**Write nothing when the ticket taught nothing structural, and say so in the
+report.** Most tickets teach nothing structural, and an invented entry is
+worse than an empty one because it dilutes the entries that matter.
+
+**Never write into the front's own repo under `fronts/`.** A defect in a
+front's code is a ticket on that front. This step writes only to the
+management repo.
+
+Confidential fronts stay pointers-only: nothing employer-owned enters
+`_command/` beyond what that front's IP-boundary rules already permit.
+
+### Report
+
 - Report to the founder: key + PR URL + verification snapshot
   (typecheck/lint/test counts) + which manual smoke scenarios are still
-  pending on their side.
+  pending on their side + what was written to front context, or that
+  nothing structural was learned.
 
 ## Autonomy scope
 
