@@ -5,12 +5,12 @@ description: >-
   merged-ready PR on any front. Runs the fixed 8-phase sequence: classify,
   triage (systematic debugging OR brainstorming), ticket, branch,
   phase-commits, code review with fixes, local verification gauntlet, PR,
-  link back. Works with Jira, GitHub Issues, or no tracker at all. Two
-  default pause points (before creating the ticket, before creating the PR)
-  unless --full-auto is passed; everything else runs autonomously within
-  the invocation's scope. Use whenever the founder types /mission-flow -
-  with or without flags - and gives a description of a defect / task /
-  enhancement plus a tracker reference (or says trackerless).
+  link back. Works with Jira, GitHub Issues, or no tracker at all. Runs
+  autonomously end to end within the invocation's scope, stopping only on
+  critical misalignment or a blocking impediment. Use whenever the founder
+  types /mission-flow - with or without flags - and gives a description of
+  a defect / task / enhancement plus a tracker reference (or says
+  trackerless).
 ---
 
 # Mission Flow
@@ -29,19 +29,20 @@ skip a phase, never reorder, never invent new phases.
   - **Trackerless:** say so; the flow files the task on the project's
     own board (`_command/portfolio/<front>/[<project>/]tasks/` - see
     `framework/task-board.md`) instead.
-- **`--full-auto` (optional flag; alias: `--auto`).** Skips both default
-  pause points; the flow runs end-to-end without stopping. Default (no
-  flag) = partial autonomy with pauses. `--auto` waives the approval
-  PAUSES, not design judgment: a genuine design fork - a data-model /
-  schema choice, a cross-cutting behaviour matrix (see Phase 1), or a
-  founder mechanism the evidence shows is unsafe or ineffective - is still
-  surfaced for a decision before it ships.
+- **`--confirm` (optional flag).** Restores two approval gates for this
+  invocation: before creating the ticket, and before creating the PR. Off
+  by default. Reach for it when the task is genuinely underspecified and
+  you want to see the draft before it lands, not as routine practice.
+- **`--full-auto` (optional flag; alias: `--auto`).** Accepted and has no
+  effect: autonomous execution is the default. Retained so existing
+  invocations keep parsing. It does not affect the triggers in "When the
+  flow stops", which apply regardless of any flag.
 - **`--spend <lean|standard|deep>` (optional).** lean = reviewer cap 1,
   tightest prose; standard (default) = the Phase-5 sizing table as-is;
   deep = the full multi-angle review sweep. **`--deep-review` remains as
   an alias for `--spend deep`.** `--thinking` (default high - Phase 1 is
-  root-cause work) and `--verbosity` per the universal grammar (the
-  pause points and evidence pastes are discipline at every tier).
+  root-cause work) and `--verbosity` per the universal grammar (the stop
+  triggers and evidence pastes are discipline at every tier).
 - **`with Override: <clauses>` suffix (freeform).** Per-invocation
   overrides the founder types after the flags. Interpret each override as
   a scalpel, not a blanket (see
@@ -49,8 +50,44 @@ skip a phase, never reorder, never invent new phases.
   specific thing to skip or change; everything not named stays. Note in
   the Phase-8 report which clauses were honoured.
 
-If the description is missing, or the tracker situation is unclear, STOP
-and ask the founder before Phase 0.
+## When the flow stops
+
+This flow is a CTO-grade orchestrator. While the task is clear it runs from
+Phase 0 to Phase 8 without asking permission: it does not present drafts for
+sign-off, and it does not check in at phase boundaries. Autonomy is the
+default, not a flag. A ticket draft the flow is confident in gets created; a
+PR body the flow is confident in gets opened.
+
+It stops for exactly two reasons.
+
+**Critical misalignment** - what is about to ship diverges from what was
+asked. STOP, name which of the four it contradicts, present the choice, and
+wait. The triggers are exhaustive:
+
+| Trigger | What it contradicts |
+|---|---|
+| Evidence shows the requested mechanism is unsafe or will not achieve the goal | the prompt |
+| A genuine design fork the request does not settle: a data-model or schema choice, a cross-cutting behaviour matrix (Phase 1) | the plan |
+| The ticket's acceptance criteria cannot be satisfied as written | the given ticket |
+| Scope found mid-flow materially exceeds what was described | the idea for the ticket |
+| An irreversible or outward-facing action is required that this invocation does not cover: a merge, a production write, a message to a third party | the prompt |
+
+**A blocking impediment** - the flow cannot proceed at all. STOP and report.
+These report an obstacle rather than asking to proceed, so no flag waives
+them. The founder may unblock or waive one after it is reported, which is
+their call on a reported obstacle, never a gate the flow opens on its own:
+
+| Phase | Impediment |
+|---|---|
+| 0 | the description is missing, or the tracker situation is unclear |
+| 2 | Jira path with no parent and no existing ticket |
+| 6 | the local stack genuinely cannot be brought up |
+| any | a phase's gate fails |
+
+Anything not on these two lists is not a reason to stop. A phase boundary is
+not a check-in, a draft is not a submission, and a decision the request
+already settled is not re-opened. `--confirm` adds back the two ticket and PR
+gates for one invocation without changing either list.
 
 ## Phase 0 - Classify the work
 
@@ -86,11 +123,12 @@ requirements, and shape before writing code. Produce a short agreed
 approach (what's in scope, what's not, one or two concrete design
 choices).
 
-**Cross-cutting behaviour change (audit before you --auto).** When a ticket
+**Cross-cutting behaviour change (audit before you proceed).** When a ticket
 expands from a point fix into a change across a MATRIX - every status x role, a
 whole permission surface, controls that must match state - the design fork is
-not one choice, it is the entire target matrix. Do not --auto a fix whose
-correct end-state is still an undecided product decision. First AUDIT the
+not one choice, it is the entire target matrix. That is critical misalignment
+with the plan: stop and settle it. Never carry a fix forward autonomously when
+its correct end-state is still an undecided product decision. First AUDIT the
 actual current behaviour from real evidence (read the gating code; drive the
 running UI), present a current-state-vs-target matrix, and get the founder's
 per-cell sign-off. THEN implement the agreed matrix. (Lived: a narrow "closed
@@ -194,11 +232,8 @@ Draft with:
   path - per the Phase-1 production-execution check). No placeholders. (See
   `framework/learning-seed/11-delivery-hygiene.md`.)
 
-### PAUSE POINT 1 - before creating the ticket
-
-Present the drafted title + description to the founder for approval,
-UNLESS `--full-auto` was passed. Wait for an explicit "go" before
-creating anything.
+Create it. Under `--confirm`, present the drafted title and description
+first and wait for an explicit go.
 
 ## Phase 3 - Branch
 
@@ -216,8 +251,10 @@ git rev-parse --abbrev-ref '@{upstream}'  # must NOT name the base branch
   aims at the base branch. Where the base also triggers a deploy, that push
   is an unreviewed production release. The `rev-parse` above must either
   error with "no upstream configured" or name the new branch; if it prints
-  the base branch, stop and re-point before doing any work. Say out loud
-  which branch the upstream names before leaving this phase.
+  the base branch, re-point it before doing any work. This is a correction
+  the flow makes on its own and notes in the Phase-8 report, not a stop; if
+  it cannot be re-pointed, that is a failed gate. Say out loud which branch
+  the upstream names before leaving this phase.
 - `base-branch` comes from the repo's spoke
   (`_command/portfolio/<front>/[<project>/]<project>.md`) if one exists;
   fallback = `origin/main`. Native-board tickets: fill the task's
@@ -306,8 +343,8 @@ tool availability per `_command/machine.local.md`:
 Paste the literal terminal output - evidence before claims. Do NOT claim
 green without pasting; do NOT push if anything is red.
 
-**Integration + e2e QA - REQUIRED when API or UI behaviour changed, and NOT
-skipped under `--auto`.** The unit/typecheck/lint gauntlet is the FLOOR, never
+**Integration + e2e QA - REQUIRED when API or UI behaviour changed, and never
+skipped for autonomy.** The unit/typecheck/lint gauntlet is the FLOOR, never
 the ceiling, for a user-facing change (hard rules 1 + 5). Unit-green with a
 mocked boundary is not "verified". Stand up the real stack locally and:
 - **Backend (over the wire):** exercise the actual changed endpoints against
@@ -351,8 +388,7 @@ stale. Before drafting the PR body: update the ticket (or task file)
 so it describes the behaviour actually delivered, and write the PR body to
 the final shipped state. Skip only when nothing changed. A ticket or PR
 that describes behaviour the code does not have is a defect in the
-deliverable, not just stale prose. This applies on every run, including
-`--full-auto`.
+deliverable, not just stale prose. This applies on every run.
 
 - `git push -u origin <branch>` - confirm the remote accepted.
 - Confirm `gh auth status` is on the account that owns the target repo;
@@ -383,13 +419,14 @@ This is the step that makes the checklist enforceable instead of decorative.
 Writing the file at Phase 2 and never reading it back leaves the whole floor
 resting on recall.
 
-### PAUSE POINT 2 - before creating the PR
+### Open the PR
 
-Present the drafted PR title + body to the founder for approval, UNLESS
-`--full-auto` was passed. Wait for an explicit "go" before `gh pr create`.
+`gh pr create` with the drafted title and body. Under `--confirm`, present
+them first and wait for an explicit go.
 
 Once created: do NOT request review, tag reviewers, mark ready, or
-auto-merge - those stay with the founder.
+auto-merge - those stay with the founder. Merging is outward-facing and
+outside every invocation's scope.
 
 ## Phase 8 - Link back (produces: two-way traceability)
 
@@ -415,8 +452,10 @@ carve-out is exactly as wide as one invocation.
 - Do NOT skip phases; do NOT reorder.
 - Do NOT batch phase commits into a single commit "to save time" - commit
   hygiene is the deliverable.
-- Do NOT bypass the pause points by inferring approval from a "yes" said
-  three messages earlier - approval is per-pause-point, in-moment.
+- Do NOT invent a stop. The two lists in "When the flow stops" are
+  exhaustive; a phase boundary is not a check-in.
+- Under `--confirm`, do NOT infer approval from a "yes" said three messages
+  earlier - approval is per-gate, in-moment.
 - If any phase's gate fails, STOP and report; do not paper over it.
 
 ## Related doctrine
