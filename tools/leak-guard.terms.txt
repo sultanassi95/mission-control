@@ -1,0 +1,63 @@
+# leak-guard deny-list - process vocabulary that must not reach an outward artifact
+#
+# One case-insensitive REGEX per line. Blank lines and lines starting with #
+# are ignored. Every term is matched against the tool input only, never against
+# the repo's files.
+#
+# TUNING RULE: prefer a multiword phrase over a bare word. A bare common word
+# is a false-positive engine: "gate" is inside delegate, mitigate, aggregate,
+# navigate, investigate, and "gateway" is ordinary code. Every entry below is
+# either multiword or a word nobody writes by accident in a commit message.
+#
+# SCOPE WARNING: a repo whose SUBJECT is process (this one) will legitimately
+# use these words in its commits. Enable the full list only on repos where the
+# words are leakage, not subject matter. See framework/leak-guard.md.
+
+# --- attribution of a decision to a person rather than to the change ---
+\bfounder (said|says|decided|asked|wants|wanted|approved|confirmed|rejected)\b
+\bper the founder\b
+\bas the founder (asked|requested|instructed)\b
+\bthe founder's (call|decision|request)\b
+\bthe owner (decided|locked)\b
+\bas (instructed|requested) by\b
+
+# --- internal orchestration vocabulary ---
+# NOT bare \borchestrator\b or \bsub-?agents?\b. Both are ordinary domain
+# nouns: a Saga orchestrator is a microservices pattern, and an SNMP AgentX
+# sub-agent is RFC 2741 vocabulary. Blocked on 2026-08-13 in review against
+# "add the orchestrator service to coordinate payment steps" and "restart the
+# AgentX sub-agent on socket timeout", both legitimate. Bind them to the verb
+# that makes them process talk.
+\bthe orchestrator (decided|dispatched|integrated|held|holds)\b
+\b(dispatch(ed|es)?|brief(ed)?) (a |the )?sub-?agents?\b
+# NOT \bpause point\b. "insert a pause point at the marker" is ordinary video
+# editing vocabulary, and ytkit is a video tool. The phrase is also obsolete:
+# MC-006 removed pause points from the flow.
+\bthe gate (passed|failed)\b
+\bgate-locked\b
+\bfan-?out budget\b
+
+# Disabled by default, on evidence. Scanning this repo's own 8 commits on
+# 2026-08-13, `\bmission[- ]flow phase\b` produced 2 hits (444c87e, 673370b)
+# and BOTH were false: those commits are legitimately about mission-flow.
+# In a repo where the flow is tooling rather than subject matter it is real
+# leakage, so uncomment it there.
+# \bmission[- ]flow phase\b
+
+# --- deliberation labels ---
+# DELIBERATELY EMPTY. [ASSUMPTION], [UNVERIFIED] and [STUB] were here and were
+# removed on 2026-08-13: framework/engineering-standard.md and the instance's
+# CONSTITUTION.local both REQUIRE those markers ("a remaining stub is [STUB] and
+# the ticket stays open"). Blocking them made the guard forbid the very text
+# doctrine mandates. They are correct usage, not leakage.
+
+# --- authorship tells ---
+# The tell is the self-reference, not the subject. "language model" and
+# "AI assistant" alone are product vocabulary on any AI product, so they are
+# bound to the self-referential phrasing instead.
+\bas an AI\b
+\bas a language model\b
+\bI am an? (AI|assistant|language model)\b
+Co-Authored-By:\s*(Claude|GPT|Gemini|Copilot)
+\bgenerated (with|by) (Claude|GPT|Gemini|Copilot|an? AI)\b
+🤖
