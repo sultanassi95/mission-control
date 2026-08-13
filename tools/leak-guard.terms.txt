@@ -1,0 +1,50 @@
+# leak-guard deny-list - process vocabulary that must not reach an outward artifact
+#
+# One case-insensitive REGEX per line. Blank lines and lines starting with #
+# are ignored. Every term is matched against the tool input only, never against
+# the repo's files.
+#
+# TUNING RULE: prefer a multiword phrase over a bare word. A bare common word
+# is a false-positive engine: "gate" is inside delegate, mitigate, aggregate,
+# navigate, investigate, and "gateway" is ordinary code. Every entry below is
+# either multiword or a word nobody writes by accident in a commit message.
+#
+# SCOPE WARNING: a repo whose SUBJECT is process (this one) will legitimately
+# use these words in its commits. Enable the full list only on repos where the
+# words are leakage, not subject matter. See framework/leak-guard.md.
+
+# --- attribution of a decision to a person rather than to the change ---
+\bfounder (said|says|decided|asked|wants|wanted|approved|confirmed|rejected)\b
+\bper the founder\b
+\bas the founder (asked|requested|instructed)\b
+\bthe founder's (call|decision|request)\b
+\bowner (decided|locked|approved)\b
+\bas (instructed|requested) by\b
+
+# --- internal orchestration vocabulary ---
+\borchestrator\b
+\bsub-?agents?\b
+\bpause point\b
+\bthe gate (passed|failed)\b
+\bgate-locked\b
+\bfan-?out budget\b
+
+# Disabled by default, on evidence. Scanning this repo's own 8 commits on
+# 2026-08-13, `\bmission[- ]flow phase\b` produced 2 hits (444c87e, 673370b)
+# and BOTH were false: those commits are legitimately about mission-flow.
+# In a repo where the flow is tooling rather than subject matter it is real
+# leakage, so uncomment it there.
+# \bmission[- ]flow phase\b
+
+# --- deliberation labels that belong in the working notes, not the artifact ---
+\[ASSUMPTION\]
+\[UNVERIFIED\]
+\[STUB\]
+
+# --- authorship tells ---
+\bas an AI\b
+\bAI assistant\b
+\blanguage model\b
+Co-Authored-By:\s*(Claude|GPT|Gemini|Copilot)
+\bgenerated with\b
+🤖
