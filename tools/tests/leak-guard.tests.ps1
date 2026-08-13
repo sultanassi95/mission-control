@@ -34,10 +34,13 @@ Assert "block message names the matched text" `
   ($stderrText -match "matched 'founder decided'")
 Assert "blocks 'per the founder' in a PR body" `
   ((RunHook (Bash 'gh pr create --title "t" --body "Scoped per the founder to one endpoint."')) -eq 2)
-Assert "blocks orchestration vocabulary" `
-  ((RunHook (Bash 'git commit -m "chore(x): orchestrator retries the queue"')) -eq 2)
-Assert "blocks a deliberation label" `
-  ((RunHook (Bash 'git commit -m "fix(x): [ASSUMPTION] the index exists"')) -eq 2)
+Assert "blocks orchestration vocabulary bound to its verb" `
+  ((RunHook (Bash 'git commit -m "chore(x): the orchestrator dispatched the retry"')) -eq 2)
+# There is deliberately no deliberation-label test. [ASSUMPTION], [UNVERIFIED]
+# and [STUB] were removed from the list because engineering-standard.md and
+# CONSTITUTION.local REQUIRE those markers; blocking them made the guard forbid
+# the text doctrine mandates. The false-positive loop below asserts [STUB]
+# passes, which is the behaviour that matters.
 Assert "blocks an authorship trailer" `
   ((RunHook (Bash 'git commit -m "feat(x): add thing" -m "Co-Authored-By: Claude <a@b.c>"')) -eq 2)
 Assert "blocks in a tracker comment (MCP tool)" `
@@ -58,6 +61,65 @@ Assert "allows 'investigate'" ((RunHook (Bash 'git commit -m "chore: investigate
 Assert "allows 'gateway'"     ((RunHook (Bash 'git commit -m "feat(infra): add the api gateway stage"')) -eq 0)
 Assert "allows 'stub' as a word" `
   ((RunHook (Bash 'git commit -m "test(x): stub the clock in the suite"')) -eq 0)
+
+# --- bypass regressions: every one of these reached an artifact unscanned ---
+Assert "blocks despite a -c global flag" `
+  ((RunHook (Bash 'git -c commit.gpgsign=false commit -m "fix: founder decided to revert"')) -eq 2)
+Assert "blocks despite a -C global flag" `
+  ((RunHook (Bash 'git -C fronts/x commit -m "fix: founder decided to revert"')) -eq 2)
+Assert "refuses a file-borne commit message" `
+  ((RunHook (Bash 'git commit -F /tmp/msg.txt')) -eq 2)
+Assert "refuses gh pr --body-file"   ((RunHook (Bash 'gh pr create --body-file /tmp/b.txt')) -eq 2)
+Assert "refuses gh pr --fill"        ((RunHook (Bash 'gh pr create --fill')) -eq 2)
+Assert "allows -F - with a heredoc"  ((RunHook (Bash "git commit -F - <<EOF`nfix(auth): reject an expired token`nEOF")) -eq 0)
+Assert "blocks a tracker edit tool" `
+  ((RunHook @{ tool_name = "mcp__x__editJiraIssue"; tool_input = @{ body = "the founder decided" } }) -eq 2)
+Assert "blocks a wiki page create" `
+  ((RunHook @{ tool_name = "mcp__x__createConfluencePage"; tool_input = @{ body = "the founder decided" } }) -eq 2)
+Assert "blocks an uppercase COMMENT tool name" `
+  ((RunHook @{ tool_name = "mcp__x__addCOMMENTToIssue"; tool_input = @{ body = "the founder decided" } }) -eq 2)
+Assert "does NOT scan a tracker read" `
+  ((RunHook @{ tool_name = "mcp__x__getJiraIssue"; tool_input = @{ jql = "text ~ orchestrator" } }) -eq 0)
+Assert "does NOT scan a tracker search" `
+  ((RunHook @{ tool_name = "mcp__x__searchJiraIssuesUsingJql"; tool_input = @{ jql = "the founder decided" } }) -eq 0)
+
+# --- false positives proven in review: ordinary engineering text must pass ---
+foreach ($fp in @(
+  'feat(saga): add the orchestrator service to coordinate payment steps',
+  'fix(snmp): restart the AgentX sub-agent on socket timeout',
+  'feat(llm): swap the language model provider to Anthropic',
+  'feat(chat): wire the AI assistant panel to the new provider',
+  'docs: note the open [STUB] on the fallback path, tracked in MC-010',
+  'feat(iga): notify when the resource owner approved the access request',
+  'feat(editor): insert a pause point at the marker',
+  'docs: regenerate api reference, generated with typedoc'
+)) {
+  Assert "allows: $($fp.Substring(0, [Math]::Min(46, $fp.Length)))" `
+    ((RunHook (Bash "git commit -m `"$fp`"")) -eq 0)
+}
+
+# --- every ACTIVE term must block something: a dropped line cannot go unnoticed ---
+$termCases = @{
+  '\bfounder (said'                  = 'chore: founder said revert it'
+  '\bper the founder\b'              = 'chore: scoped per the founder'
+  '\bas the founder ('               = 'chore: as the founder requested'
+  "\bthe founder's ("                = "chore: the founder's call on scope"
+  '\bthe owner (decided'             = 'chore: the owner decided to defer'
+  '\bas (instructed|requested) by\b' = 'chore: as instructed by the review'
+  '\bthe orchestrator ('             = 'chore: the orchestrator dispatched two passes'
+  'sub-?agents?\b'                   = 'chore: dispatched a sub-agent for review'
+  '\bthe gate (passed'               = 'chore: the gate passed on retry'
+  '\bgate-locked\b'                  = 'chore: gate-locked until approval'
+  '\bfan-?out budget\b'              = 'chore: fan-out budget of two agents'
+  '\bas an AI\b'                     = 'chore: as an AI I cannot verify this'
+  '\bas a language model\b'          = 'chore: as a language model I inferred it'
+  '\bI am an? ('                     = 'chore: I am an assistant and cannot merge'
+  'Co-Authored-By:'                  = 'feat: x" -m "Co-Authored-By: Claude <a@b.c>'
+  '\bgenerated (with|by) ('          = 'docs: generated with Claude'
+}
+foreach ($k in $termCases.Keys) {
+  Assert "term still blocks: $k" ((RunHook (Bash "git commit -m `"$($termCases[$k])`"")) -eq 2)
+}
 
 # --- scope: only outward commands are scanned ---
 Assert "ignores a non-outward git command" `
@@ -106,5 +168,6 @@ if ($bashExe -and (Test-Path $sh)) {
   Write-Output "SKIP  shell twin parity (bash not on PATH)"
 }
 
+if (Test-Path $errFile) { Remove-Item $errFile -Force }
 if ($failures.Count -gt 0) { Write-Output "TESTS FAILED: $($failures -join ', ')"; exit 1 }
 Write-Output "ALL LEAK-GUARD TESTS PASSED"; exit 0

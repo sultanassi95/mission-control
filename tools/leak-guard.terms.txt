@@ -18,13 +18,21 @@
 \bper the founder\b
 \bas the founder (asked|requested|instructed)\b
 \bthe founder's (call|decision|request)\b
-\bowner (decided|locked|approved)\b
+\bthe owner (decided|locked)\b
 \bas (instructed|requested) by\b
 
 # --- internal orchestration vocabulary ---
-\borchestrator\b
-\bsub-?agents?\b
-\bpause point\b
+# NOT bare \borchestrator\b or \bsub-?agents?\b. Both are ordinary domain
+# nouns: a Saga orchestrator is a microservices pattern, and an SNMP AgentX
+# sub-agent is RFC 2741 vocabulary. Blocked on 2026-08-13 in review against
+# "add the orchestrator service to coordinate payment steps" and "restart the
+# AgentX sub-agent on socket timeout", both legitimate. Bind them to the verb
+# that makes them process talk.
+\bthe orchestrator (decided|dispatched|integrated|held|holds)\b
+\b(dispatch(ed|es)?|brief(ed)?) (a |the )?sub-?agents?\b
+# NOT \bpause point\b. "insert a pause point at the marker" is ordinary video
+# editing vocabulary, and ytkit is a video tool. The phrase is also obsolete:
+# MC-006 removed pause points from the flow.
 \bthe gate (passed|failed)\b
 \bgate-locked\b
 \bfan-?out budget\b
@@ -36,15 +44,20 @@
 # leakage, so uncomment it there.
 # \bmission[- ]flow phase\b
 
-# --- deliberation labels that belong in the working notes, not the artifact ---
-\[ASSUMPTION\]
-\[UNVERIFIED\]
-\[STUB\]
+# --- deliberation labels ---
+# DELIBERATELY EMPTY. [ASSUMPTION], [UNVERIFIED] and [STUB] were here and were
+# removed on 2026-08-13: framework/engineering-standard.md and the instance's
+# CONSTITUTION.local both REQUIRE those markers ("a remaining stub is [STUB] and
+# the ticket stays open"). Blocking them made the guard forbid the very text
+# doctrine mandates. They are correct usage, not leakage.
 
 # --- authorship tells ---
+# The tell is the self-reference, not the subject. "language model" and
+# "AI assistant" alone are product vocabulary on any AI product, so they are
+# bound to the self-referential phrasing instead.
 \bas an AI\b
-\bAI assistant\b
-\blanguage model\b
+\bas a language model\b
+\bI am an? (AI|assistant|language model)\b
 Co-Authored-By:\s*(Claude|GPT|Gemini|Copilot)
-\bgenerated with\b
+\bgenerated (with|by) (Claude|GPT|Gemini|Copilot|an? AI)\b
 🤖

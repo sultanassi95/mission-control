@@ -41,13 +41,26 @@ aggregate, navigate and investigate, and `gateway` is ordinary code, so the
 list carries `the gate passed` and `gate-locked` instead. Every entry is either
 multiword or a word nobody writes by accident.
 
-## What it does not scan
+## What it scans, and what it refuses
 
-Only commands that publish something are scanned: `git commit`, `git tag -a`,
-`gh pr create|edit|comment|review`, `gh issue create|comment`,
-`gh release create`, plus tracker and wiki comment tools. A `git status`, a
-`grep` for one of the terms, or a `Read` of a file named after one is never
-scanned. The repo's own files are never read.
+Publishing commands are scanned: `git commit`, `git tag`, and
+`gh pr|issue|release create|edit|comment|review`. The match tolerates global
+flags between the binary and the subcommand, because `git -c key=value commit`
+and `git -C dir commit` are ordinary and an adjacency-only pattern misses both.
+Tracker and wiki WRITES are scanned too: a tool whose name combines a write
+verb (add, create, edit, update, post, append) with a tracker noun (comment,
+issue, page, worklog, description, ticket).
+
+A `git status`, a `grep` for one of the terms, a `Read` of a file named after
+one, and any tracker READ or SEARCH are never scanned, so a query mentioning a
+deny-list word is not blocked. The repo's own files are never read.
+
+**A message the guard cannot see is refused, not waved through.** `-F FILE`,
+`--file=`, `--body-file`, `--notes-file`, `--fill` and `--fill-first` put the
+outward text somewhere the hook cannot read, which would otherwise be the
+easiest bypass in the tool. Those are blocked with an explanation. Inline the
+message with `-m`, or pipe it with `-F -` and a heredoc, which arrives in the
+command and is scanned normally.
 
 ## Enable it
 
@@ -57,20 +70,33 @@ Per repo, in `.claude/settings.json`. Nothing is enabled by default.
 {
   "PreToolUse": [
     {
-      "matcher": "Bash|mcp__.*[Cc]omment.*",
+      "matcher": "Bash|mcp__.*",
       "hooks": [
-        { "type": "command", "command": "pwsh -NoProfile -File \"${CLAUDE_PROJECT_DIR}/tools/leak-guard.ps1\"", "timeout": 10 }
+        { "type": "command", "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PROJECT_DIR}/tools/leak-guard.ps1\"", "timeout": 10 }
       ]
     }
   ]
 }
 ```
 
+The matcher is deliberately wide. Narrowing it to comment-named tools was tried
+and dropped: it silently excluded `editJiraIssue`, `createConfluencePage` and
+`addWorklogToJiraIssue`, so the hook never saw them. The script decides what to
+scan; the matcher only decides what reaches the script.
+
+Use `powershell`, not `pwsh`. The scripts are PowerShell 5.1 style, `pwsh` is
+absent on a stock Windows box, and the test suite exercises `powershell`, so a
+`pwsh` snippet fails while the suite stays green.
+
 On macOS and Linux use the shell twin, which needs `jq`:
 
 ```json
 { "type": "command", "command": "bash \"${CLAUDE_PROJECT_DIR}/tools/leak-guard.sh\"", "timeout": 10 }
 ```
+
+The shell twin pre-filters before it requires `jq`, so a machine without `jq`
+still runs ordinary commands; only a genuinely outward-looking one hits the
+hard failure.
 
 Hooks load at session start, so restart the session after adding it. Verify
 with `/hooks`.
