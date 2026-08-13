@@ -450,7 +450,7 @@ Choose ONE destination per fact, by what the fact binds:
 
 | The fact binds | Destination |
 |---|---|
-| every project on the front | the hub, `_command/portfolio/<front>/_front.md` |
+| every project on the front | the hub, `_command/portfolio/<front>/_front.md`, under `## Cross-repo constraints` or a new `## Structural notes`. **Never `## Status`** - `/debrief` owns it and caps it at 5 lines |
 | this repo only | the spoke, `_command/portfolio/<front>/[<project>/]<project>.md`, in `gotchas` or "How to work in it" |
 
 **The bar is structural, not eventful.** A fact belongs here only if it
@@ -460,16 +460,40 @@ RDS is VPC-private, so a data change ships as a migration" is structural.
 "AI-1628 shipped on Tuesday" is state and belongs in `progress.md`. If a
 future session would not act differently for knowing it, do not write it.
 
+Three tie-breakers for the cases the bar alone does not settle:
+
+- **A value is never structural; the mechanism that produces it is.** A
+  rotated credential, a current endpoint, a token: never written here, and
+  a secret never enters `_command/` at all. "Credentials come from the
+  deploy role, not the developer's shell" is the structural half, and it is
+  the half that keeps being true.
+- **A defect somebody will fix is state; a defect nobody owns is
+  structural.** "CI skips lint on forked PRs" belongs here only when no
+  ticket owns fixing it. If a ticket owns it, the ticket is the record.
+- **Generic doctrine already carried by this skill or `framework/` is not
+  re-written per front.** Check before writing: a front-specific echo of a
+  rule that already applies everywhere adds noise and rots separately.
+
 This step is the reference layer only. `progress.md` still takes state at
 `/debrief`, and transferable method still goes to the learning log at
 `/learn-from-session`. One fact, one layer.
 
 Read the destination before writing. Where an entry already covers the
-ground, sharpen that entry rather than appending a near-duplicate.
+ground, sharpen that entry rather than appending a near-duplicate. Also
+check `_command/learning/` for a pending entry whose `Destination` names
+this front's context: if one exists, that fact already has an owner in
+`/promote-learnings` and writing it here too produces the duplicate both
+skills are trying to avoid.
 
 **Write nothing when the ticket taught nothing structural, and say so in the
 report.** Most tickets teach nothing structural, and an invented entry is
-worse than an empty one because it dilutes the entries that matter.
+worse than an empty one because it dilutes the entries that matter. The
+close call, not the easy one: "this endpoint was slower than expected under
+the seed data" feels like a finding and is not structural. It is one
+observation about one dataset, it will not still be true after the next
+index or the next seed, and no future session should change its approach for
+it. That is a no. If the profiling instead established that the table has no
+index on the column every read filters by, that is a yes.
 
 **Never write into the front's own repo under `fronts/`.** A defect in a
 front's code is a ticket on that front. This step writes only to the
