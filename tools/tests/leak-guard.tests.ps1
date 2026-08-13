@@ -82,5 +82,29 @@ Assert "that phrase passes under the shipped list (control)" `
   ((RunHook (Bash 'git commit -m "feat(x): a completely-ordinary-phrase here"')) -eq 0)
 Remove-Item $tmpTerms -Force
 
+# --- shell twin parity: the .sh is what macOS and Linux actually run ---
+$sh = Join-Path $toolsDir "leak-guard.sh"
+# Bind the EXECUTABLE, not the name. This file defines a helper function called
+# Bash, and PowerShell resolves functions ahead of applications, so `& bash`
+# here would call that helper and never launch bash: the block tests fail while
+# every allow test passes vacuously on a stale $LASTEXITCODE.
+$bashExe = (Get-Command bash -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1)
+if ($bashExe -and (Test-Path $sh)) {
+  function RunSh($cmd) {
+    $payload = (@{ tool_name = "Bash"; tool_input = @{ command = $cmd } } | ConvertTo-Json -Depth 12 -Compress)
+    $prev = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+    $payload | & $script:bashExe.Source $sh 2>$script:errFile | Out-Null
+    $code = $LASTEXITCODE
+    $ErrorActionPreference = $prev
+    return $code
+  }
+  Assert "sh twin blocks a dirty commit"   ((RunSh 'git commit -m "fix: founder decided x"') -eq 2)
+  Assert "sh twin allows a clean commit"   ((RunSh 'git commit -m "fix(auth): reject expired token"') -eq 0)
+  Assert "sh twin allows 'delegate'"       ((RunSh 'git commit -m "refactor: delegate parsing"') -eq 0)
+  Assert "sh twin ignores git status"      ((RunSh 'git status --short') -eq 0)
+} else {
+  Write-Output "SKIP  shell twin parity (bash not on PATH)"
+}
+
 if ($failures.Count -gt 0) { Write-Output "TESTS FAILED: $($failures -join ', ')"; exit 1 }
 Write-Output "ALL LEAK-GUARD TESTS PASSED"; exit 0
