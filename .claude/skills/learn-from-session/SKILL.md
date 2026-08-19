@@ -87,9 +87,19 @@ Before writing a single candidate to disk, read BOTH indexes in full:
 Phase 1, verify ALL EIGHT of the following. A candidate that fails any one
 gets reframed or dropped, never written as-is.
 
-1. **No dups.** Check both indexes for an existing entry on the same
-   topic. If one exists in either store, plan to update that file in
-   Phase 3 rather than create a duplicate.
+1. **No dups, in the lesson stores AND in front context.** Check both
+   indexes for an existing entry on the same topic; if one exists in either
+   store, plan to update that file in Phase 3 rather than create a
+   duplicate. For any candidate that is a project or reference fact about a
+   SPECIFIC front, also read that front's hub (`_front.md`) and the spoke of
+   the repo it concerns. Two other skills write structural facts there and
+   neither is visible from the two lesson indexes: `/mission-flow` Phase 8
+   writes what a ticket established, `/promote-learnings` writes what a
+   lesson established. A candidate the hub or spoke already covers is
+   DROPPED, or REFRAMED down to the part that is genuinely new, with the
+   reason recorded in the verdict list below. Read only the fronts this
+   session actually touched, never the whole portfolio: the check is one or
+   two file reads, not a portfolio sweep.
 2. **No useless learning.** The actionability bar: if no future session
    would decide anything differently because of this lesson, drop it. Cap
    the session at the few lessons that clear the bar; volume is not value.
