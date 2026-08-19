@@ -297,6 +297,11 @@ Commit rules (all types):
 
 ## Phase 5 - Code review
 
+Two checks gate this phase, and `--auto` waives neither: the ticket's
+acceptance criteria are verified before any reviewer is dispatched, and the
+diff gets a distinct engineering-principles pass alongside the correctness
+review.
+
 ### Verify the acceptance criteria first
 
 Reviewers read a diff for quality. Nothing else in this flow asks whether the
@@ -331,6 +336,15 @@ and cheaper: name the criterion, present the choice, and wait. Do NOT dispatch
 reviewers at a diff that does not satisfy its own ticket, and do not waive this
 gate for `--auto` or `--spend lean`.
 
+### Size the batch before dispatching it
+
+State the fan-out for the whole phase in one line in the record BEFORE the
+first dispatch, covering the correctness reviewers and the principles pass
+together: `N agents x model x effort ~ tokens`, within the
+`CONSTITUTION.local` section 2 ceilings. The criteria check above adds no
+agents at its default, because it runs inline; say so rather than leaving it
+uncounted.
+
 ### Dispatch the reviewers
 
 Run your code-review skill with fixes applied (`/code-review --fix` where
@@ -356,6 +370,31 @@ Rationale: on a moderate diff, five reviewers burn tokens without
 producing five distinct classes of finding; most overlap. Prefer one agent
 that reasons broadly for typical work; save the fan-out for changes with
 genuinely different failure modes at different layers.
+
+### The engineering-principles pass
+
+Correctness review catches defects. It does not catch a change that duplicates
+logic the repo already has, or one that puts a responsibility in the wrong
+place, so those pass review today because nobody is asked to look for them.
+This is a distinct pass (Quality review, `framework/roles.md`) in the same
+batch as the correctness reviewers, never an extra paragraph bolted onto one
+of their prompts.
+
+It reports per principle considered - single responsibility, the open-closed,
+substitution, interface-segregation and dependency-inversion principles where
+they bear on the change, DRY, and responsibility placement - with one of three
+verdicts:
+
+- **violated**, at `file:line`, naming the concrete counterpart: the existing
+  code being duplicated, or the module that should own the behaviour.
+- **applies, clean.**
+- **not applicable**, and why.
+
+A violation with no named counterpart is not reportable, and `not applicable`
+is the honest answer for most small diffs. A generic assertion that the change
+"follows SOLID" is not a finding, and neither is a violation manufactured to
+fill the report; both are the vacuous-assertion failure mode
+(`CONSTITUTION.local` rule 5) in a reviewer's clothing.
 
 ### Apply the findings
 
