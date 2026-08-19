@@ -341,17 +341,15 @@ gate for `--auto` or `--spend lean`.
 State the fan-out for the whole phase in one line in the record BEFORE the
 first dispatch, covering the correctness reviewers and the principles pass
 together: `N agents x model x effort ~ tokens`, within the
-`CONSTITUTION.local` section 2 ceilings. The criteria check above adds no
-agents at its default, because it runs inline; say so rather than leaving it
-uncounted.
+`CONSTITUTION.local` section 2 ceilings and the presets in
+`framework/roles.md`. The criteria check above adds no agents at its default,
+because it runs inline; say so rather than leaving it uncounted.
 
 ### Dispatch the reviewers
 
 Run your code-review skill with fixes applied (`/code-review --fix` where
 available; absent a review skill, dispatch one focused reviewer sub-agent
-per the sizing table below). Announce the fan-out budget BEFORE
-dispatching any review agents (state N x model x effort; see
-`framework/roles.md`).
+per the sizing table below).
 
 **Default sizing (conservative - the founder pays for every reviewer):**
 
