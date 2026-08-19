@@ -311,7 +311,7 @@ the expensive ordering.
 
 The orchestrator runs this itself, before any dispatch: it already holds both
 the ticket and the diff, and a sub-agent cannot close a ticket in any case
-(`CONSTITUTION.local` rule 2). Escalate to one spec-compliance reviewer (mid
+(`CONSTITUTION.local.md` rule 2). Escalate to one spec-compliance reviewer (mid
 tier · medium, `framework/roles.md`) only when the diff exceeds ~1500 lines or
 the ticket carries more than ~8 criteria.
 
@@ -341,7 +341,7 @@ gate for `--auto` or `--spend lean`.
 State the fan-out for the whole phase in one line in the record BEFORE the
 first dispatch, covering the correctness reviewers and the principles pass
 together: `N agents x model x effort ~ tokens`, within the
-`CONSTITUTION.local` section 2 ceilings and the presets in
+`CONSTITUTION.local.md` section 2 ceilings and the presets in
 `framework/roles.md`. The criteria check above adds no agents at its default,
 because it runs inline; say so rather than leaving it uncounted.
 
@@ -392,7 +392,7 @@ A violation with no named counterpart is not reportable, and `not applicable`
 is the honest answer for most small diffs. A generic assertion that the change
 "follows SOLID" is not a finding, and neither is a violation manufactured to
 fill the report; both are the vacuous-assertion failure mode
-(`CONSTITUTION.local` rule 5) in a reviewer's clothing.
+(`CONSTITUTION.local.md` rule 5) in a reviewer's clothing.
 
 ### Apply the findings
 
