@@ -103,7 +103,7 @@ it talks). The full table is in
 - **Cadence:** `briefing` (morning) · `debrief` (evening) · `retro`
   (weekly)
 - **Delivery:** `mission-flow` (bug/task to merged-ready PR, 8 phases) ·
-  `triage` · `log-deviation` · `today-progress-summary`
+  `triage` · `log-deviation` · `standup`
 - **Learning:** `learn-from-session` · `promote-learnings`
 - **Portfolio:** `new-front` · `retire-front` · `map-front` · `preflight` · `spend`
 - **Docs:** `as-built` · `doc-voice` · `adr` · `docs-viewer`

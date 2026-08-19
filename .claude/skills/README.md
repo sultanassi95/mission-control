@@ -64,7 +64,7 @@ default):
 | **Delivery** | `mission-flow` | Bug/task to merged-ready PR: the fixed 8-phase playbook (Jira, GitHub Issues, or the native task board) | per work item |
 | | `triage` | Messy inbox to per-project task boards, one table, STOP-gated | when items pile up |
 | | `log-deviation` | Canonical register row + body, logged BEFORE the fix | on any drift from plan |
-| | `today-progress-summary` | Paste-ready standup for Slack / Jira / WhatsApp | end of day |
+| | `standup` | Paste-ready standup for Slack / Jira / WhatsApp | end of day |
 | **Learning** | `learn-from-session` | Session lessons through an 8-rule critique gate into the right store | at debrief, or anytime |
 | | `promote-learnings` | Reinforced lessons drafted into standing rules, founder-gated | periodically |
 | **Portfolio** | `new-front` | Detect-first onboarding of a new project: hub, spokes, board row | new project |

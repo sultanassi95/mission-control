@@ -1,12 +1,12 @@
 ---
-name: today-progress-summary
+name: standup
 description: >-
   Generate a to-the-point end-of-day (or mid-session) progress summary
   formatted for a specific chat surface: Slack, Jira, or WhatsApp. Pulls
   from the current session context: tickets filed / moved / merged, PRs
   opened / merged, branches pushed, items triaged out. Never an article.
   Bullets with ticket URLs, grouped by state. Use whenever the founder
-  types /today-progress-summary, optionally with
+  types /standup, optionally with
   --format slack|jira|whatsapp (default: slack).
 ---
 
