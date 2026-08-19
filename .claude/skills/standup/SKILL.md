@@ -112,9 +112,9 @@ triaged / closed.
 
 State buckets (use exactly one per item):
 
-- `Merged`: PR merged into the base branch today.
+- `Merged`: PR merged into the base branch inside the window.
 - `Open PR`: PR is open and awaiting review / merge.
-- `New (Open)`: filed today, not started, no PR yet.
+- `New (Open)`: filed inside the window, not started, no PR yet.
 - `Triaged out`: rows the founder invalidated, closed as duplicate, or
   rolled into another item. Compress to a single line.
 
