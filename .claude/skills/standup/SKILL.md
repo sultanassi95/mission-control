@@ -1,30 +1,97 @@
 ---
 name: standup
 description: >-
-  Generate a to-the-point end-of-day (or mid-session) progress summary
-  formatted for a specific chat surface: Slack, Jira, or WhatsApp. Pulls
-  from the current session context: tickets filed / moved / merged, PRs
-  opened / merged, branches pushed, items triaged out. Never an article.
-  Bullets with ticket URLs, grouped by state. Use whenever the founder
-  types /standup, optionally with
+  Report what actually happened between two times, formatted for a specific
+  chat surface: Slack, Jira, or WhatsApp. Reads the systems of record - git
+  history, the tracker, the boards, ticket evidence logs - over an explicit
+  window, never only what the current conversation witnessed. Never an
+  article. Bullets with ticket URLs, grouped by state. Use whenever the
+  founder types /standup, asks what was done since a given time, or wants a
+  handoff for a window spanning a night, a weekend or several sessions.
+  Flags: --from / --to / --front / --project /
   --format slack|jira|whatsapp (default: slack).
 ---
 
-# Today's Progress Summary
+# Standup
 
-Consolidates the session's work into a short, medium-tailored bullet list
-the founder can paste into Slack / Jira / WhatsApp without editing. Same
-content across formats; only punctuation, section headers, and bullet
-styles change.
+Reports what happened over an explicit window as a short, medium-tailored
+bullet list the founder can paste into Slack / Jira / WhatsApp without
+editing. Same content across formats; only punctuation, section headers, and
+bullet styles change.
 
 ## Inputs
 
+- `--from <YYYY-MM-DD[ HH:MM]>` / `--to <YYYY-MM-DD[ HH:MM]>` (optional): the
+  window bounds, to the hour. A standup window is routinely a night, a
+  weekend, or several days, so it is NOT a calendar day and is never rounded
+  to one. `--to` defaults to the prompt time.
+- `--front <name>` (optional): only that front's items.
+- `--project <key>` (optional): only that repo. Independent of `--front` -
+  either may be given alone, or both together.
 - `--format <slack|jira|whatsapp>` (optional; default `slack`). Case
   insensitive. `--format=slack` and `--format slack` both work.
-- `--front <name>` (optional): only that front's items.
-- Optional freeform scope in the invocation (e.g. `since 09:00`, `just
-  this morning`, `only the TICK-200 bash`). Default: everything the
-  current session has visibly touched.
+
+### Resolving the window
+
+1. `--from` given: use it, with `--to` or the prompt time.
+2. `--from` omitted and the front's hub carries a window convention (a
+   `## Debrief window` section): use that convention, and say which one you
+   used and what bounds it produced.
+3. Neither: 16:00 local on the previous day through the prompt time, said out
+   loud as the default it is.
+
+**Read every timestamp as an offset, never as a clock abbreviation.** The
+local zone here renders as `EEST` or `EDT` meaning UTC+3 (Egypt), NOT US
+Eastern. Read as a US zone, a three-letter label shifts the window by seven
+hours and silently drops or invents an evening of work. Compute the bounds
+with `date` and state them in the output, so a wrong window is visible
+instead of silent.
+
+## Sourcing: read the records, not the conversation
+
+The work in a standup window usually happened across several sessions,
+evenings, and manual steps this conversation never witnessed. So DISCOVER the
+work from the systems of record rather than summarising what happens to be in
+context. Per front in scope:
+
+| Source | What it settles |
+|---|---|
+| `git log --all --since=<from> --until=<to>` per repo | commits, and which branch they landed on |
+| `gh pr list --state all --json number,title,state,mergedAt,headRefName` | PR state, and the authoritative merge time |
+| the tracker (Jira `updated >= <from>`, or `gh issue list`) | ticket state changes |
+| `tasks/_board.md` plus each ticket's frontmatter | trackerless fronts |
+| a ticket folder's evidence log | what was proven, for the outcome line |
+
+Two rules the sources themselves impose:
+
+- **An event time beats a note's time.** A local note records when it was
+  written; `mergedAt` records when the merge happened. The two disagree
+  exactly at window boundaries, and the event time decides whether an item is
+  in or out. Never place an item by the timestamp of a note about it.
+- **Normalise offsets before comparing.** git returns the committer's offset,
+  GitHub returns UTC, a tracker returns the account's zone. Convert all of
+  them to one offset before testing against the bounds.
+
+**Say which sources you read**, and name any you could not (no tracker access,
+a repo not present locally). An unread source is a hole in the window, not an
+absence of work.
+
+**Attribute to the founder, not to every commit in the window.** A partnered
+or day-job repo carries other people's commits, and a shared branch carries
+merges of their work. Report what the founder did; where authorship is
+genuinely ambiguous, say so rather than claiming it.
+
+**An empty window says so.** "Nothing falls in this window" is the correct
+output when the records return nothing. Never pad with older work and never
+widen the bounds to find something.
+
+**Confidential fronts stay pointer-only.** A ticket key, a state and a URL are
+fine; internals from an employer-owned repo are not, beyond what that front's
+IP-boundary rules permit.
+
+The summary reads AS the founder, not as an assistant summarising them - no
+process leakage, no AI tells. Prefer the founder's own words for an outcome
+line where they have already stated it.
 
 ## What to include
 
@@ -71,7 +138,8 @@ State buckets (use exactly one per item):
 - Ticket URL + PR URL inline on the same line, separated by ` and `
   or a middle dot; Slack unfurls both.
 - Blank line between sections.
-- One-line title at the top: `*<Scope title> - YYYY-MM-DD*`.
+- One-line title at the top naming the scope AND the resolved window:
+  `*<Scope title> - <from> to <to>*`.
 
 **`--format jira`:**
 
@@ -88,22 +156,10 @@ State buckets (use exactly one per item):
 - URLs inline, multiple separated by ` | `.
 - Tighter than Slack: two to five words of description, then the URLs.
 
-## Handling the current session
-
-Read what is visibly in the conversation to build the list. Do NOT invent
-tickets or PRs that don't appear in-session. If uncertain about a state
-("did that PR merge?"), check via `git log --oneline origin/<base>` in the
-relevant repo, or `gh pr view <n> --json state`. Never assume `merged`
-without evidence.
-
-Prefer the founder's own words for the outcome line when they've already
-stated it in-session. The summary reads AS the founder, not as an
-assistant summarising them - no process leakage, no AI tells.
-
 ## Example (`--format slack`) output
 
 ```
-*orbit-app QA bash - 2026-07-02*
+*orbit-app QA bash - 01 Jul 17:00 to 02 Jul 18:30*
 
 *Merged*
 - TICK-212 (QA-11): invitation acceptance flow now works end-to-end. https://acme.atlassian.net/browse/TICK-212 and https://github.com/acme/orbit-app/pull/36
