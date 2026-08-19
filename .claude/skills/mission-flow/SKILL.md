@@ -297,11 +297,59 @@ Commit rules (all types):
 
 ## Phase 5 - Code review
 
+Two checks gate this phase, and `--auto` waives neither: the ticket's
+acceptance criteria are verified before any reviewer is dispatched, and the
+diff gets a distinct engineering-principles pass alongside the correctness
+review.
+
+### Verify the acceptance criteria first
+
+Reviewers read a diff for quality. Nothing else in this flow asks whether the
+diff does what the ticket asked, so a change can be correct, well tested, and
+still answer the wrong question. Discovering that after paying for review is
+the expensive ordering.
+
+The orchestrator runs this itself, before any dispatch: it already holds both
+the ticket and the diff, and a sub-agent cannot close a ticket in any case
+(`CONSTITUTION.local.md` rule 2). Escalate to one spec-compliance reviewer (mid
+tier · medium, `framework/roles.md`) only when the diff exceeds ~1500 lines or
+the ticket carries more than ~8 criteria.
+
+Report every criterion on its own line, with exactly one verdict:
+
+| Verdict | What it requires |
+|---|---|
+| **met** | the literal evidence: `file:line`, the test that covers it, or the command output |
+| **not met** | what is missing. This stops the phase |
+| **not verifiable here** | why, plus the Phase 6 command that will settle it |
+
+`not verifiable here` is the verdict that rots if left loose, so it is bounded:
+legitimate ONLY for a criterion that needs runtime evidence Phase 6 produces.
+Anything settleable by reading the diff is settled now, and a criterion marked
+`met` with no evidence beside it is not met. Every deferred criterion is
+carried into the Phase 6 run list and ticked at the Phase 7 Definition of Done
+settle, so it cannot evaporate on the way to the PR.
+
+A `not met` verdict is not a new kind of stop. It is the "acceptance criteria
+cannot be satisfied as written" trigger in "When the flow stops", found earlier
+and cheaper: name the criterion, present the choice, and wait. Do NOT dispatch
+reviewers at a diff that does not satisfy its own ticket, and do not waive this
+gate for `--auto` or `--spend lean`.
+
+### Size the batch before dispatching it
+
+State the fan-out for the whole phase in one line in the record BEFORE the
+first dispatch, covering the correctness reviewers and the principles pass
+together: `N agents x model x effort ~ tokens`, within the
+`CONSTITUTION.local.md` section 2 ceilings and the presets in
+`framework/roles.md`. The criteria check above adds no agents at its default,
+because it runs inline; say so rather than leaving it uncounted.
+
+### Dispatch the reviewers
+
 Run your code-review skill with fixes applied (`/code-review --fix` where
 available; absent a review skill, dispatch one focused reviewer sub-agent
-per the sizing table below). Announce the fan-out budget BEFORE
-dispatching any review agents (state N x model x effort; see
-`framework/roles.md`).
+per the sizing table below).
 
 **Default sizing (conservative - the founder pays for every reviewer):**
 
@@ -320,6 +368,33 @@ Rationale: on a moderate diff, five reviewers burn tokens without
 producing five distinct classes of finding; most overlap. Prefer one agent
 that reasons broadly for typical work; save the fan-out for changes with
 genuinely different failure modes at different layers.
+
+### The engineering-principles pass
+
+Correctness review catches defects. It does not catch a change that duplicates
+logic the repo already has, or one that puts a responsibility in the wrong
+place, so those pass review today because nobody is asked to look for them.
+This is a distinct pass (Quality review, `framework/roles.md`) in the same
+batch as the correctness reviewers, never an extra paragraph bolted onto one
+of their prompts.
+
+It reports per principle considered - single responsibility, the open-closed,
+substitution, interface-segregation and dependency-inversion principles where
+they bear on the change, DRY, and responsibility placement - with one of three
+verdicts:
+
+- **violated**, at `file:line`, naming the concrete counterpart: the existing
+  code being duplicated, or the module that should own the behaviour.
+- **applies, clean.**
+- **not applicable**, and why.
+
+A violation with no named counterpart is not reportable, and `not applicable`
+is the honest answer for most small diffs. A generic assertion that the change
+"follows SOLID" is not a finding, and neither is a violation manufactured to
+fill the report; both are the vacuous-assertion failure mode
+(`CONSTITUTION.local.md` rule 5) in a reviewer's clothing.
+
+### Apply the findings
 
 Verify each candidate finding against the diff before applying. Skip
 refuted / out-of-scope / speculative findings - state the reason for each
