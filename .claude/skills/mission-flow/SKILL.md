@@ -38,6 +38,12 @@ skip a phase, never reorder, never invent new phases.
   effect: autonomous execution is the default. Retained so existing
   invocations keep parsing. It does not affect the triggers in "When the
   flow stops", which apply regardless of any flag.
+- **`--inline` (optional flag).** Runs every phase in one context, the way this
+  flow worked before it delegated. Reach for it to compare cost on the same
+  ticket, or when a ticket is too small for a dispatch to pay for itself. It
+  changes WHO does the work and nothing else: the stop triggers, the Phase-5
+  acceptance-criteria check and every evidence requirement are identical either
+  way.
 - **`--spend <lean|standard|deep>` (optional).** lean = reviewer cap 1,
   tightest prose; standard (default) = the Phase-5 sizing table as-is;
   deep = the full multi-angle review sweep. **`--deep-review` remains as
@@ -184,6 +190,20 @@ path, current branch, the git rule, the IO contract, and one platform line from
 reuse it for every dispatch in that flow - assembling it per dispatch is how a
 field ends up blank. A spoke with blank required fields is not dispatch-ready:
 the flow stops there rather than dispatching an agent that is acting as nobody.
+
+### Sizing, and the tally at the end
+
+State the sizing before the first dispatch of a phase, in that phase's record:
+`N agents x model x effort ~ tokens`, within the `CONSTITUTION.local.md` section
+2 ceilings and the `framework/roles.md` presets. Inside this flow the fan-out is
+already authorised, so this is a statement rather than a request.
+
+Each record carries the tokens its dispatch actually used, and the Phase-8 report
+ends with a per-phase tally read off the records. Delegation is meant to cut what
+the orchestrator spends reprocessing a long context on every turn; whether it
+cuts the TOTAL across all agents is an empirical question, and a flow that cannot
+say what it spent cannot answer it. Compare against an `--inline` run on a
+comparable ticket, never against an estimate.
 
 ## Phase 0 - Classify the work
 
@@ -694,6 +714,9 @@ Confidential fronts stay pointers-only: nothing employer-owned enters
   (typecheck/lint/test counts) + which manual smoke scenarios are still
   pending on their side + what was written to front context, or that
   nothing structural was learned.
+- End with the per-phase tally from the records: which phase ran at which model
+  and effort, and what it spent. One line per dispatch, and say `--inline` when
+  the flow did not dispatch at all.
 
 ## Autonomy scope
 
