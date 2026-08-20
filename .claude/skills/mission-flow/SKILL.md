@@ -90,6 +90,40 @@ not a check-in, a draft is not a submission, and a decision the request
 already settled is not re-opened. `--confirm` adds back the two ticket and PR
 gates for one invocation without changing either list.
 
+## How this flow runs - orchestration, not execution
+
+The orchestrator holds the plan and the integrated picture. It delegates the
+phases that read and write in bulk, and keeps the ones where delegating would
+break a rule. `framework/CONSTITUTION.md` section 5 is the model; this table is
+where this flow complies with it instead of describing it.
+
+| Phase | Disposition | Why |
+|---|---|---|
+| 0 classify | inline | one decision, reads nothing |
+| 1 triage | **dispatched** | the largest reading surface in the flow |
+| 2 ticket | inline | the ticket is the plan, and holding the plan is what the orchestrator is for |
+| 3 branch | **never delegated** | a git write, and hard rule 8's upstream check lives here |
+| 4 implement | **dispatched**, one per logical unit | mechanical once the approach is settled |
+| 5 review | **dispatched** | already the pattern; see Phase 5 |
+| 6 verify | **hybrid** | an agent may run the gauntlet; the orchestrator runs the terminal assertion itself |
+| 7 push + PR | **never delegated** | outward-facing, and the autonomy carve-out is the orchestrator's alone |
+| 8 capture | inline | judgment about structural versus state, on a small input |
+
+**Three things are never delegated and never summarised.** Each is a place where
+a relayed claim would quietly replace evidence:
+
+- **The diff.** Phase 5 receives a diff file the ORCHESTRATOR generated, so a
+  reviewing agent cannot scope its own input. A description of a change is not
+  the change, and the difference is where real defects hide.
+- **The terminal assertion.** Phase 6 may delegate running the gauntlet, but the
+  orchestrator itself runs the one command that proves the artifact the user
+  consumes, and pastes that output. Evidence-before-claims does not survive a
+  relay, and `CONSTITUTION.local.md` rule 2 puts the round trip on the
+  orchestrator by name.
+- **The acceptance-criteria verdicts.** Phase 5's criteria check stays inline. A
+  sub-agent cannot close a ticket, so it cannot be the thing that says a ticket
+  is satisfied.
+
 ## Phase 0 - Classify the work
 
 Pick one:
@@ -103,6 +137,9 @@ Pick one:
 Announce the classification before Phase 1. If genuinely ambiguous, ask.
 
 ## Phase 1 - Triage (produces: root cause OR agreed approach)
+
+**Dispatched.** One investigator, whose record is what Phase 2 builds the ticket
+from. Split into two only when a ticket has genuinely independent sub-questions.
 
 **For bugs (via systematic debugging):** reproduce, gather evidence at
 every component boundary, trace to the root cause, paste literal proof.
@@ -238,6 +275,9 @@ first and wait for an explicit go.
 
 ## Phase 3 - Branch
 
+**Never delegated.** This phase writes to git, and the upstream check below is
+hard rule 8.
+
 From the repo root:
 
 ```
@@ -267,6 +307,10 @@ git rev-parse --abbrev-ref '@{upstream}'  # must NOT name the base branch
   `feat/tick-214-forward-invite-params`.
 
 ## Phase 4 - Implement (produces: 1-N phase commits, all green in isolation)
+
+**Dispatched, one agent per logical unit**, each in its own worktree when more
+than one runs. The commit rules below bind the agent, and the orchestrator
+verifies the tree afterwards.
 
 **Bugs (TDD-shaped):**
 1. `test(<key>): <failing test that pins the root cause>` - the RED test
@@ -404,6 +448,9 @@ the review pass).
 
 ## Phase 6 - Verify locally (produces: literal green terminal output)
 
+**Hybrid.** An agent may run the gauntlet and return its literal output; the
+orchestrator runs the terminal assertion itself. See "How this flow runs".
+
 Run the repo's own gauntlet, respecting any Node/tool version pin the repo
 declares (check the project's CLAUDE.md, the spoke, and your memory for
 pins), with every command composed for THIS machine - shell dialect and
@@ -454,6 +501,9 @@ about the client path; then separate the (often environmental) trigger from any
 real bug it surfaced.
 
 ## Phase 7 - Push + PR
+
+**Never delegated.** Pushing and opening a PR are outward-facing, and the
+autonomy carve-out belongs to the orchestrator alone.
 
 ### Reconcile the ticket + PR to what shipped (conditional)
 
