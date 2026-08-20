@@ -221,8 +221,10 @@ Confirm in one line; no stop gate.
    OS-mismatched). Show it at the gate - the Preferences lines are the
    founder-confirmable part.
 5. **Run the instance leak-check** and paste its literal output:
-   `powershell -Command ".\tools\leak-sweep.ps1 -Mode instance -Path _command,CLAUDE.md"`
-   (or `tools/leak-sweep.sh instance`). Exit 0 required - zero leftover
+   `powershell -Command ".\tools\leak-sweep.ps1 instance"`
+   (or `tools/leak-sweep.sh instance`; instance mode reads `_command/` and the
+   operating `CLAUDE.md` in both, so the two are equivalent here). Exit 0
+   required - zero leftover
    placeholders. A non-zero exit means a template blank survived: fix the
    instance file, not the check.
 6. **Print the tree** of `_command/` + the root files, then the

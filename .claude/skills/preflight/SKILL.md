@@ -58,8 +58,10 @@ the universal grammar - PASS/FAIL evidence is discipline at every tier.
    per active front, and its "Founder-gated" items are still real (spot
    check one or two).
 5. **No leftover placeholders.** Run the instance-mode sweep:
-   `powershell -Command ".\tools\leak-sweep.ps1 -Mode instance -Path _command,CLAUDE.md"`
-   (or `tools/leak-sweep.sh instance`). Exit 0 required; paste the output.
+   `powershell -Command ".\tools\leak-sweep.ps1 instance"`
+   (or `tools/leak-sweep.sh instance`; instance mode reads `_command/` and the
+   operating `CLAUDE.md` in both, so the two are equivalent here). Exit 0
+   required; paste the output.
 6. **The instance cannot be committed.** Run
    `powershell -Command ".\tools\check-ignores.ps1"`. Exit 0 required; paste the
    output. Then two things the gate cannot see, being about this clone rather than
