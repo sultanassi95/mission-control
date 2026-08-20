@@ -14,6 +14,7 @@ if [ "$MODE" != "promote" ] && [ "$MODE" != "instance" ]; then
   exit 2
 fi
 
+# promote guards the PUBLIC repo, so it reads everything that ships.
 TARGETS=(framework .claude/skills README.md LIFTOFF.md CLAUDE.md CHANGELOG.md)
 
 RULE_NAMES=(windows-user-path unix-home-path email aws-access-key github-token generic-secret aws-account-id legacy-name model-pin)
@@ -34,19 +35,31 @@ RULE_ICASE=(0 0 0 0 0 1 0 1 1)
 # the operator's deny-list (if present). The generic identity rules guard the
 # PUBLIC repo only - an instance legitimately contains its own founder's
 # paths and email.
+#
+# It also reads a different tree: the instance (_command/ plus the operating
+# CLAUDE.md), matching `leak-sweep.ps1 -Mode instance -Path _command,CLAUDE.md`.
+# Pointing it at framework/ instead reported the kit templates' deliberate
+# <PLACEHOLDER-...> blanks as leaks while never opening _command/ at all.
 if [ "$MODE" = "instance" ]; then
+  TARGETS=(_command CLAUDE.md)
   RULE_NAMES=(leftover-placeholder)
-  RULE_PATTERNS=('<PLACEHOLDER[^>]*>|\{\{[^}]+\}\}|TODO-INIT')
+  # The brace token is a bare identifier ({{PROJECT_NAME}}). `[^}]+` also
+  # matched Mermaid's hexagon node syntax ({{"label"}}), so every diagram-first
+  # doc carrying one reported as an unfilled blank.
+  RULE_PATTERNS=('<PLACEHOLDER[^>]*>|\{\{[A-Za-z0-9_.-]+\}\}|TODO-INIT')
   RULE_ICASE=(0)
 fi
 
 PRIVATE_TERMS=()
+PRIVATE_PATTERNS=()
 if [ -f "$PRIVATE_LIST" ]; then
   while IFS= read -r term || [ -n "$term" ]; do
     case "$term" in
       ''|'#'*) continue ;;
     esac
     PRIVATE_TERMS+=("$term")
+    # Escaped once here, not once per line of every file.
+    PRIVATE_PATTERNS+=("\<$(printf '%s' "$term" | sed -e 's/[][\.*^$()+?{}|]/\\&/g')\>")
   done < "$PRIVATE_LIST"
 fi
 
@@ -64,17 +77,48 @@ for t in "${TARGETS[@]}"; do
   fi
 done
 
+# A sweep that opened nothing is not a clean sweep. An unreachable root used to
+# print "CLEAN: 0 hits across 0 file(s)" and exit 0.
+if [ ${#FILES[@]} -eq 0 ]; then
+  echo "LEAK-SWEEP ERROR: no files under '$ROOT' for mode=${MODE} (targets: ${TARGETS[*]})." >&2
+  exit 2
+fi
+
 HITS=()
 for file in "${FILES[@]}"; do
   rel="${file#"$ROOT"/}"
+
+  # Whole-file prefilter: only rules and terms that appear SOMEWHERE in this
+  # file enter the per-line loop. A clean file costs one grep per rule instead
+  # of one grep per rule per line, and the prefilter is a superset of the
+  # per-line result, so no hit can be missed.
+  ACTIVE_RULES=()
+  i=0
+  while [ $i -lt ${#RULE_NAMES[@]} ]; do
+    if [ "${RULE_ICASE[$i]}" = "1" ]; then
+      grep -Eqi -- "${RULE_PATTERNS[$i]}" "$file" && ACTIVE_RULES+=("$i") || true
+    else
+      grep -Eq -- "${RULE_PATTERNS[$i]}" "$file" && ACTIVE_RULES+=("$i") || true
+    fi
+    i=$((i + 1))
+  done
+  ACTIVE_TERMS=()
+  j=0
+  while [ $j -lt ${#PRIVATE_TERMS[@]} ]; do
+    grep -Eq -- "${PRIVATE_PATTERNS[$j]}" "$file" && ACTIVE_TERMS+=("$j") || true
+    j=$((j + 1))
+  done
+  if [ ${#ACTIVE_RULES[@]} -eq 0 ] && [ ${#ACTIVE_TERMS[@]} -eq 0 ]; then
+    continue
+  fi
+
   lineno=0
   while IFS= read -r line || [ -n "$line" ]; do
     lineno=$((lineno + 1))
     case "$line" in
       *"$EXEMPT_MARKER"*) continue ;;
     esac
-    i=0
-    while [ $i -lt ${#RULE_NAMES[@]} ]; do
+    for i in ${ACTIVE_RULES[@]+"${ACTIVE_RULES[@]}"}; do
       rname="${RULE_NAMES[$i]}"
       pattern="${RULE_PATTERNS[$i]}"
       icase="${RULE_ICASE[$i]}"
@@ -88,19 +132,17 @@ for file in "${FILES[@]}"; do
           [ -n "$m" ] && HITS+=("$rel:$lineno: [$rname] $m")
         done <<< "$matches"
       fi
-      i=$((i + 1))
     done
-    for term in "${PRIVATE_TERMS[@]}"; do
-      escaped="$(printf '%s' "$term" | sed -e 's/[][\.*^$()+?{}|]/\\&/g')"
-      if printf '%s' "$line" | grep -Eq -- "\<${escaped}\>"; then
-        HITS+=("$rel:$lineno: [private-term] $term")
+    for j in ${ACTIVE_TERMS[@]+"${ACTIVE_TERMS[@]}"}; do
+      if printf '%s' "$line" | grep -Eq -- "${PRIVATE_PATTERNS[$j]}"; then
+        HITS+=("$rel:$lineno: [private-term] ${PRIVATE_TERMS[$j]}")
       fi
     done
   done < "$file"
 done
 
 if [ ${#HITS[@]} -gt 0 ]; then
-  for h in "${HITS[@]}"; do
+  for h in ${HITS[@]+"${HITS[@]}"}; do
     printf '%s\n' "$h"
   done
   echo "LEAK-SWEEP FAILED: ${#HITS[@]} hit(s). Mode=${MODE}."

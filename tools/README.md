@@ -23,7 +23,11 @@ Two run-sites, two rule sets:
   `/preflight`: leftover template placeholders (`<PLACEHOLDER-...>`,
   `{{TOKEN}}`, `TODO-INIT`) + your deny-list if present. It does NOT run
   the identity rules - a private instance legitimately contains its own
-  founder's paths and email.
+  founder's paths and email. It reads `_command/` and the operating
+  `CLAUDE.md`, not `framework/`, whose kit templates carry placeholders on
+  purpose. The brace token must be a bare identifier, so a Mermaid hexagon
+  node (`A{{"label"}}`) is not mistaken for an unfilled blank; an unquoted
+  one (`A{{plain}}`) still needs the exempt marker.
 
 Usage:
 - From a PowerShell session: `.\tools\leak-sweep.ps1 [-Path <p1>,<p2>] [-Mode promote|instance] [-PrivateList <file>] [-Root <dir>]`
