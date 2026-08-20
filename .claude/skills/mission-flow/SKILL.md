@@ -174,15 +174,24 @@ do the phase, and remove the need rather than restating the ban.
 |---|---|
 | read and map only | an agent type carrying no `Bash` at all |
 | investigate, running commands | an agent type with no `Edit` or `Write`. `Bash` remains, so this reduces the blast radius rather than removing it |
-| implement | its own git worktree, so the main tree is not reachable |
-| implement, outbound | no usable git credentials, so a `push` FAILS rather than being forbidden |
+| implement | its own git worktree on its own branch, so the main tree is not reachable |
 | review | a pre-generated diff file and the paths, never a live working tree |
 
+**The outbound gap is open, and naming it is the only honest thing to do here.**
 A worktree protects the tree, not the remote. An implement agent that runs
 `git push` is not contained by isolation, and pushing to a base branch that
-deploys is an unreviewed release (hard rule 8), so the outbound half needs its
-own control. Committing inside the worktree stays available, because that is the
-phase's job; only the outward step is removed, and it belongs to Phase 7 anyway.
+deploys is an unreviewed release (hard rule 8). The obvious control would be to
+dispatch without usable git credentials so a push fails rather than being
+forbidden - but **no such mechanism exists**: a dispatched agent inherits the
+parent's SSH agent, `gh` token and credential helper, and nothing in this repo or
+the Agent tool's own options changes that. `isolation: worktree` isolates the
+tree only.
+
+So the outbound risk is covered by the enumerated ban below, which is prose, plus
+detection after the fact. That is weaker than the other rows in this table and
+must not be written up as though it were not. Closing it needs harness support
+this product does not control; until then, an implement dispatch is the one
+place in this flow where a rule is doing work a control should be doing.
 
 **Every shell-capable dispatch also carries the enumerated ban**, naming the
 commands rather than gesturing at care: no `stash`, `checkout`, `reset`,
