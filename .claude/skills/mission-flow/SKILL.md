@@ -195,20 +195,18 @@ do the phase, and remove the need rather than restating the ban.
 | review | a pre-generated diff file and the paths, never a live working tree |
 
 **The outbound gap is open, and naming it is the only honest thing to do here.**
-A worktree protects the tree, not the remote. An implement agent that runs
-`git push` is not contained by isolation, and pushing to a base branch that
-deploys is an unreviewed release (hard rule 8). The obvious control would be to
-dispatch without usable git credentials so a push fails rather than being
-forbidden - but **no such mechanism exists**: a dispatched agent inherits the
-parent's SSH agent, `gh` token and credential helper, and nothing in this repo or
-the Agent tool's own options changes that. `isolation: worktree` isolates the
-tree only.
+A dispatched agent inherits the parent's git credentials, so isolating its tree
+does not isolate the remote. `framework/roles.md` carries that fact and the probe
+behind it; this table does not restate it, because two independently worded copies
+of one constraint drift apart.
 
-So the outbound risk is covered by the enumerated ban below, which is prose, plus
-detection after the fact. That is weaker than the other rows in this table and
-must not be written up as though it were not. Closing it needs harness support
-this product does not control; until then, an implement dispatch is the one
-place in this flow where a rule is doing work a control should be doing.
+The consequence for THIS flow: an implement agent that runs `git push` is not
+contained by its worktree, and pushing to a base branch that deploys is an
+unreviewed release (hard rule 8). So the outbound risk is covered by the
+enumerated ban below, which is prose, plus verification after the fact. That is
+weaker than every other row in this table and must not be written up as though it
+were not. An implement dispatch is the one place in this flow where a rule is
+doing work a control should be doing.
 
 **Every shell-capable dispatch also carries the enumerated ban**, naming the
 commands rather than gesturing at care. On git: no `stash`, `checkout`, `reset`,
