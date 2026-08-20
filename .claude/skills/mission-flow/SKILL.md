@@ -153,6 +153,38 @@ The record is also the audit trail, so it carries the model and effort it ran at
 and the tokens it used. That is what lets `/spend` tally a flow afterwards
 instead of estimating it.
 
+### Dispatch safety - the least-capable agent that can do the job
+
+A prose constraint on a sub-agent is not a control: on 2026-07-24 an agent
+briefed READ-ONLY ran `git stash -u` in the working tree
+(`CONSTITUTION.local.md` section 2). So pick the weakest tool set that can still
+do the phase, and remove the need rather than restating the ban.
+
+| The phase needs to | Dispatch it with |
+|---|---|
+| read and map only | an agent type carrying no `Bash` at all |
+| investigate, running commands | an agent type with no `Edit` or `Write`. `Bash` remains, so this reduces the blast radius rather than removing it |
+| implement | its own git worktree, so the main tree is not reachable |
+| implement, outbound | no usable git credentials, so a `push` FAILS rather than being forbidden |
+| review | a pre-generated diff file and the paths, never a live working tree |
+
+A worktree protects the tree, not the remote. An implement agent that runs
+`git push` is not contained by isolation, and pushing to a base branch that
+deploys is an unreviewed release (hard rule 8), so the outbound half needs its
+own control. Committing inside the worktree stays available, because that is the
+phase's job; only the outward step is removed, and it belongs to Phase 7 anyway.
+
+**Verify every working tree after any phase that dispatched a shell-capable
+agent.** That is detection rather than prevention, and it is the last line.
+
+**The identity header.** Sub-agents inherit neither `CONSTITUTION.md` nor the
+project `CLAUDE.md`, so every dispatch leads with a header: front, repo, trust,
+path, current branch, the git rule, the IO contract, and one platform line from
+`_command/machine.local.md`. Compose it ONCE per invocation from the spoke and
+reuse it for every dispatch in that flow - assembling it per dispatch is how a
+field ends up blank. A spoke with blank required fields is not dispatch-ready:
+the flow stops there rather than dispatching an agent that is acting as nobody.
+
 ## Phase 0 - Classify the work
 
 Pick one:
