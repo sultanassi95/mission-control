@@ -42,12 +42,22 @@ RULE_ICASE=(0 0 0 0 0 1 0 1 1)
 # <PLACEHOLDER-...> blanks as leaks while never opening _command/ at all.
 if [ "$MODE" = "instance" ]; then
   TARGETS=(_command CLAUDE.md)
-  RULE_NAMES=(leftover-placeholder)
+  # The identity rules stay off because an instance legitimately holds its own
+  # founder's paths and email. A live credential is never legitimate there, so
+  # the secret rules stay ON. Measured across _command/ before choosing: the
+  # three secret rules hit 0 lines, user paths 815, email 957, twelve-digit ids
+  # 6366. That is the whole argument for which three are kept.
+  RULE_NAMES=(leftover-placeholder aws-access-key github-token generic-secret)
   # The brace token is a bare identifier ({{PROJECT_NAME}}). `[^}]+` also
   # matched Mermaid's hexagon node syntax ({{"label"}}), so every diagram-first
   # doc carrying one reported as an unfilled blank.
-  RULE_PATTERNS=('<PLACEHOLDER[^>]*>|\{\{[A-Za-z0-9_.-]+\}\}|TODO-INIT')
-  RULE_ICASE=(0)
+  RULE_PATTERNS=(
+    '<PLACEHOLDER[^>]*>|\{\{[A-Za-z0-9_.-]+\}\}|TODO-INIT'
+    'AKIA[0-9A-Z]{16}'
+    'gh[pousr]_[A-Za-z0-9]{20,}'
+    '(api[_-]?key|client[_-]?secret|access[_-]?token)[[:space:]]*[:=][[:space:]]*[^[:space:]]+'
+  )
+  RULE_ICASE=(0 0 0 1)
 fi
 
 PRIVATE_TERMS=()

@@ -35,7 +35,14 @@ if ($Mode -eq "instance") {
   # while never opening _command/ at all. The brace token is a bare identifier;
   # `[^}]+` also matched Mermaid's hexagon node syntax ({{"label"}}), so every
   # diagram-first doc carrying one read as an unfilled blank.
-  $rules = @(@{ Name = "leftover-placeholder"; Pattern = '<PLACEHOLDER[^>]*>|\{\{[A-Za-z0-9_.-]+\}\}|TODO-INIT' })
+  # A live credential is never legitimate in an instance, so the secret rules
+  # stay on alongside the placeholder rule; only the identity ones drop.
+  $rules = @(
+    @{ Name = "leftover-placeholder"; Pattern = '<PLACEHOLDER[^>]*>|\{\{[A-Za-z0-9_.-]+\}\}|TODO-INIT' },
+    @{ Name = "aws-access-key";       Pattern = 'AKIA[0-9A-Z]{16}' },
+    @{ Name = "github-token";         Pattern = 'gh[pousr]_[A-Za-z0-9]{20,}' },
+    @{ Name = "generic-secret";       Pattern = '(?i)(api[_-]?key|client[_-]?secret|access[_-]?token)\s*[:=]\s*\S+' }
+  )
 }
 
 if (-not $Path) {
