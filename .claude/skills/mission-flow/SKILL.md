@@ -103,17 +103,21 @@ phases that read and write in bulk, and keeps the ones where delegating would
 break a rule. `framework/CONSTITUTION.md` section 5 is the model; this table is
 where this flow complies with it instead of describing it.
 
-| Phase | Disposition | Why |
-|---|---|---|
-| 0 classify | inline | one decision, reads nothing |
-| 1 triage | **dispatched** | the largest reading surface in the flow |
-| 2 ticket | inline | the ticket is the plan, and holding the plan is what the orchestrator is for |
-| 3 branch | **never delegated** | a git write, and hard rule 8's upstream check lives here |
-| 4 implement | **dispatched**, one per logical unit | mechanical once the approach is settled |
-| 5 review | **dispatched** | already the pattern; see Phase 5 |
-| 6 verify | **hybrid** | an agent may run the gauntlet; the orchestrator runs the terminal assertion itself |
-| 7 push + PR | **never delegated** | outward-facing, and the autonomy carve-out is the orchestrator's alone |
-| 8 capture | inline | judgment about structural versus state, on a small input |
+| Phase | Disposition | Routing (`roles.md`) | Why |
+|---|---|---|---|
+| 0 classify | inline | - | one decision, reads nothing |
+| 1 triage | **dispatched** | mid · high (bug) / mid · medium (task) | the largest reading surface in the flow |
+| 2 ticket | inline | - | the ticket is the plan, and holding the plan is what the orchestrator is for |
+| 3 branch | **never delegated** | - | a git write, and hard rule 8's upstream check lives here |
+| 4 implement | **dispatched**, one per logical unit | mid · high; frontier for load-bearing logic | mechanical once the approach is settled |
+| 5 review | **dispatched** | mid · medium; frontier · high when load-bearing | already the pattern; see Phase 5 |
+| 6 verify | **hybrid** | mid · low for the run | an agent may run the gauntlet; the orchestrator runs the terminal assertion itself |
+| 7 push + PR | **never delegated** | - | outward-facing, and the autonomy carve-out is the orchestrator's alone |
+| 8 capture | inline | - | judgment about structural versus state, on a small input |
+
+Escalate a row on evidence that the cheaper tier actually failed, never on
+anxiety, and never above the `CONSTITUTION.local.md` section 2 ceilings. Under
+`--spend lean` each dispatched row steps one tier down.
 
 **Three things are never delegated and never summarised.** Each is a place where
 a relayed claim would quietly replace evidence:
@@ -179,6 +183,14 @@ A worktree protects the tree, not the remote. An implement agent that runs
 deploys is an unreviewed release (hard rule 8), so the outbound half needs its
 own control. Committing inside the worktree stays available, because that is the
 phase's job; only the outward step is removed, and it belongs to Phase 7 anyway.
+
+**Every shell-capable dispatch also carries the enumerated ban**, naming the
+commands rather than gesturing at care: no `stash`, `checkout`, `reset`,
+`restore`, `clean`, `switch`, `add`, `commit`, `push`. It is prose, and prose is
+not a control - it rides ALONGSIDE the structural controls above, never instead
+of them (`CONSTITUTION.local.md` section 2 requires both). An implement dispatch
+is the one exception: it may commit inside its own worktree, because that is the
+phase's job.
 
 **Verify every working tree after any phase that dispatched a shell-capable
 agent.** That is detection rather than prevention, and it is the last line.
