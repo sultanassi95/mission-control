@@ -133,7 +133,11 @@ a relayed claim would quietly replace evidence:
   orchestrator itself runs the one command that proves the artifact the user
   consumes, and pastes that output. Evidence-before-claims does not survive a
   relay, and `CONSTITUTION.local.md` rule 2 puts the round trip on the
-  orchestrator by name.
+  orchestrator by name. Phase 6's integration and e2e evidence may be produced by
+  a dispatch, but it lands as ARTIFACTS the record points at - the literal status
+  and body, the screenshot, the server log line - never as an agent's word that a
+  flow passed. "The e2e suite is green" from a sub-agent is inferred-done, which
+  Phase 6 already refuses.
 - **The acceptance-criteria verdicts.** Phase 5's criteria check stays inline. A
   sub-agent cannot close a ticket, so it cannot be the thing that says a ticket
   is satisfied.
@@ -729,7 +733,10 @@ Confidential fronts stay pointers-only: nothing employer-owned enters
 ## Autonomy scope
 
 A single `/mission-flow` invocation grants commit + push + `gh pr create`
-authority for THIS ticket only. When the PR is open (or the founder closes
+authority for THIS ticket only. A dispatched agent inherits a strict subset: it
+may commit inside its own worktree and nothing else. Push and PR stay with the
+orchestrator, which is why an implement dispatch carries no usable git
+credentials rather than a note asking it to refrain. When the PR is open (or the founder closes
 the loop), autonomy expires. Next task = re-ask. This skill is the
 explicit carve-out from the standing "no git writes unasked" default; the
 carve-out is exactly as wide as one invocation.
