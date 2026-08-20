@@ -124,6 +124,35 @@ a relayed claim would quietly replace evidence:
   sub-agent cannot close a ticket, so it cannot be the thing that says a ticket
   is satisfied.
 
+### The record protocol
+
+Every dispatch returns exactly one record, written to
+
+    <ticket-folder>/records/NN-<phase>-<agent>.md
+
+in the format `framework/kit/_record-schema.md` specifies. **The orchestrator
+reads the record; it does not read the work.** That is the entire mechanism by
+which its context stays small, and skipping it turns a dispatch into a detour
+that costs more than doing the work inline.
+
+Three rules make a record safe to integrate from:
+
+- **Pointers, not characterisations.** A record names artifacts by path - the
+  diff, the output file, the failing test - rather than describing them. "A
+  whole-file prefilter was added for performance" is a legal line only with the
+  diff path beside it. A record that characterises an artifact without giving its
+  path goes back to the agent; it is not integrated.
+- **Capped at 150 lines.** Past that a record is a second context rather than a
+  summary of one. A phase that cannot report inside the cap was scoped too wide:
+  re-decompose it.
+- **Minimum context in.** A dispatch receives the ticket, its own brief, and at
+  most two prior records. Needing a third means the decomposition is wrong
+  (`_record-schema.md`).
+
+The record is also the audit trail, so it carries the model and effort it ran at
+and the tokens it used. That is what lets `/spend` tally a flow afterwards
+instead of estimating it.
+
 ## Phase 0 - Classify the work
 
 Pick one:
