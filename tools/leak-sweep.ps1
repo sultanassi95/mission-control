@@ -1,6 +1,9 @@
 param(
-  [string[]]$Path = @("framework", ".claude\skills", "README.md", "LIFTOFF.md", "CLAUDE.md", "CHANGELOG.md"),
+  # $Mode is FIRST so `leak-sweep.ps1 promote` selects a mode. With $Path first,
+  # that bound "promote" to a path which does not exist: zero files, exit 0, and
+  # `leak-sweep.ps1 instance` reported Mode=promote because $Mode never got it.
   [ValidateSet("promote", "instance")][string]$Mode = "promote",
+  [string[]]$Path,
   [string]$PrivateList = (Join-Path $PSScriptRoot "leak-sweep.private.txt"),
   [string]$Root = (Split-Path $PSScriptRoot -Parent)
 )
@@ -18,12 +21,25 @@ $rules = @(
   @{ Name = "legacy-name";       Pattern = '(?i)\bpmc\b' },
   @{ Name = "model-pin";         Pattern = '(?i)\b(opus|sonnet|haiku|gpt|gemini|claude)[ -]?[0-9]+(\.[0-9]+)?\b|(?i)claude-[a-z]+-[0-9]' }
 )
+$defaultPromoteTargets = @("framework", ".claude\skills", "README.md", "LIFTOFF.md", "CLAUDE.md", "CHANGELOG.md")
+$defaultInstanceTargets = @("_command", "CLAUDE.md")
+
 if ($Mode -eq "instance") {
   # Instance mode guards a PRIVATE instance: leftover template placeholders +
   # the operator's deny-list (if present). The generic identity rules above
   # guard the PUBLIC repo only - an instance legitimately contains its own
   # founder's paths and email.
-  $rules = @(@{ Name = "leftover-placeholder"; Pattern = '<PLACEHOLDER[^>]*>|\{\{[^}]+\}\}|TODO-INIT' })
+  #
+  # It reads a different tree for the same reason. Pointed at framework/ it
+  # reported the kit templates' deliberate <PLACEHOLDER-...> blanks as leaks
+  # while never opening _command/ at all. The brace token is a bare identifier;
+  # `[^}]+` also matched Mermaid's hexagon node syntax ({{"label"}}), so every
+  # diagram-first doc carrying one read as an unfilled blank.
+  $rules = @(@{ Name = "leftover-placeholder"; Pattern = '<PLACEHOLDER[^>]*>|\{\{[A-Za-z0-9_.-]+\}\}|TODO-INIT' })
+}
+
+if (-not $Path) {
+  $Path = if ($Mode -eq "instance") { $defaultInstanceTargets } else { $defaultPromoteTargets }
 }
 
 $privateTerms = @()
@@ -41,6 +57,14 @@ $targets = foreach ($p in $Path) {
       $_.Name -ne 'leak-sweep.private.txt'
     }
   } elseif (Test-Path $full) { Get-Item $full }
+}
+
+# A sweep that opened nothing is not a clean sweep.
+if (@($targets).Count -eq 0) {
+  # Not Write-Error: $ErrorActionPreference is Stop, which would make it
+  # terminating and never reach the exit code this contract promises.
+  [Console]::Error.WriteLine("LEAK-SWEEP ERROR: no files under '$Root' for mode=$Mode (targets: $($Path -join ' ')).")
+  exit 2
 }
 
 foreach ($file in @($targets)) {
