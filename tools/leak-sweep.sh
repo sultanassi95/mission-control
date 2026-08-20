@@ -74,21 +74,35 @@ if [ -f "$PRIVATE_LIST" ]; then
 fi
 
 FILES=()
+MISSING=()
 for t in "${TARGETS[@]}"; do
   full="$ROOT/$t"
   if [ -d "$full" ]; then
+    before=${#FILES[@]}
     while IFS= read -r f; do
       FILES+=("$f")
     done < <(find "$full" -type f \
       -not -path '*/node_modules/*' -not -path '*/.git/*' -not -path '*/.docs-viewer-cache/*' \
       -not -name 'leak-sweep.private.txt')
+    [ ${#FILES[@]} -eq "$before" ] && MISSING+=("$t (empty)")
   elif [ -f "$full" ]; then
     FILES+=("$full")
+  else
+    MISSING+=("$t (absent)")
   fi
 done
 
-# A sweep that opened nothing is not a clean sweep. An unreachable root used to
-# print "CLEAN: 0 hits across 0 file(s)" and exit 0.
+# A target that is not there was not checked, so it cannot be reported clean.
+# Per target, not just globally: instance mode reads _command/ + CLAUDE.md, and
+# a globally-non-empty check passes on CLAUDE.md alone while _command/ is
+# missing or misnamed - which is exactly the state liftoff step 5 exists to
+# catch.
+if [ ${#MISSING[@]} -gt 0 ]; then
+  echo "LEAK-SWEEP ERROR: mode=${MODE} target(s) not scanned under '$ROOT': ${MISSING[*]}" >&2
+  exit 2
+fi
+
+# Backstop for the whole-set case.
 if [ ${#FILES[@]} -eq 0 ]; then
   echo "LEAK-SWEEP ERROR: no files under '$ROOT' for mode=${MODE} (targets: ${TARGETS[*]})." >&2
   exit 2
@@ -98,24 +112,50 @@ HITS=()
 for file in "${FILES[@]}"; do
   rel="${file#"$ROOT"/}"
 
+  # A file the sweep cannot open has not been checked, so it can never count as
+  # clean. Before the prefilter this surfaced as a fatal redirect error; the
+  # prefilter would instead activate no rules and skip the file silently.
+  if [ ! -r "$file" ]; then
+    echo "LEAK-SWEEP ERROR: cannot read '$rel'. Unreadable is not clean." >&2
+    exit 2
+  fi
+
   # Whole-file prefilter: only rules and terms that appear SOMEWHERE in this
   # file enter the per-line loop. A clean file costs one grep per rule instead
   # of one grep per rule per line, and the prefilter is a superset of the
   # per-line result, so no hit can be missed.
+  #
+  # grep exit 1 means no match; anything above 1 is an error (unreadable file,
+  # invalid pattern) and must abort. Collapsing both into "no match" is how a
+  # broken rule silently stops guarding every file it was meant to cover.
   ACTIVE_RULES=()
   i=0
   while [ $i -lt ${#RULE_NAMES[@]} ]; do
+    status=0
     if [ "${RULE_ICASE[$i]}" = "1" ]; then
-      grep -Eqi -- "${RULE_PATTERNS[$i]}" "$file" && ACTIVE_RULES+=("$i") || true
+      grep -Eqi -- "${RULE_PATTERNS[$i]}" "$file" || status=$?
     else
-      grep -Eq -- "${RULE_PATTERNS[$i]}" "$file" && ACTIVE_RULES+=("$i") || true
+      grep -Eq -- "${RULE_PATTERNS[$i]}" "$file" || status=$?
+    fi
+    if [ "$status" -eq 0 ]; then
+      ACTIVE_RULES+=("$i")
+    elif [ "$status" -gt 1 ]; then
+      echo "LEAK-SWEEP ERROR: grep exit $status on '$rel' for rule ${RULE_NAMES[$i]}." >&2
+      exit 2
     fi
     i=$((i + 1))
   done
   ACTIVE_TERMS=()
   j=0
   while [ $j -lt ${#PRIVATE_TERMS[@]} ]; do
-    grep -Eq -- "${PRIVATE_PATTERNS[$j]}" "$file" && ACTIVE_TERMS+=("$j") || true
+    status=0
+    grep -Eq -- "${PRIVATE_PATTERNS[$j]}" "$file" || status=$?
+    if [ "$status" -eq 0 ]; then
+      ACTIVE_TERMS+=("$j")
+    elif [ "$status" -gt 1 ]; then
+      echo "LEAK-SWEEP ERROR: grep exit $status on '$rel' for private term ${PRIVATE_TERMS[$j]}." >&2
+      exit 2
+    fi
     j=$((j + 1))
   done
   if [ ${#ACTIVE_RULES[@]} -eq 0 ] && [ ${#ACTIVE_TERMS[@]} -eq 0 ]; then

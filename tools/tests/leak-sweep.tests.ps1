@@ -29,7 +29,8 @@ Assert "placeholder not flagged (promote)" (($out | Select-String '\[leftover-pl
 
 $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $sweep -Root $dirty -Path @(".") -Mode instance -PrivateList $privList
 Assert "instance flags placeholder"        (($out | Select-String '\[leftover-placeholder\]').Count -ge 3)
-Assert "instance skips identity rules"     (($out | Select-String '\[email\]|\[windows-user-path\]|\[aws-access-key\]').Count -eq 0)
+Assert "instance skips identity rules"     (($out | Select-String '\[email\]|\[windows-user-path\]|\[unix-home-path\]|\[aws-account-id\]').Count -eq 0)
+Assert "instance still flags secrets"      (($out | Select-String '\[aws-access-key\]|\[github-token\]|\[generic-secret\]').Count -ge 3)
 Assert "instance still flags private term" (($out | Select-String '\[private-term\] Zoltan').Count -ge 1)
 
 $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $sweep -Root $clean -Path @(".") -Mode promote -PrivateList $privList

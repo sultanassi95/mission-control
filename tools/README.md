@@ -44,7 +44,11 @@ parameters only. `$Mode` was not always first in the PowerShell param block, and
 while it was second a bare `leak-sweep.ps1 promote` bound "promote" to `-Path`,
 scanned nothing and exited 0.
 
-Exit 0 means clean. Exit 1 prints `file:line: [rule] match` for each hit.
+Exit 0 means clean. Exit 1 prints `file:line: [rule] match` for each hit. Exit 2
+means the sweep could not do its job and you should not read it as a pass: a
+target that is absent or empty, a file it cannot open, or a rule whose pattern
+grep rejected. `instance` on a pre-liftoff clone exits 2 for that reason, since
+there is no `_command/` to check yet.
 
 A line intentionally naming the operator can be exempted with a trailing
 `MC-LEAK-EXEMPT: <reason>` marker.

@@ -56,22 +56,36 @@ if (Test-Path $PrivateList) {
 
 $exemptMarker = 'MC-LEAK-EXEMPT:'
 $hits = New-Object System.Collections.Generic.List[string]
-$targets = foreach ($p in $Path) {
+$targets = @()
+$missing = @()
+foreach ($p in $Path) {
   $full = Join-Path $Root $p
+  $found = @()
   if (Test-Path $full -PathType Container) {
-    Get-ChildItem $full -Recurse -File | Where-Object {
+    $found = @(Get-ChildItem $full -Recurse -File | Where-Object {
       $_.FullName -notmatch '\\(node_modules|\.git|\.docs-viewer-cache)(\\|$)' -and
       $_.Name -ne 'leak-sweep.private.txt'
-    }
-  } elseif (Test-Path $full) { Get-Item $full }
+    })
+    if ($found.Count -eq 0) { $missing += "$p (empty)" }
+  } elseif (Test-Path $full) {
+    $found = @(Get-Item $full)
+  } else {
+    $missing += "$p (absent)"
+  }
+  $targets += $found
 }
 
-# Normalise before counting: an empty foreach yields $null, and @($null) has
-# Count 1, which would have let the empty-scan guard below pass and restored the
-# clean-exit-on-nothing bug this guard exists to close.
-$targets = @($targets | Where-Object { $_ })
+# A target that is not there was not checked, so it cannot be reported clean.
+# Per target, not just globally: instance mode reads _command/ + CLAUDE.md, and a
+# globally-non-empty check passes on CLAUDE.md alone while _command/ is missing
+# or misnamed, which is the state liftoff step 5 exists to catch.
+if ($missing.Count -gt 0) {
+  [Console]::Error.WriteLine("LEAK-SWEEP ERROR: mode=$Mode target(s) not scanned under '$Root': $($missing -join ', ')")
+  exit 2
+}
 
-# A sweep that opened nothing is not a clean sweep.
+# $targets is built as a real array above, so Count is trustworthy here. Kept as
+# a backstop for the whole-set case.
 if ($targets.Count -eq 0) {
   # Not Write-Error: $ErrorActionPreference is Stop, which would make it
   # terminating and never reach the exit code this contract promises.
