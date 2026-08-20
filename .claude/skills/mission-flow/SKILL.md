@@ -146,12 +146,19 @@ a relayed claim would quietly replace evidence:
 
 Every dispatch returns exactly one record, written to
 
-    <ticket-folder>/records/NN-<phase>-<agent>.md
+    <ticket-folder>/records/NN-<scope>-<agent>.md
 
-in the format `framework/kit/_record-schema.md` specifies. **The orchestrator
-reads the record; it does not read the work.** That is the entire mechanism by
-which its context stays small, and skipping it turns a dispatch into a detour
-that costs more than doing the work inline.
+in the format `framework/kit/_record-schema.md` specifies, filename included.
+**The orchestrator reads the record; it does not read the work.** That is the
+entire mechanism by which its context stays small, and skipping it turns a
+dispatch into a detour that costs more than doing the work inline.
+
+**Phase 1 dispatches before that folder exists.** The ticket folder is created in
+Phase 2, and on the trackerless path the `<ID>` in its name is not even assigned
+until then, so a Phase-1 record has nowhere to land. It goes to the session
+scratchpad, which is where temp artifacts belong anyway, and Phase 2 moves it
+into `records/` as it creates the folder. Any phase dispatched before Phase 2
+follows the same route.
 
 The rules that make a record safe to integrate from live in
 `_record-schema.md`, because they bind every skill that dispatches and not just
@@ -214,17 +221,25 @@ the flow stops there rather than dispatching an agent that is acting as nobody.
 
 ### Sizing, and the tally at the end
 
-State the sizing before the first dispatch of a phase, in that phase's record:
-`N agents x model x effort ~ tokens`, within the `CONSTITUTION.local.md` section
-2 ceilings and the `framework/roles.md` presets. Inside this flow the fan-out is
+State the sizing before the first dispatch of a phase, in the orchestrator's own
+output: `N agents x model x effort`, within the `CONSTITUTION.local.md` section 2
+ceilings and the `framework/roles.md` presets. Not in the record - the record is
+authored by the agent and does not exist yet. Inside this flow the fan-out is
 already authorised, so this is a statement rather than a request.
 
-Each record carries the tokens its dispatch actually used, and the Phase-8 report
-ends with a per-phase tally read off the records. Delegation is meant to cut what
-the orchestrator spends reprocessing a long context on every turn; whether it
-cuts the TOTAL across all agents is an empirical question, and a flow that cannot
-say what it spent cannot answer it. Compare against an `--inline` run on a
-comparable ticket, never against an estimate.
+**The orchestrator tallies the tokens, because it is the only one that can see
+them.** A dispatched agent cannot observe its own consumption; the harness
+reports usage back to the parent when it reports at all. So the orchestrator
+notes what came back per dispatch and closes Phase 8 with the tally. Where the
+harness surfaces nothing, the tally says so and stops there: never invent a
+number (`/spend` step 1, `CONSTITUTION.local.md` rule 6). The record carries the
+model and effort it ran at, which it does know.
+
+Delegation is meant to cut what the orchestrator spends reprocessing a long
+context on every turn; whether it cuts the TOTAL across all agents is an
+empirical question, and a flow that cannot say what it spent cannot answer it.
+Compare against an `--inline` run on a comparable ticket, never against an
+estimate.
 
 ## Phase 0 - Classify the work
 
@@ -410,9 +425,18 @@ git rev-parse --abbrev-ref '@{upstream}'  # must NOT name the base branch
 
 ## Phase 4 - Implement (produces: 1-N phase commits, all green in isolation)
 
-**Dispatched, one agent per logical unit**, each in its own worktree when more
-than one runs. The commit rules below bind the agent, and the orchestrator
-verifies the tree afterwards.
+**Dispatched, one agent per logical unit, each in its own worktree on its own
+branch** off the ticket branch, whether one unit runs or several. Uniform on
+purpose: git refuses to check out one branch in two worktrees
+(`fatal: ... is already used by worktree at ...`), so per-unit branches are what
+makes more than one agent possible at all, and a single unit taking the same
+route means the common case is not the unprotected one.
+
+The orchestrator merges each unit's branch back into the ticket branch as its
+record arrives - fast-forward when one unit ran - because Phase 5's diff and
+Phase 7's push both read the ticket branch, and a commit that never lands there
+is a commit nothing reviews. The commit rules below bind the agent, and the
+orchestrator verifies every tree afterwards.
 
 **Bugs (TDD-shaped):**
 1. `test(<key>): <failing test that pins the root cause>` - the RED test
