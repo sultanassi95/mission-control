@@ -66,8 +66,13 @@ $targets = foreach ($p in $Path) {
   } elseif (Test-Path $full) { Get-Item $full }
 }
 
+# Normalise before counting: an empty foreach yields $null, and @($null) has
+# Count 1, which would have let the empty-scan guard below pass and restored the
+# clean-exit-on-nothing bug this guard exists to close.
+$targets = @($targets | Where-Object { $_ })
+
 # A sweep that opened nothing is not a clean sweep.
-if (@($targets).Count -eq 0) {
+if ($targets.Count -eq 0) {
   # Not Write-Error: $ErrorActionPreference is Stop, which would make it
   # terminating and never reach the exit code this contract promises.
   [Console]::Error.WriteLine("LEAK-SWEEP ERROR: no files under '$Root' for mode=$Mode (targets: $($Path -join ' ')).")
@@ -96,5 +101,5 @@ if ($hits.Count -gt 0) {
   Write-Output ("LEAK-SWEEP FAILED: {0} hit(s). Mode={1}." -f $hits.Count, $Mode)
   exit 1
 }
-Write-Output ("LEAK-SWEEP CLEAN: 0 hits across {0} file(s). Mode={1}. PrivateTerms={2}." -f @($targets).Count, $Mode, $privateTerms.Count)
+Write-Output ("LEAK-SWEEP CLEAN: 0 hits across {0} file(s). Mode={1}. PrivateTerms={2}." -f $targets.Count, $Mode, $privateTerms.Count)
 exit 0
