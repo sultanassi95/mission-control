@@ -119,6 +119,10 @@ Escalate a row on evidence that the cheaper tier actually failed, never on
 anxiety, and never above the `CONSTITUTION.local.md` section 2 ceilings. Under
 `--spend lean` each dispatched row steps one tier down.
 
+Each phase also states its own disposition where that phase is read, because this
+document is consulted at a phase rather than start to finish. **This table is
+authoritative** if the two ever disagree.
+
 **Three things are never delegated and never summarised.** Each is a place where
 a relayed claim would quietly replace evidence:
 
@@ -145,19 +149,11 @@ reads the record; it does not read the work.** That is the entire mechanism by
 which its context stays small, and skipping it turns a dispatch into a detour
 that costs more than doing the work inline.
 
-Three rules make a record safe to integrate from:
-
-- **Pointers, not characterisations.** A record names artifacts by path - the
-  diff, the output file, the failing test - rather than describing them. "A
-  whole-file prefilter was added for performance" is a legal line only with the
-  diff path beside it. A record that characterises an artifact without giving its
-  path goes back to the agent; it is not integrated.
-- **Capped at 150 lines.** Past that a record is a second context rather than a
-  summary of one. A phase that cannot report inside the cap was scoped too wide:
-  re-decompose it.
-- **Minimum context in.** A dispatch receives the ticket, its own brief, and at
-  most two prior records. Needing a third means the decomposition is wrong
-  (`_record-schema.md`).
+The rules that make a record safe to integrate from live in
+`_record-schema.md`, because they bind every skill that dispatches and not just
+this one: point rather than characterise, cap at 150 lines, minimum context in,
+and re-decompose past about two prior records. Read them there; this flow adds
+nothing to them.
 
 The record is also the audit trail, so it carries the model and effort it ran at
 and the tokens it used. That is what lets `/spend` tally a flow afterwards
