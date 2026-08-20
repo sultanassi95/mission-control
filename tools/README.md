@@ -29,11 +29,20 @@ Two run-sites, two rule sets:
   node (`A{{"label"}}`) is not mistaken for an unfilled blank; an unquoted
   one (`A{{plain}}`) still needs the exempt marker.
 
-Usage:
-- From a PowerShell session: `.\tools\leak-sweep.ps1 [-Path <p1>,<p2>] [-Mode promote|instance] [-PrivateList <file>] [-Root <dir>]`
-- From any shell: `powershell -Command ".\tools\leak-sweep.ps1 -Mode instance -Path _command,CLAUDE.md"`
-  (do not use `powershell -File` with a multi-value `-Path` - argument arrays do not survive `-File`)
+Usage. **The first positional argument is the MODE in both entry points**, and
+each mode picks its own targets, so a bare mode is the normal invocation:
+
 - `tools/leak-sweep.sh [promote|instance] [root]`
+- From a PowerShell session: `.\tools\leak-sweep.ps1 [promote|instance] [-Path <p1>,<p2>] [-PrivateList <file>] [-Root <dir>]`
+- From any shell: `powershell -Command ".\tools\leak-sweep.ps1 instance"`
+  (do not use `powershell -File` with a multi-value `-Path` - argument arrays do not survive `-File`)
+
+Where the two still differ, because it is the kind of thing that gets
+transliterated wrongly: the shell script takes the scan root as an optional
+SECOND positional, while the PowerShell one takes `-Root` and `-Path` as named
+parameters only. `$Mode` was not always first in the PowerShell param block, and
+while it was second a bare `leak-sweep.ps1 promote` bound "promote" to `-Path`,
+scanned nothing and exited 0.
 
 Exit 0 means clean. Exit 1 prints `file:line: [rule] match` for each hit.
 
