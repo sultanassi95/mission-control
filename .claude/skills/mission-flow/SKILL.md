@@ -176,6 +176,24 @@ this one: point rather than characterise, cap at 150 lines, minimum context in,
 and re-decompose past about two prior records. Read them there; this flow adds
 nothing to them.
 
+**Who writes the file.** An agent type with no `Write` tool cannot author its own
+record, and those are the RIGHT types for Phase 1 and Phase 5 under the safety
+table below. So the normal path is that the agent returns the record as its final
+message and the ORCHESTRATOR persists it. That is not a workaround; it is what
+keeping an investigating agent write-free costs, and it is cheap.
+
+**A record over cap, or absent, stops the phase.** Check the line count before
+integrating anything. The remedy is re-decomposition, never a bigger cap: an
+over-cap record means the brief was scoped too wide, and accepting it hands the
+orchestrator the second context this whole arrangement exists to avoid. Note the
+honest limit - nothing mechanical enforces the cap, so it holds only while the
+orchestrator actually checks.
+
+**A dispatch that returns `status: failed` also stops the phase.** Read the
+reason, then choose: re-dispatch with an agent type that has the missing
+capability, re-decompose, or do it inline. A failed dispatch costs a full round
+trip and returns no work, so it is a decision point, not a gap to route around.
+
 The record is also the audit trail, so it carries the model and effort it ran at
 and the tokens it used. That is what lets `/spend` tally a flow afterwards
 instead of estimating it.
