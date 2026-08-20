@@ -110,7 +110,7 @@ where this flow complies with it instead of describing it.
 | 2 ticket | inline | - | the ticket is the plan, and holding the plan is what the orchestrator is for |
 | 3 branch | **never delegated** | - | a git write, and hard rule 8's upstream check lives here |
 | 4 implement | **dispatched**, one per logical unit | mid · high; frontier for load-bearing logic | mechanical once the approach is settled |
-| 5 review | **dispatched** | mid · medium; frontier · high when load-bearing | already the pattern; see Phase 5 |
+| 5 review | **dispatched** | per Phase 5's own sizing ladder | already the pattern; that ladder is the single source for reviewer count and tier |
 | 6 verify | **hybrid** | mid · low for the run | an agent may run the gauntlet; the orchestrator runs the terminal assertion itself |
 | 7 push + PR | **never delegated** | - | outward-facing, and the autonomy carve-out is the orchestrator's alone |
 | 8 capture | inline | - | judgment about structural versus state, on a small input |
@@ -123,12 +123,22 @@ Each phase also states its own disposition where that phase is read, because thi
 document is consulted at a phase rather than start to finish. **This table is
 authoritative** if the two ever disagree.
 
+Every disposition in this document, here and at the phases, reads "unless
+`--inline`". That flag collapses all of them to inline for one invocation, so a
+reader who enters at a phase heading is not following an instruction the
+invocation has already overridden.
+
 **Three things are never delegated and never summarised.** Each is a place where
 a relayed claim would quietly replace evidence:
 
-- **The diff.** Phase 5 receives a diff file the ORCHESTRATOR generated, so a
-  reviewing agent cannot scope its own input. A description of a change is not
-  the change, and the difference is where real defects hide.
+- **The diff.** A DISPATCHED reviewer receives a diff file the orchestrator
+  generated into the session scratchpad (`git diff <base>..HEAD > <path>`), so
+  the agent cannot scope its own input. A description of a change is not the
+  change, and the difference is where real defects hide. Phase 5's other path,
+  the in-session code-review skill, derives its own range against the live tree:
+  that is allowed and often right, but the cannot-scope-its-own-input protection
+  does not apply to it. Pick knowingly rather than assuming both paths carry the
+  same guarantees.
 - **The terminal assertion.** Phase 6 may delegate running the gauntlet, but the
   orchestrator itself runs the one command that proves the artifact the user
   consumes, and pastes that output. Evidence-before-claims does not survive a
@@ -201,12 +211,20 @@ this product does not control; until then, an implement dispatch is the one
 place in this flow where a rule is doing work a control should be doing.
 
 **Every shell-capable dispatch also carries the enumerated ban**, naming the
-commands rather than gesturing at care: no `stash`, `checkout`, `reset`,
-`restore`, `clean`, `switch`, `add`, `commit`, `push`. It is prose, and prose is
-not a control - it rides ALONGSIDE the structural controls above, never instead
-of them (`CONSTITUTION.local.md` section 2 requires both). An implement dispatch
-is the one exception: it may commit inside its own worktree, because that is the
-phase's job.
+commands rather than gesturing at care. On git: no `stash`, `checkout`, `reset`,
+`restore`, `clean`, `switch`, `add`, `commit`, `push`. An implement dispatch is
+the one exception, and only for `add` and `commit` inside its own worktree,
+because that is the phase's job.
+
+A Phase-6 dispatch needs its own clause, because its destructive move is not a
+git command: **do not tear down the local stack.** No `docker compose down`, no
+`pkill`, no killing a dev server or a database container. The founder is often
+live-testing against that stack, so a teardown between phases reads as a product
+outage; verification brings things up and leaves them up.
+
+All of it is prose, and prose is not a control - it rides ALONGSIDE the
+structural controls above, never instead of them
+(`CONSTITUTION.local.md` section 2 requires both).
 
 **Verify every working tree after any phase that dispatched a shell-capable
 agent.** That is detection rather than prevention, and it is the last line.
