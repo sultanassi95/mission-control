@@ -38,6 +38,12 @@ skip a phase, never reorder, never invent new phases.
   effect: autonomous execution is the default. Retained so existing
   invocations keep parsing. It does not affect the triggers in "When the
   flow stops", which apply regardless of any flag.
+- **`--inline` (optional flag).** Runs every phase in one context, the way this
+  flow worked before it delegated. Reach for it to compare cost on the same
+  ticket, or when a ticket is too small for a dispatch to pay for itself. It
+  changes WHO does the work and nothing else: the stop triggers, the Phase-5
+  acceptance-criteria check and every evidence requirement are identical either
+  way.
 - **`--spend <lean|standard|deep>` (optional).** lean = reviewer cap 1,
   tightest prose; standard (default) = the Phase-5 sizing table as-is;
   deep = the full multi-angle review sweep. **`--deep-review` remains as
@@ -90,6 +96,185 @@ not a check-in, a draft is not a submission, and a decision the request
 already settled is not re-opened. `--confirm` adds back the two ticket and PR
 gates for one invocation without changing either list.
 
+## How this flow runs - orchestration, not execution
+
+The orchestrator holds the plan and the integrated picture. It delegates the
+phases that read and write in bulk, and keeps the ones where delegating would
+break a rule. `framework/CONSTITUTION.md` section 5 is the model; this table is
+where this flow complies with it instead of describing it.
+
+| Phase | Disposition | Routing (`roles.md`) | Why |
+|---|---|---|---|
+| 0 classify | inline | - | one decision, reads nothing |
+| 1 triage | **dispatched** | mid · high (bug) / mid · medium (task) | the largest reading surface in the flow |
+| 2 ticket | inline | - | the ticket is the plan, and holding the plan is what the orchestrator is for |
+| 3 branch | **never delegated** | - | a git write, and hard rule 8's upstream check lives here |
+| 4 implement | **dispatched**, one per logical unit | mid · high; frontier for load-bearing logic | mechanical once the approach is settled |
+| 5 review | **dispatched** | per Phase 5's own sizing ladder | already the pattern; that ladder is the single source for reviewer count and tier |
+| 6 verify | **hybrid** | mid · low for the run | an agent may run the gauntlet; the orchestrator runs the terminal assertion itself |
+| 7 push + PR | **never delegated** | - | outward-facing, and the autonomy carve-out is the orchestrator's alone |
+| 8 capture | inline | - | judgment about structural versus state, on a small input |
+
+Escalate a row on evidence that the cheaper tier actually failed, never on
+anxiety, and never above the `CONSTITUTION.local.md` section 2 ceilings. Under
+`--spend lean` each dispatched row steps one tier down.
+
+Each phase also states its own disposition where that phase is read, because this
+document is consulted at a phase rather than start to finish. **This table is
+authoritative** if the two ever disagree.
+
+Every disposition in this document, here and at the phases, reads "unless
+`--inline`". That flag collapses all of them to inline for one invocation, so a
+reader who enters at a phase heading is not following an instruction the
+invocation has already overridden.
+
+**Three things are never delegated and never summarised.** Each is a place where
+a relayed claim would quietly replace evidence:
+
+- **The diff.** A DISPATCHED reviewer receives a diff file the orchestrator
+  generated into the session scratchpad (`git diff <base>..HEAD > <path>`), so
+  the agent cannot scope its own input. A description of a change is not the
+  change, and the difference is where real defects hide. Phase 5's other path,
+  the in-session code-review skill, derives its own range against the live tree:
+  that is allowed and often right, but the cannot-scope-its-own-input protection
+  does not apply to it. Pick knowingly rather than assuming both paths carry the
+  same guarantees.
+- **The terminal assertion.** Phase 6 may delegate running the gauntlet, but the
+  orchestrator itself runs the one command that proves the artifact the user
+  consumes, and pastes that output. Evidence-before-claims does not survive a
+  relay, and `CONSTITUTION.local.md` rule 2 puts the round trip on the
+  orchestrator by name. Phase 6's integration and e2e evidence may be produced by
+  a dispatch, but it lands as ARTIFACTS the record points at - the literal status
+  and body, the screenshot, the server log line - never as an agent's word that a
+  flow passed. "The e2e suite is green" from a sub-agent is inferred-done, which
+  Phase 6 already refuses.
+- **The acceptance-criteria verdicts.** Phase 5's criteria check stays inline. A
+  sub-agent cannot close a ticket, so it cannot be the thing that says a ticket
+  is satisfied.
+
+### The record protocol
+
+Every dispatch returns exactly one record, written to
+
+    <ticket-folder>/records/NN-<scope>-<agent>.md
+
+in the format `framework/kit/_record-schema.md` specifies, filename included.
+**The orchestrator reads the record; it does not read the work.** That is the
+entire mechanism by which its context stays small, and skipping it turns a
+dispatch into a detour that costs more than doing the work inline.
+
+**Phase 1 dispatches before that folder exists.** The ticket folder is created in
+Phase 2, and on the trackerless path the `<ID>` in its name is not even assigned
+until then, so a Phase-1 record has nowhere to land. It goes to the session
+scratchpad, which is where temp artifacts belong anyway, and Phase 2 moves it
+into `records/` as it creates the folder. Any phase dispatched before Phase 2
+follows the same route.
+
+The rules that make a record safe to integrate from live in
+`_record-schema.md`, because they bind every skill that dispatches and not just
+this one: point rather than characterise, cap at 150 lines, minimum context in,
+and re-decompose past about two prior records. Read them there; this flow adds
+nothing to them.
+
+**Who writes the file.** An agent type with no `Write` tool cannot author its own
+record, and those are the RIGHT types for Phase 1 and Phase 5 under the safety
+table below. So the normal path is that the agent returns the record as its final
+message and the ORCHESTRATOR persists it. That is not a workaround; it is what
+keeping an investigating agent write-free costs, and it is cheap.
+
+**A record over cap, or absent, stops the phase.** Check the line count before
+integrating anything. The remedy is re-decomposition, never a bigger cap: an
+over-cap record means the brief was scoped too wide, and accepting it hands the
+orchestrator the second context this whole arrangement exists to avoid. Note the
+honest limit - nothing mechanical enforces the cap, so it holds only while the
+orchestrator actually checks.
+
+**A dispatch that returns `status: failed` also stops the phase.** Read the
+reason, then choose: re-dispatch with an agent type that has the missing
+capability, re-decompose, or do it inline. A failed dispatch costs a full round
+trip and returns no work, so it is a decision point, not a gap to route around.
+
+The record is also the audit trail, so it carries the model and effort it ran at
+and the tokens it used. That is what lets `/spend` tally a flow afterwards
+instead of estimating it.
+
+### Dispatch safety - the least-capable agent that can do the job
+
+A prose constraint on a sub-agent is not a control: on 2026-07-24 an agent
+briefed READ-ONLY ran `git stash -u` in the working tree
+(`CONSTITUTION.local.md` section 2). So pick the weakest tool set that can still
+do the phase, and remove the need rather than restating the ban.
+
+| The phase needs to | Dispatch it with |
+|---|---|
+| read and map only | an agent type carrying no `Bash` at all |
+| investigate, running commands | an agent type with no `Edit` or `Write`. `Bash` remains, so this reduces the blast radius rather than removing it |
+| implement | its own git worktree on its own branch, so the main tree is not reachable |
+| review | a pre-generated diff file and the paths, never a live working tree |
+
+**The outbound gap is open, and naming it is the only honest thing to do here.**
+A dispatched agent inherits the parent's git credentials, so isolating its tree
+does not isolate the remote. `framework/roles.md` carries that fact and the probe
+behind it; this table does not restate it, because two independently worded copies
+of one constraint drift apart.
+
+The consequence for THIS flow: an implement agent that runs `git push` is not
+contained by its worktree, and pushing to a base branch that deploys is an
+unreviewed release (hard rule 8). So the outbound risk is covered by the
+enumerated ban below, which is prose, plus verification after the fact. That is
+weaker than every other row in this table and must not be written up as though it
+were not. An implement dispatch is the one place in this flow where a rule is
+doing work a control should be doing.
+
+**Every shell-capable dispatch also carries the enumerated ban**, naming the
+commands rather than gesturing at care. On git: no `stash`, `checkout`, `reset`,
+`restore`, `clean`, `switch`, `add`, `commit`, `push`. An implement dispatch is
+the one exception, and only for `add` and `commit` inside its own worktree,
+because that is the phase's job.
+
+A Phase-6 dispatch needs its own clause, because its destructive move is not a
+git command: **do not tear down the local stack.** No `docker compose down`, no
+`pkill`, no killing a dev server or a database container. The founder is often
+live-testing against that stack, so a teardown between phases reads as a product
+outage; verification brings things up and leaves them up.
+
+All of it is prose, and prose is not a control - it rides ALONGSIDE the
+structural controls above, never instead of them
+(`CONSTITUTION.local.md` section 2 requires both).
+
+**Verify every working tree after any phase that dispatched a shell-capable
+agent.** That is detection rather than prevention, and it is the last line.
+
+**The identity header.** Sub-agents inherit neither `CONSTITUTION.md` nor the
+project `CLAUDE.md`, so every dispatch leads with a header: front, repo, trust,
+path, current branch, the git rule, the IO contract, and one platform line from
+`_command/machine.local.md`. Compose it ONCE per invocation from the spoke and
+reuse it for every dispatch in that flow - assembling it per dispatch is how a
+field ends up blank. A spoke with blank required fields is not dispatch-ready:
+the flow stops there rather than dispatching an agent that is acting as nobody.
+
+### Sizing, and the tally at the end
+
+State the sizing before the first dispatch of a phase, in the orchestrator's own
+output: `N agents x model x effort`, within the `CONSTITUTION.local.md` section 2
+ceilings and the `framework/roles.md` presets. Not in the record - the record is
+authored by the agent and does not exist yet. Inside this flow the fan-out is
+already authorised, so this is a statement rather than a request.
+
+**The orchestrator tallies the tokens, because it is the only one that can see
+them.** A dispatched agent cannot observe its own consumption; the harness
+reports usage back to the parent when it reports at all. So the orchestrator
+notes what came back per dispatch and closes Phase 8 with the tally. Where the
+harness surfaces nothing, the tally says so and stops there: never invent a
+number (`/spend` step 1, `CONSTITUTION.local.md` rule 6). The record carries the
+model and effort it ran at, which it does know.
+
+Delegation is meant to cut what the orchestrator spends reprocessing a long
+context on every turn; whether it cuts the TOTAL across all agents is an
+empirical question, and a flow that cannot say what it spent cannot answer it.
+Compare against an `--inline` run on a comparable ticket, never against an
+estimate.
+
 ## Phase 0 - Classify the work
 
 Pick one:
@@ -103,6 +288,9 @@ Pick one:
 Announce the classification before Phase 1. If genuinely ambiguous, ask.
 
 ## Phase 1 - Triage (produces: root cause OR agreed approach)
+
+**Dispatched.** One investigator, whose record is what Phase 2 builds the ticket
+from. Split into two only when a ticket has genuinely independent sub-questions.
 
 **For bugs (via systematic debugging):** reproduce, gather evidence at
 every component boundary, trace to the root cause, paste literal proof.
@@ -238,6 +426,9 @@ first and wait for an explicit go.
 
 ## Phase 3 - Branch
 
+**Never delegated.** This phase writes to git, and the upstream check below is
+hard rule 8.
+
 From the repo root:
 
 ```
@@ -267,6 +458,19 @@ git rev-parse --abbrev-ref '@{upstream}'  # must NOT name the base branch
   `feat/tick-214-forward-invite-params`.
 
 ## Phase 4 - Implement (produces: 1-N phase commits, all green in isolation)
+
+**Dispatched, one agent per logical unit, each in its own worktree on its own
+branch** off the ticket branch, whether one unit runs or several. Uniform on
+purpose: git refuses to check out one branch in two worktrees
+(`fatal: ... is already used by worktree at ...`), so per-unit branches are what
+makes more than one agent possible at all, and a single unit taking the same
+route means the common case is not the unprotected one.
+
+The orchestrator merges each unit's branch back into the ticket branch as its
+record arrives - fast-forward when one unit ran - because Phase 5's diff and
+Phase 7's push both read the ticket branch, and a commit that never lands there
+is a commit nothing reviews. The commit rules below bind the agent, and the
+orchestrator verifies every tree afterwards.
 
 **Bugs (TDD-shaped):**
 1. `test(<key>): <failing test that pins the root cause>` - the RED test
@@ -404,6 +608,9 @@ the review pass).
 
 ## Phase 6 - Verify locally (produces: literal green terminal output)
 
+**Hybrid.** An agent may run the gauntlet and return its literal output; the
+orchestrator runs the terminal assertion itself. See "How this flow runs".
+
 Run the repo's own gauntlet, respecting any Node/tool version pin the repo
 declares (check the project's CLAUDE.md, the spoke, and your memory for
 pins), with every command composed for THIS machine - shell dialect and
@@ -454,6 +661,9 @@ about the client path; then separate the (often environmental) trigger from any
 real bug it surfaced.
 
 ## Phase 7 - Push + PR
+
+**Never delegated.** Pushing and opening a PR are outward-facing, and the
+autonomy carve-out belongs to the orchestrator alone.
 
 ### Reconcile the ticket + PR to what shipped (conditional)
 
@@ -583,11 +793,17 @@ Confidential fronts stay pointers-only: nothing employer-owned enters
   (typecheck/lint/test counts) + which manual smoke scenarios are still
   pending on their side + what was written to front context, or that
   nothing structural was learned.
+- End with the per-phase tally from the records: which phase ran at which model
+  and effort, and what it spent. One line per dispatch, and say `--inline` when
+  the flow did not dispatch at all.
 
 ## Autonomy scope
 
 A single `/mission-flow` invocation grants commit + push + `gh pr create`
-authority for THIS ticket only. When the PR is open (or the founder closes
+authority for THIS ticket only. A dispatched agent inherits a strict subset: it
+may commit inside its own worktree and nothing else. Push and PR stay with the
+orchestrator, which is why an implement dispatch carries no usable git
+credentials rather than a note asking it to refrain. When the PR is open (or the founder closes
 the loop), autonomy expires. Next task = re-ask. This skill is the
 explicit carve-out from the standing "no git writes unasked" default; the
 carve-out is exactly as wide as one invocation.

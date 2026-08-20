@@ -26,3 +26,8 @@ status: <complete | partial - reason>
 ```
 
 **Rules:** one job per agent · minimum context in · no side effects outside scope · if a task needs more than ~2 prior records as input, re-decompose. The parent integrates from records, never from raw sub-agent context.
+
+**Two rules that keep a record a summary rather than a second context:**
+
+- **Cap it at 150 lines.** A record past that is not a summary of the work, it is the work again, and the parent's context pays for it twice. A phase that cannot report inside the cap was scoped too wide.
+- **Point, do not characterise.** Name artifacts by path - the diff, the output file, the failing test - rather than describing them. "A whole-file prefilter was added for performance" carries none of the detail that made such a change wrong once; the diff path does. A record that characterises an artifact without giving its path goes back to the agent rather than being integrated.

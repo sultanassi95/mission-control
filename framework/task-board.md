@@ -98,6 +98,7 @@ whatever its `tracker:`:
 ```
 _command/portfolio/<front>/[<project>/]tasks/<ID>-<slug>/
 ├─ ticket.md      the record + the Definition-of-Done checklist + evidence log
+├─ records/       one per dispatched sub-agent (kit/_record-schema.md)
 ├─ scripts/       repro / verify / one-off scripts
 ├─ samples/       inputs · fixtures · datasets used to reproduce or verify
 ├─ artifacts/     generated outputs · exports · dumps · logs
