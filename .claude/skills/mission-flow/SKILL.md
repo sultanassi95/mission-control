@@ -711,6 +711,21 @@ producing five distinct classes of finding; most overlap. Prefer one agent
 that reasons broadly for typical work; save the fan-out for changes with
 genuinely different failure modes at different layers.
 
+**The specialty slots are named lenses, not improvised prompts.** Choose by
+what the diff touched: error handling / fallbacks -> a silent-failure lens;
+heavy test changes -> a test-coverage lens; new or reshaped types -> a
+type-design lens (the pr-review-toolkit agents carry these lenses where
+installed). One caution, decided deliberately: those stock agents carry FULL
+toolsets, which the dispatch-safety table forbids for reviewers - so dispatch
+the LENS (its prompt and rubric) on a weak-tool agent with the pre-generated
+diff file, never the stock agent against a live tree.
+
+**Risk class trumps line count.** A diff touching authn/z, secrets handling,
+parsing of external input, or an exposed network boundary gets one
+security-lens pass regardless of size (a security-review skill where
+installed; a dispatched security lens otherwise). Sixty lines of auth change
+carry a different failure mode than six hundred lines of UI.
+
 ### The engineering-principles pass
 
 Correctness review catches defects. It does not catch a change that duplicates
@@ -743,6 +758,15 @@ refuted / out-of-scope / speculative findings - state the reason for each
 skip. If fixes land, commit them as
 `chore(<key>): code-review polish for <component>` (a single commit for
 the review pass).
+
+A finding skipped as REAL-but-out-of-scope must land somewhere that persists:
+on this ticket when it sits in the change's blast radius, otherwise as a new
+tracker/board item. "Skipped: out of scope" alone is a finding lost - the
+lived pattern is recording the real gap on the ticket, and it is now the rule.
+
+When the polish commit is more than trivial, its own diff gets ONE bounded
+re-pass - a single reviewer or the inline criteria check, one round, never a
+loop. Review fixes are code too.
 
 ## Phase 6 - Verify locally (produces: literal green terminal output)
 

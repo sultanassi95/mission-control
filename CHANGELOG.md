@@ -6,6 +6,14 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-09-03: Phase 5's specialty reviewer slots become named lenses
+  (silent-failure, test-coverage, type-design) dispatched as prompts on
+  weak-tool agents with the diff file - never the stock full-toolset agents
+  against a live tree. Risk class now trumps line count: auth, secrets,
+  input-parsing and boundary diffs get a security-lens pass at any size.
+  Real-but-out-of-scope findings must persist (ticket or new tracker item),
+  and a non-trivial polish commit gets one bounded re-pass. (MC-020)
+
 - 2026-09-03: Phase 4 stops trusting its own machinery. A red check must be
   proven to have APPLIED (failure message matches the root cause; every new
   check broken once and restored; injections self-report and are asserted);
