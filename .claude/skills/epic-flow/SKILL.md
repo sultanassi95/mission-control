@@ -86,9 +86,26 @@ files** - kinds: schema | route | file | artifact | job), `size`, `squash`
 `00-face.md`: the outcome, explicit non-goals, and OUTCOME-LEVEL acceptance -
 evidence-typed exactly like Phase-2 criteria, stated against the terminal
 artifact a user consumes. The epic-level terminal assertion is declared here.
-E0 also ensures a docs-viewer is serving the front's portfolio dir and leaves
-it running. One page; correcting a face costs a paragraph, which is why it is
-the first gate.
+One page; correcting a face costs a paragraph, which is why it is the first
+gate.
+
+**E0 also brings the plan's window up.** The docs-viewer is root-pinned by
+design, so the pattern is reuse-or-generate at the FRONT's portfolio dir
+(`_command/portfolio/<front>/`), where the epic folder appears in the live
+sidebar with its mermaid diagrams pre-rendered:
+
+1. A viewer already serving that dir (its `docs-viewer-server.cjs` process is
+   running)? Reuse it - report the URL, touch nothing.
+2. The files exist but nothing is serving? Start it (`npm run docs-viewer`
+   from that dir) and report the URL.
+3. Nothing exists? Run `/docs-viewer` WITH that dir as the project root
+   (generate, install its dev-dependencies there, start), then report the URL.
+
+The server is LEFT RUNNING at every exit of every stage - the founder is
+usually watching it, and tearing down a viewer mid-plan is the shared-stack
+mistake in miniature. Port conflicts resolve by the viewer's own free-port
+scan; the URL lands in `00-face.md`'s header line so a resumed session finds
+the running window before starting a second one.
 
 ### E1 - Current-state audit (dispatched, read-only; no gate)
 

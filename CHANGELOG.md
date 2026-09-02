@@ -6,6 +6,11 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-09-03: epic-flow E0 gains its docs-viewer mechanics: reuse-or-generate
+  at the front's portfolio dir (the viewer is root-pinned; the proven pattern
+  is generating it where the docs live), report the URL into 00-face.md, and
+  leave the server running at every stage exit. (MC-031, parent MC-017)
+
 - 2026-09-03: tools/epic-coverage lands - the mechanical E4 gate. Unclaimed
   declared outputs and over-claims (one output owned twice) exit 1; undeclared
   claims warn (a stale architecture doc is a plan edit, not a block). Ships
