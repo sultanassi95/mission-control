@@ -100,6 +100,19 @@ not a check-in, a draft is not a submission, and a decision the request
 already settled is not re-opened. `--confirm` adds back the two ticket and PR
 gates for one invocation without changing either list.
 
+## The execution surface - one session task per phase
+
+The founder watches an autonomous run through the session task list, so the
+list is part of the flow's contract, not a nicety. At Phase 0 of EVERY ticket
+run, create one session task per phase - `<key> · P0 Classify` through
+`<key> · P8 Capture` - with the harness task tools. Set a phase's task
+`in_progress` on entry and `completed` when its gate passes; a failed gate
+leaves the task in progress, which is the honest picture. Starting a NEW
+ticket completes or clears the previous ticket's phase tasks and creates a
+fresh set - one ticket, one list, always current. An epic run creates a fresh
+list per child ticket. A flow with no visible phase progress is a black box,
+and an autonomous black box is the thing this system exists to prevent.
+
 ## How this flow runs - orchestration, not execution
 
 The orchestrator holds the plan and the integrated picture. It delegates the

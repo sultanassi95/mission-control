@@ -6,6 +6,11 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-09-03: every mission-flow run now surfaces itself as a per-phase
+  session task list (P0-P8, one task per phase, refreshed per ticket, one
+  fresh list per epic child) - the founder's real-time window into an
+  autonomous run is doctrine, not habit. (MC-027)
+
 - 2026-09-03: work is probed for prior delivery before anyone investigates it.
   Phase 1's first move on both paths searches the base branch's history for
   the ticket key and feature terms (a hit is a stop-with-evidence), and
