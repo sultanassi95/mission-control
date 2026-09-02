@@ -921,11 +921,14 @@ is outward-facing and outside every invocation's scope.
 
 ### Link back
 
-- Jira: post a comment on the ticket with the PR URL. GitHub Issues: the
-  closing keyword already links; add a one-line comment if the issue is a
-  long-running tracker. Native board: fill the task's `pr:` field, set
-  state `review`, regenerate `_board.md` (state `done` comes when the
-  founder merges).
+- Jira: post a comment on the ticket with the PR URL, then transition the
+  ticket to its review/in-review state - transitions discovered from the API
+  exactly as Phase 2 does, never assumed. Done stays with the founder, at
+  merge. GitHub Issues: the closing keyword already links; add a one-line
+  comment if the issue is a long-running tracker, and move the project-board
+  column to review where one exists. Native board: fill the task's `pr:`
+  field, set state `review`, regenerate `_board.md` (state `done` comes when
+  the founder merges).
 
 ### Update the front's context
 
@@ -996,6 +999,17 @@ Confidential fronts stay pointers-only: nothing employer-owned enters
   (typecheck/lint/test counts) + which manual smoke scenarios are still
   pending on their side + what was written to front context, or that
   nothing structural was learned.
+- **Lesson candidates:** unvetted one-liners with an evidence pointer,
+  consumed by `/debrief`'s learn-from-session step. This line writes to NO
+  lesson store - it is a handoff buffer so an 11:00 lesson survives to a 19:00
+  debrief, and candidates die by default if the debrief's critique rejects
+  them.
+- **Decisions taken:** deviations logged (register ids), stops taken and how
+  the founder resolved them, and a one-line `/adr` proposal for each settled
+  design fork - filed only on the founder's yes, never self-approved.
+- **Zero untracked loose ends:** every pending / deferred / pre-existing item
+  named in the report carries a tracker or board id, or an explicit
+  "not filed: <reason>". The flow does not end owning nothing.
 - End with the per-phase tally from the records: which phase ran at which model
   and effort, and what it spent. One line per dispatch, and say `--inline` when
   the flow did not dispatch at all.

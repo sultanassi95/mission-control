@@ -6,6 +6,14 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-09-03: Phase 8 closes the loop it was already pointing at. The tracker
+  ticket is transitioned to review (transitions discovered, not assumed); the
+  report carries lesson candidates (a handoff buffer for /debrief, writing to
+  no lesson store), the decisions taken (deviation ids, stops and their
+  resolutions, /adr proposals for settled forks - founder-gated), and a
+  zero-untracked-loose-ends rule: every pending item has an id or a stated
+  reason it does not. (MC-025)
+
 - 2026-09-03: Phase 7 closes two small honesty gaps: the reconcile step
   re-verdicts acceptance criteria that changed after Phase 5 ran, and the
   freshly opened PR's mergeable state is read and reported (conflicting paths
