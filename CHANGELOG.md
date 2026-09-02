@@ -6,6 +6,12 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-09-03: Phase 2 gains four gates. Dedup first: an issue already tracked
+  is extended, never re-filed. Criteria are evidence-typed at write time and
+  the ticket declares its terminal assertion (executed at Phase 6). Tickets
+  under an output-declaring parent name the outputs they claim, so a phase
+  split across tickets cannot silently drop its remainder. And `--parent <key>`
+  files small work under its epic or parent task directly. (MC-016)
 - 2026-09-03: Phase 0 speaks /triage's intake vocabulary - five kinds, with
   decision-for-founder and info-only as explicit exits - announces its
   classification with a one-line rationale, and owns mid-flow reclassification

@@ -30,6 +30,10 @@ skip a phase, never reorder, never invent new phases.
   - **Trackerless:** say so; the flow files the task on the project's
     own board (`_command/portfolio/<front>/[<project>/]tasks/` - see
     `framework/task-board.md`) instead.
+- **`--parent <key>` (optional).** Files the ticket directly under the named
+  epic or parent task. Marginally-small bugs and tasks that belong to a larger
+  effort take this route rather than getting an orphan ticket; the Jira path
+  derives the child TYPE from this parent exactly as it would from a given one.
 - **`--confirm` (optional flag).** Restores two approval gates for this
   invocation: before creating the ticket, and before creating the PR. Off
   by default. Reach for it when the task is genuinely underspecified and
@@ -378,6 +382,16 @@ Deliverable: a paragraph the Phase-2 ticket description can be built on.
 
 ## Phase 2 - Ticket (produces: a tracked unit of work, In Progress)
 
+### First: is the issue already tracked? (every path)
+
+Search the tracker for an existing ticket owning this ISSUE before creating
+anything - JQL / `gh issue list --search` on the failing surface's terms, plus
+the project's own board. A hit means EXTEND that ticket and its open PR: a
+change of approach is a continuation of the same unit of work, never a new
+ticket (`_command/learning/04` - a ticket filed as attempt #2 at an
+already-tracked issue was rejected in plain words). New tickets are for new,
+distinct work.
+
 ### Jira path
 
 Determine child issue type by reading the parent - do NOT assume:
@@ -443,6 +457,19 @@ Draft with:
   or against prod (how it deploys and runs there - migration, job, backfill
   path - per the Phase-1 production-execution check). No placeholders. (See
   `framework/learning-seed/11-delivery-hygiene.md`.)
+
+- **Verifiable criteria** - each acceptance criterion names its evidence type
+  as it is written: a test, a command output, a `file:line`, or
+  `runtime - Phase 6`. Phase 5's per-criterion verdicts are mechanical only
+  when the criterion said up front what satisfies it; "works correctly" can
+  never earn a `met`.
+- **The terminal assertion** - one line naming the command that proves the
+  artifact the user consumes. Declared here, executed at Phase 6; a better one
+  discovered later is a logged deviation, never a silent swap.
+- **Parent output claims** - when the parent declares an output list (an epic
+  implementing a plan phase), name which of those outputs THIS ticket claims.
+  A phase split across tickets silently drops whatever no ticket claimed
+  (`_command/learning/17`); the claim line makes the remainder a visible diff.
 
 Create it. Under `--confirm`, present the drafted title and description
 first and wait for an explicit go.

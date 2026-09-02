@@ -29,7 +29,10 @@ home + the enforcement gate, never a mirror of the external ticket.
 
 ## Acceptance criteria
 
-- <verifiable outcome, one per line>
+- <verifiable outcome> - evidence: <test | command output | file:line | runtime - Phase 6>
+
+**Terminal assertion:** <the one command that proves the artifact the user
+consumes - declared at ticket time, executed at Phase 6>
 
 ## Definition of Done (the integration-truth floor)
 
