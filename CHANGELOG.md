@@ -6,6 +6,12 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-09-03: tools/epic-coverage lands - the mechanical E4 gate. Unclaimed
+  declared outputs and over-claims (one output owned twice) exit 1; undeclared
+  claims warn (a stale architecture doc is a plan edit, not a block). Ships
+  with executable tests including BOTH negative controls, each proven able to
+  fail. (MC-030, parent MC-017)
+
 - 2026-09-03: epic-flow lands in planning mode - the altitude above
   mission-flow for work bigger than one ticket. Gated stages E0-E6 (face,
   evidence audit with an epic-scale already-delivered scan, SOLID-checked

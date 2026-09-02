@@ -68,3 +68,11 @@ gitignored are, and the paths that must ship still can be (exit 0 clean /
 1 listing each problem). Where the sweep reads file contents, this one
 reads the rules, because a doc claiming a path is ignored proves nothing
 about what git will do. `/preflight` step 6 runs it at every spend tier.
+
+## epic-coverage (`epic-coverage.sh` / `epic-coverage.py`)
+
+The E4 gate of epic-flow: diffs fragment-owned outputs against the
+architecture's declared outputs. Exit 1 on an unclaimed remainder or an
+over-claim; undeclared claims warn. Tests: `tests/epic-coverage.tests.sh`
+(both negative controls executable). A `.ps1` twin is deferred until a
+Windows operator exists.
