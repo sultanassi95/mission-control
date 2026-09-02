@@ -6,6 +6,14 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-09-03: Phase 1 made honest and probe-bound. The task path no longer
+  describes mid-run alignment that autonomy forbids - the investigator returns
+  a proposed approach plus explicit forks (genuine forks stop, trivial ones
+  are settled on the record). Both paths verify a requested mechanism against
+  ground truth before adopting it, data-path work resolves one real identifier
+  and probes one item before bulk, Phase 2 verifies the Phase-1 record landed,
+  and the default investigator is a read-only explorer. (MC-014)
+
 - 2026-09-03: every mission-flow run now surfaces itself as a per-phase
   session task list (P0-P8, one task per phase, refreshed per ticket, one
   fresh list per epic child) - the founder's real-time window into an

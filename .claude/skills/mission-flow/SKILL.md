@@ -184,7 +184,9 @@ dispatch into a detour that costs more than doing the work inline.
 Phase 2, and on the trackerless path the `<ID>` in its name is not even assigned
 until then, so a Phase-1 record has nowhere to land. It goes to the session
 scratchpad, which is where temp artifacts belong anyway, and Phase 2 moves it
-into `records/` as it creates the folder. Any phase dispatched before Phase 2
+into `records/` as it creates the folder - and VERIFIES the move landed: a
+Phase-1 record absent from `records/` at that point stops the phase, because
+the ticket about to be drafted is built on it. Any phase dispatched before Phase 2
 follows the same route.
 
 The rules that make a record safe to integrate from live in
@@ -337,8 +339,10 @@ before work started, caught only by exactly this probe. One command, and it
 kills a whole flow's spend. A hit is a stop-with-evidence: present the
 delivering commit(s); the founder decides whether anything remains.
 
-**Dispatched.** One investigator, whose record is what Phase 2 builds the ticket
-from. Split into two only when a ticket has genuinely independent sub-questions.
+**Dispatched.** One investigator - default agent type: a read-only explorer
+(`feature-dev:code-explorer` where available), which satisfies the
+least-capable rule by construction - whose record is what Phase 2 builds the
+ticket from. Split into two only when a ticket has genuinely independent sub-questions.
 
 **For bugs (via systematic debugging):** reproduce, gather evidence at
 every component boundary, trace to the root cause, paste literal proof.
@@ -355,10 +359,31 @@ AI-1502: the guards were fine; the real cause was `raw-body: request aborted`
 read access up front (it may need an interactive cloud login the founder runs);
 keep any confidential payloads in the session scratch, never in `_command/`.
 
-**For tasks/enhancements (via brainstorming):** align on intent,
-requirements, and shape before writing code. Produce a short agreed
-approach (what's in scope, what's not, one or two concrete design
-choices).
+**Data-path work gets the two probes (`_command/learning/06`, `/08`).** When
+the ticket touches a data path, trace from the CODE to the concrete inputs -
+the manifest, config, or query that names them - and resolve ONE real
+identifier end to end before building on anything (a bucket listing is a hint,
+not the input set; a whole benchmark was once built on files the app never
+reads). And before any bulk retrieval or mutation, run it against exactly ONE
+item and inspect the payload - a wrong pointer or schema assumption is almost
+always wrong for the entire set.
+
+**For tasks/enhancements (via a brainstorming discipline, dispatched):** the
+flow is autonomous, so there is nobody to "align with" mid-run and the text
+does not pretend otherwise. The investigator returns a PROPOSED approach
+(what's in scope, what's not, one or two concrete design choices) plus an
+explicit list of open forks. A genuine fork - a data-model or schema choice,
+an unsafe or unsettled mechanism, product-visible behaviour the request does
+not settle - routes to the misalignment stop. A trivial fork is settled by
+the orchestrator, with the choice and its rationale written into the record.
+
+**Verify the requested mechanism against ground truth (both paths).** A
+literal fix directive is a hypothesis about mechanism, not a settled design:
+honor the GOAL, and check the mechanism against the system's real numbers and
+shape (capacity, config, schema) before adopting it as the approach. On a real
+ticket that said "raise concurrency 8 -> 32", the arithmetic showed the
+instruction was both unsafe and ineffective, and the evidence-backed
+alternative is what shipped (`_command/learning/02`).
 
 **Cross-cutting behaviour change (audit before you proceed).** When a ticket
 expands from a point fix into a change across a MATRIX - every status x role, a
