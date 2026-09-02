@@ -6,6 +6,13 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-09-03: Phase 0 speaks /triage's intake vocabulary - five kinds, with
+  decision-for-founder and info-only as explicit exits - announces its
+  classification with a one-line rationale, and owns mid-flow reclassification
+  (same ticket, switched discipline). Phase 1 is renamed **Investigate**: the
+  phase investigates; /triage triages. The name collision was found while
+  teaching the flow. (MC-013)
+
 - 2026-07-29: The instance is local, and it is now enforced rather than
   described. `_command/` was documented as gitignored in `task-board.md` and in
   the spoke template while `.gitignore` re-included it with a negation, so an

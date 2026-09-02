@@ -3,7 +3,7 @@ name: mission-flow
 description: >-
   The standard playbook for turning a bug, task, or enhancement into a
   merged-ready PR on any front. Runs the fixed 8-phase sequence: classify,
-  triage (systematic debugging OR brainstorming), ticket, branch,
+  investigate (systematic debugging OR brainstorming), ticket, branch,
   phase-commits, code review with fixes, local verification gauntlet, PR,
   link back and capture what the ticket taught about the front. Works with
   Jira, GitHub Issues, or no tracker at all. Runs
@@ -106,7 +106,7 @@ where this flow complies with it instead of describing it.
 | Phase | Disposition | Routing (`roles.md`) | Why |
 |---|---|---|---|
 | 0 classify | inline | - | one decision, reads nothing |
-| 1 triage | **dispatched** | mid · high (bug) / mid · medium (task) | the largest reading surface in the flow |
+| 1 investigate | **dispatched** | mid · high (bug) / mid · medium (task) | the largest reading surface in the flow |
 | 2 ticket | inline | - | the ticket is the plan, and holding the plan is what the orchestrator is for |
 | 3 branch | **never delegated** | - | a git write, and hard rule 8's upstream check lives here |
 | 4 implement | **dispatched**, one per logical unit | mid · high; frontier for load-bearing logic | mechanical once the approach is settled |
@@ -277,17 +277,40 @@ estimate.
 
 ## Phase 0 - Classify the work
 
-Pick one:
+Classify with the same five-kind vocabulary `/triage` uses at intake - one
+classification language from inbox to PR. Pick one:
 
 - **Bug** (a defect / regression against shipped behaviour): invoke a
   systematic-debugging discipline for Phase 1 (the superpowers plugin
   ships one as `superpowers:systematic-debugging`).
 - **Task / Enhancement** (new work, feature, cleanup, migration): invoke a
   brainstorming discipline for Phase 1 (`superpowers:brainstorming`).
+- **Decision-for-founder** (a product or scope decision wearing a task's
+  clothes): EXIT the flow - present the decision with its options and
+  evidence, and build nothing until it is made. A decision never silently
+  becomes a task.
+- **Info-only** (nothing to build - a fact, a status, a pointer): EXIT the
+  flow - route the fact to the layer that owns it (progress log, hub, spoke;
+  `framework/continuity-stack.md`) and say where it went.
 
-Announce the classification before Phase 1. If genuinely ambiguous, ask.
+The two exits are verdicts, not failures: naming why an item is not
+flow-shaped is this phase doing its job. Epic-sized work gains its own exit
+when the epic playbook exists (MC-017); until then, materially-multi-ticket
+scope found here is the "scope exceeds the description" stop.
 
-## Phase 1 - Triage (produces: root cause OR agreed approach)
+Announce the classification WITH its one-line rationale - "defect against
+shipped behaviour: <what shipped, what broke>" or "new work: <what does not
+exist yet>" - before Phase 1, so a misroute is contestable before the
+investigation spends anything. If genuinely ambiguous, ask.
+
+**Reclassification.** Phase-1 evidence that flips the class (a "task" that is
+really a defect; a "bug" that is really an undecided product behaviour)
+re-enters this phase: announce the new classification with its rationale and
+continue on the SAME ticket - one issue = one ticket, however many
+classifications it takes (`_command/learning/04`). The Phase-1 discipline
+switches with it; work already done remains evidence.
+
+## Phase 1 - Investigate (produces: root cause OR agreed approach)
 
 **Dispatched.** One investigator, whose record is what Phase 2 builds the ticket
 from. Split into two only when a ticket has genuinely independent sub-questions.
