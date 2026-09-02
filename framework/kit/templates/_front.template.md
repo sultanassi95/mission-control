@@ -26,3 +26,10 @@ flowchart LR
 - <write posture, stakeholder / employer notes>
 
 _Up: the portfolio picture `_command/mental-model.md` · the rules `framework/CONSTITUTION.md` from the portfolio root_
+
+<!-- Optional, written by /compliance-ref - never by hand:
+## Compliance profile        (and/or: ## Quality profile)
+- standards: <soc2, ...>
+- monitor: <collector>
+- evidence_surface: <github-prs, jira>
+-->

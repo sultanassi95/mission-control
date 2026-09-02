@@ -724,7 +724,12 @@ diff file, never the stock agent against a live tree.
 parsing of external input, or an exposed network boundary gets one
 security-lens pass regardless of size (a security-review skill where
 installed; a dispatched security lens otherwise). Sixty lines of auth change
-carry a different failure mode than six hundred lines of UI.
+carry a different failure mode than six hundred lines of UI. Where the front
+declares a compliance profile (the compliance-ref skill), the trigger list
+widens to its control families - access control, encryption, audit logging,
+data retention, sensitive-data paths - and a diff that ADDS a dependency
+answers "why this dependency" in review. Fronts declaring nothing pay
+nothing.
 
 ### The engineering-principles pass
 
@@ -823,6 +828,15 @@ exists. Two lived defects rode this gap: a secret-hydration script that
 exited silently on an empty variable, and an empty DB_HOST caught only by a
 hand-run validate before merge.
 
+**Dependency vulnerabilities gate on the DELTA.** When the diff touches a
+dependency manifest or lockfile, run the ecosystem's audit (`npm audit` /
+`pip-audit` / `cargo audit`) against BASE and HEAD and diff the findings: a
+NEW high/critical introduced by this change is red; pre-existing findings are
+reported into the record - fileable per Phase 8's loose-ends rule - never
+blocking. A gate that reds on inherited state gets waived into
+meaninglessness: 44 pre-existing advisories once shipped as their own
+remediation pass precisely because the per-ticket gate stayed green-able.
+
 **Integration + e2e QA - REQUIRED when API or UI behaviour changed, and never
 skipped for autonomy.** The unit/typecheck/lint gauntlet is the FLOOR, never
 the ceiling, for a user-facing change (hard rules 1 + 5). Unit-green with a
@@ -891,6 +905,11 @@ deliverable, not just stale prose. This applies on every run.
   the WL id for trackerless).
 - Title: identical Conventional-Commits shape to the primary commit
   (`<type>(<key>): <lowercase description>`).
+
+Where the front declares a compliance profile, the PR is the surface its
+monitor samples for change-management evidence: the closing keyword links the
+ticket, review approval precedes merge, and CI evidence rides the checks. The
+flow already performs change management; this step makes it sampleable.
 
 ### Settle the Definition of Done checklist first
 

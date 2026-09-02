@@ -6,6 +6,15 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-09-03: compliance becomes per-front configuration, bound by command.
+  The new compliance-ref skill writes a profile block (standards -> control
+  families, monitor -> evidence surface) into a front's hub - idempotent,
+  founder-run, framework stays vendor-free. mission-flow reads it: Phase 5's
+  risk trigger widens to the declared control families, Phase 6 gates
+  dependency vulnerabilities on the DELTA (new high/critical red; inherited
+  findings reported, never blocking), and Phase 7 aligns PR evidence with what
+  the declared monitor samples. Fronts declaring nothing pay nothing. (MC-021)
+
 - 2026-09-03: **doctrine change, founder-approved:** the autonomy carve-out
   now expires at checks-green, not at the open PR. Phase 7 watches the PR's
   checks bounded (30-minute default, timeout reports); a red caused by the
