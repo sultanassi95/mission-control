@@ -676,6 +676,41 @@ tool availability per `_command/machine.local.md`:
 Paste the literal terminal output - evidence before claims. Do NOT claim
 green without pasting; do NOT push if anything is red.
 
+**First, prove the gauntlet is testing the code you edited.** A stale build
+artifact makes every result meaningless: a gitignored build output once
+shadowed the edited source and the suite greenly exercised last week's code
+(`_command/learning/15`). Confirm the artifact under test corresponds to the
+edited source - a clean build, or a hash/mtime check on the built output. And
+any ERROR-path verification carries two proofs of its own
+(`_command/learning/11`): fidelity - the stub or emulator emits the EXACT
+error production emits, quoted side by side - and firing - the injection
+self-reports, and the test asserts it fired. A forced-failure test that
+silently stops forcing anything is a happy-path test that still passes.
+
+**The terminal assertion is the one the ticket declared.** Phase 2 wrote it
+into ticket.md; Phase 6 executes that pre-committed command, and the
+orchestrator runs it itself. Choosing the proof after seeing the
+implementation invites choosing what passes; a better assertion discovered
+now is adopted as a LOGGED deviation, never a silent swap. Acceptance one
+layer down is not the end - the artifact a human actually consumes is the one
+that must answer (`_command/learning/16`).
+
+**Bulk completeness is reconciled, never inferred.** When the change moves,
+creates, or transforms N artifacts: probe ONE item before the bulk run (a
+wrong pointer or schema assumption is almost always wrong for the whole set),
+then reconcile the count - and at least one item's bytes - against the source
+of truth after it. A bulk tool's exit 0 means the process ended, not that the
+work is complete: a sync once exited 0 having transferred 65% of its objects
+(`_command/learning/08`).
+
+**Deploy-path changes get deploy-path checks.** When the diff touches
+workflows, `infra/`, or config/secret-hydration surfaces, the gauntlet
+includes the deploy path's own dry checks - the validate script, `cdk diff`
+or the stack's equivalent, a lint of the changed workflow - BEFORE the PR
+exists. Two lived defects rode this gap: a secret-hydration script that
+exited silently on an empty variable, and an empty DB_HOST caught only by a
+hand-run validate before merge.
+
 **Integration + e2e QA - REQUIRED when API or UI behaviour changed, and never
 skipped for autonomy.** The unit/typecheck/lint gauntlet is the FLOOR, never
 the ceiling, for a user-facing change (hard rules 1 + 5). Unit-green with a

@@ -6,6 +6,14 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-09-03: Phase 6 hardened four ways: prove the artifact under test is the
+  edited source (and error-path harnesses prove fidelity + firing); the
+  terminal assertion is the one the ticket DECLARED at Phase 2, swapped only
+  by logged deviation; bulk changes verify by reconciliation (probe one
+  before, reconcile count + bytes after - exit 0 is not completeness); and
+  deploy-path diffs run the deploy path's own dry checks before the PR exists.
+  Incidents: learning/08, /11, /15, /16; the hydrate-secret silent exit. (MC-024)
+
 - 2026-09-03: Phase 2 gains four gates. Dedup first: an issue already tracked
   is extended, never re-filed. Criteria are evidence-typed at write time and
   the ticket declares its terminal assertion (executed at Phase 6). Tickets
