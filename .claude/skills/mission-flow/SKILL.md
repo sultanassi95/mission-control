@@ -34,6 +34,10 @@ skip a phase, never reorder, never invent new phases.
   epic or parent task. Marginally-small bugs and tasks that belong to a larger
   effort take this route rather than getting an orphan ticket; the Jira path
   derives the child TYPE from this parent exactly as it would from a given one.
+- **`--base <branch>` (optional).** Branches the ticket off the named base
+  instead of the spoke's recorded one - the stacked/epic case (children off an
+  epic integration branch). The same `--no-track` + upstream-proof discipline
+  applies to whatever base is chosen.
 - **`--confirm` (optional flag).** Restores two approval gates for this
   invocation: before creating the ticket, and before creating the PR. Off
   by default. Reach for it when the task is genuinely underspecified and
@@ -528,12 +532,22 @@ hard rule 8.
 From the repo root:
 
 ```
-git status                                # must be clean, or founder-approved to stash
+git status                                # dirty tree -> the protocol below
 git fetch origin
 git switch -c <type>/<key>-<kebab-slug> --no-track origin/<base-branch>
 git rev-parse --abbrev-ref '@{upstream}'  # must NOT name the base branch
 ```
 
+- **A dirty tree is a stop-with-inventory, never a stash.** The dirty files
+  may be the founder's in-flight work. Inventory the paths, stop, and report
+  WITH the file list - the founder answers "mine, hold" or "stale, proceed"
+  from evidence. `stash` is never taken unasked; it sits on the enumerated ban
+  for dispatches for the same reason.
+- **Switching this checkout is a stack event.** A watch-mode dev server on
+  this tree restarts on the switch, and every in-flight request fails with a
+  network-level error that reads as a product bug. If a dev server is watching
+  this tree, flag the switch before making it - the Phase-6 shared-stack rule
+  applies from the FIRST switch, which happens here.
 - **`--no-track` is not optional.** `git checkout -b <name> origin/<base>`
   sets the new branch's upstream to BASE, so every later `git push` from it
   aims at the base branch. Where the base also triggers a deploy, that push
@@ -545,7 +559,8 @@ git rev-parse --abbrev-ref '@{upstream}'  # must NOT name the base branch
   the upstream names before leaving this phase.
 - `base-branch` comes from the repo's spoke
   (`_command/portfolio/<front>/[<project>/]<project>.md`) if one exists;
-  fallback = `origin/main`. Native-board tickets: fill the task's
+  fallback = `origin/main`. An explicit `--base <branch>` (or a
+  spoke-recorded `integration_branch`) overrides both. Native-board tickets: fill the task's
   `branch:` field and set state `in-progress` now.
 - `<type>` matches the intended commit prefix (`fix`, `feat`, `chore`,
   `refactor`, `docs`, `test`).

@@ -6,6 +6,13 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-09-03: Phase 3 grows its missing protocols. A dirty tree is a
+  stop-with-inventory (never an unasked stash - the files may be the founder's
+  in-flight work); switching the shared checkout is flagged when a dev server
+  watches it (the shared-stack rule applies from the FIRST switch); and
+  `--base <branch>` / a spoke `integration_branch` supports stacked and epic
+  bases with the same --no-track + upstream proof. (MC-018)
+
 - 2026-09-03: Phase 1 made honest and probe-bound. The task path no longer
   describes mid-run alignment that autonomy forbids - the investigator returns
   a proposed approach plus explicit forks (genuine forks stop, trivial ones
