@@ -58,8 +58,11 @@ data this skill writes into `_command/portfolio/<front>/_front.md`, never in
 - **A monitor is a collector, not a standard.** The two are different kinds -
   one is what an auditor certifies against, the other is a product watching
   the repos - and they are never merged into one list.
-- **Quality profile keys** (readers land with the quality-lens ticket):
-  `tokens_source`, `perf_budgets`, `a11y_contract`, `telemetry_idiom`,
-  `docs_surface`.
+- **Quality profile keys**: `tokens_source`, `perf_budgets`,
+  `a11y_contract`, `telemetry_idiom`, `docs_surface`. Readers are live in
+  mission-flow: Phase 1 records the project's own patterns as the primary
+  reference (the profile is override/tie-break, order: project -> front
+  siblings -> profile), Phase 5 runs the conformance lens, Phase 6 verifies
+  declared budgets and the a11y contract for touched surfaces.
 - **A secret never enters a profile.** A profile names mechanisms and
   surfaces, never values or credentials.

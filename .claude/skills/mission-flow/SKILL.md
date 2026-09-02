@@ -372,6 +372,16 @@ reads). And before any bulk retrieval or mutation, run it against exactly ONE
 item and inspect the payload - a wrong pointer or schema assumption is almost
 always wrong for the entire set.
 
+**Record the project's existing pattern (source first, all 13 layers).** For
+every surface the ticket touches - UI components and tokens, UX interaction
+idiom, logging/metric idiom, API shape - the investigator records what THIS
+project already does, as part of the approach. The reference order for any
+design choice: (1) this project's existing patterns; (2) sibling projects on
+the front, when this project is new or the surface is novel; (3) the front's
+declared quality profile as override and tie-break. Deviating from the
+reference is a decision the ticket must state, never a default the diff
+quietly takes.
+
 **For tasks/enhancements (via a brainstorming discipline, dispatched):** the
 flow is autonomous, so there is nobody to "align with" mid-run and the text
 does not pretend otherwise. The investigator returns a PROPOSED approach
@@ -520,6 +530,11 @@ Draft with:
   implementing a plan phase), name which of those outputs THIS ticket claims.
   A phase split across tickets silently drops whatever no ticket claimed
   (`_command/learning/17`); the claim line makes the remainder a visible diff.
+- **Telemetry for new critical paths** - a new user-critical path names its
+  log line / metric / alarm as an acceptance criterion, phrased in the
+  project's own idiom. Nine production alarms once shipped that had never
+  delivered a single notification (`_command/learning/16`); observability is
+  written down here or it does not exist.
 
 Create it. Under `--confirm`, present the drafted title and description
 first and wait for an explicit go.
@@ -731,6 +746,14 @@ data retention, sensitive-data paths - and a diff that ADDS a dependency
 answers "why this dependency" in review. Fronts declaring nothing pay
 nothing.
 
+**Conformance lens (UI/UX and telemetry surfaces).** Does this diff match the
+project it lands in? One-off styling beside an existing component, a novel
+interaction where a house pattern exists, a silent new code path where the
+project has a logging/metric idiom - findings, each naming the CONCRETE
+counterpart (the component, the pattern, the idiom) it bypassed, same evidence
+bar as the principles pass. The reference order is Phase 1's: this project,
+then its front's siblings, then the declared quality profile.
+
 ### The engineering-principles pass
 
 Correctness review catches defects. It does not catch a change that duplicates
@@ -836,6 +859,12 @@ reported into the record - fileable per Phase 8's loose-ends rule - never
 blocking. A gate that reds on inherited state gets waived into
 meaninglessness: 44 pre-existing advisories once shipped as their own
 remediation pass precisely because the per-ticket gate stayed green-able.
+
+**Declared quality budgets are verified, not admired.** When the front's
+quality profile declares performance budgets (e.g. Core Web Vitals) or an
+accessibility contract, the gauntlet verifies them for the surfaces the diff
+touched. Fronts declaring nothing pay nothing - the check exists only where a
+declaration gives it teeth.
 
 **Integration + e2e QA - REQUIRED when API or UI behaviour changed, and never
 skipped for autonomy.** The unit/typecheck/lint gauntlet is the FLOOR, never

@@ -6,6 +6,16 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-09-03: the project a flow runs in is now the design reference across
+  the SDLC. Phase 1 records what the project already does for every touched
+  surface (reference order: this project -> the front's sibling projects for
+  new projects -> the declared quality profile as tie-break); Phase 5 runs a
+  conformance lens whose findings must name the concrete component, pattern,
+  or idiom bypassed; Phase 2 requires new critical paths to name their
+  telemetry as a criterion; Phase 6 verifies declared perf budgets and a11y
+  contracts. Deviating from the reference is a stated decision, never a
+  default. (MC-028)
+
 - 2026-09-03: compliance becomes per-front configuration, bound by command.
   The new compliance-ref skill writes a profile block (standards -> control
   families, monitor -> evidence surface) into a front's hub - idempotent,
