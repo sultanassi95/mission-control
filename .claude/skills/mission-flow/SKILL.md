@@ -869,7 +869,11 @@ implementation diverged - scope added or dropped, an approach or parameter
 changed, a deferred behaviour got built - the ticket description is now
 stale. Before drafting the PR body: update the ticket (or task file)
 so it describes the behaviour actually delivered, and write the PR body to
-the final shipped state. Skip only when nothing changed. A ticket or PR
+the final shipped state. The criteria table is part of the reconcile: if the
+acceptance criteria changed after Phase 5's verdicts were produced - scope
+moved by a logged deviation, an approach change - the CHANGED rows get fresh
+verdicts before the PR opens. Skip only when nothing changed, and say so in
+one line. A ticket or PR
 that describes behaviour the code does not have is a defect in the
 deliverable, not just stale prose. This applies on every run.
 
@@ -907,9 +911,11 @@ resting on recall.
 `gh pr create` with the drafted title and body. Under `--confirm`, present
 them first and wait for an explicit go.
 
-Once created: do NOT request review, tag reviewers, mark ready, or
-auto-merge - those stay with the founder. Merging is outward-facing and
-outside every invocation's scope.
+Once created: read the PR's mergeable state. A conflict with base is
+reported with the conflicting paths - rebasing a reviewed branch is the
+founder's decision, never the flow's. Then do NOT request review, tag
+reviewers, mark ready, or auto-merge - those stay with the founder. Merging
+is outward-facing and outside every invocation's scope.
 
 ## Phase 8 - Link back + capture (produces: two-way traceability, current front context)
 

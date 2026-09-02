@@ -6,6 +6,11 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-09-03: Phase 7 closes two small honesty gaps: the reconcile step
+  re-verdicts acceptance criteria that changed after Phase 5 ran, and the
+  freshly opened PR's mergeable state is read and reported (conflicting paths
+  named; rebasing a reviewed branch stays the founder's call). (MC-023)
+
 - 2026-09-03: Phase 5's specialty reviewer slots become named lenses
   (silent-failure, test-coverage, type-design) dispatched as prompts on
   weak-tool agents with the diff file - never the stock full-toolset agents
