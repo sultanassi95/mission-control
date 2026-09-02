@@ -6,6 +6,14 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-09-03: Phase 4 stops trusting its own machinery. A red check must be
+  proven to have APPLIED (failure message matches the root cause; every new
+  check broken once and restored; injections self-report and are asserted);
+  per-commit green lands as literal output in the record with an orchestrator
+  spot-check on longer stacks; merge-back conflicts get a protocol (trivial =
+  resolve and note, semantic = re-dispatch rebased); and deviations are logged
+  to the project register before a unit's merge is accepted. (MC-019)
+
 - 2026-09-03: Phase 3 grows its missing protocols. A dirty tree is a
   stop-with-inventory (never an unasked stash - the files may be the founder's
   in-flight work); switching the shared checkout is flagged when a dev server

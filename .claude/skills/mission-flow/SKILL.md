@@ -580,7 +580,11 @@ route means the common case is not the unprotected one.
 The orchestrator merges each unit's branch back into the ticket branch as its
 record arrives - fast-forward when one unit ran - because Phase 5's diff and
 Phase 7's push both read the ticket branch, and a commit that never lands there
-is a commit nothing reviews. The commit rules below bind the agent, and the
+is a commit nothing reviews. Merge-back conflicts have a protocol: a trivial
+conflict (imports, adjacent additions at a shared anchor) the orchestrator may
+resolve, noting it in the tally; a semantic conflict re-dispatches the LATER
+unit rebased onto the updated ticket branch in a fresh worktree - the
+orchestrator integrates from records, it does not write code. The commit rules below bind the agent, and the
 orchestrator verifies every tree afterwards.
 
 **Bugs (TDD-shaped):**
@@ -609,6 +613,29 @@ Commit rules (all types):
   `framework/learning-seed/11-delivery-hygiene.md`): default NO comment;
   when warranted, ONE tight line, never a docstring block. Context and
   reasoning go in the COMMIT MESSAGE + PR BODY, not the source file.
+
+**Prove the red actually fired (`_command/learning/11`, `/13`).** A red check
+whose edit never applied reports green and lies - two such no-ops happened in
+one real session, and the remedy is the rule: verify the break APPLIED before
+reading its result. Three parts. The red commit's pasted output must show the
+failure MESSAGE matches the root cause, not merely any red. Every new check
+gets the negative control once: break the guarded thing, see red, restore. And
+a forced failure or injection must self-report firing, with the test asserting
+it fired. A threshold equal to the current value, a mock missing the key the
+code reaches for, and an expectation computed from empty config are all green
+and all vacuous.
+
+**Each commit's green is evidence, not a claim.** The unit's record carries
+per-commit literal output (build + affected tests at that commit); when a unit
+produced more than two commits, the orchestrator spot-checks one mid-stack
+commit itself. "Green in isolation" without output is inferred-done, which
+this flow refuses everywhere else.
+
+**Deviations are logged before they are merged.** An implement record declares
+any deviation from the agreed approach, and the orchestrator logs it in the
+project's deviations register (the log-deviation skill's format) BEFORE
+accepting that unit's merge. Drift that does not trip the scope stop is
+recorded, never silently absorbed.
 
 ## Phase 5 - Code review
 
