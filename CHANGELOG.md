@@ -6,6 +6,13 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-09-03: **doctrine change, founder-approved:** the autonomy carve-out
+  now expires at checks-green, not at the open PR. Phase 7 watches the PR's
+  checks bounded (30-minute default, timeout reports); a red caused by the
+  diff gets exactly one re-entry into the Phase 4-6 loop; infra/flake reds and
+  second reds become founder-gated items. An integration branch once sat red
+  for five days unnoticed (AI-1814). (MC-022)
+
 - 2026-09-03: Phase 8 closes the loop it was already pointing at. The tracker
   ticket is transitioned to review (transitions discovered, not assumed); the
   report carries lesson candidates (a handoff buffer for /debrief, writing to

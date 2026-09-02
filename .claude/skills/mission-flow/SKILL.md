@@ -917,6 +917,18 @@ founder's decision, never the flow's. Then do NOT request review, tag
 reviewers, mark ready, or auto-merge - those stay with the founder. Merging
 is outward-facing and outside every invocation's scope.
 
+### Watch the checks to green
+
+The flow does not end at `gh pr create`; it ends when the PR's checks
+conclude. Watch them bounded - `gh pr checks <n> --watch`, default timeout 30
+minutes; the timeout path is a REPORT, never a hang. Green: recorded in the
+Phase-8 report. Red caused by THIS diff: one bounded re-entry into the
+Phase 4-6 loop - fix, verify, push, watch again, ONCE. Red from infra or
+flake, or a second red: a founder-gated item in the report, never silently
+left. An integration branch once sat red for five days with nothing noticing
+(AI-1814); the flow now cannot end without saying what CI said. A repo with no
+checks configured reports exactly that in one line.
+
 ## Phase 8 - Link back + capture (produces: two-way traceability, current front context)
 
 ### Link back
@@ -1020,8 +1032,10 @@ A single `/mission-flow` invocation grants commit + push + `gh pr create`
 authority for THIS ticket only. A dispatched agent inherits a strict subset: it
 may commit inside its own worktree and nothing else. Push and PR stay with the
 orchestrator, which is why an implement dispatch carries no usable git
-credentials rather than a note asking it to refrain. When the PR is open (or the founder closes
-the loop), autonomy expires. Next task = re-ask. This skill is the
+credentials rather than a note asking it to refrain. Autonomy expires when the open PR's
+checks conclude green (or the founder closes the loop) - not at the moment the
+PR opens: a red caused by this diff is still this ticket's work, and it gets
+exactly ONE bounded re-entry into the Phase 4-6 loop. Next task = re-ask. This skill is the
 explicit carve-out from the standing "no git writes unasked" default; the
 carve-out is exactly as wide as one invocation.
 
