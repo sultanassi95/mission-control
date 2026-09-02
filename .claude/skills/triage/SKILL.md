@@ -23,8 +23,10 @@ is flagged `OUT OF SCOPE -> <front>` in the table rather than filed.
 Unscoped (default): items route to any front.
 
 **Dials:** `--spend lean` = classify only, smallest table · `standard`
-(default) = the full triage · `deep` = adds a duplicate scan and
-per-item dependents lookups. `--thinking` (default medium -
+(default) = the full triage · `deep` = adds a duplicate scan,
+per-item dependents lookups, and - for items naming an existing repo
+surface - an already-delivered scan (`git log origin/<base> --grep`):
+work the base branch already contains is flagged, not filed. `--thinking` (default medium -
 classification judgment) and `--verbosity` per the universal grammar -
 the STOP gate table is discipline, shown at every tier.
 

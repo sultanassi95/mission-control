@@ -6,6 +6,12 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-09-03: work is probed for prior delivery before anyone investigates it.
+  Phase 1's first move on both paths searches the base branch's history for
+  the ticket key and feature terms (a hit is a stop-with-evidence), and
+  /triage's deep dial runs the same scan per intake item. On two real epics,
+  3 of 8 tickets were already delivered before work started. (MC-015)
+
 - 2026-09-03: Phase 6 hardened four ways: prove the artifact under test is the
   edited source (and error-path harnesses prove fidelity + firing); the
   terminal assertion is the one the ticket DECLARED at Phase 2, swapped only

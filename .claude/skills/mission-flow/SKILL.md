@@ -316,6 +316,14 @@ switches with it; work already done remains evidence.
 
 ## Phase 1 - Investigate (produces: root cause OR agreed approach)
 
+**First move, both paths: is this already delivered?** Before investigating,
+search the base branch's history for the ticket key and the feature's terms -
+`git log origin/<base> --grep=<key|terms>` - plus one targeted look at the
+surface itself. On two real epics, 3 of 8 tickets were already delivered
+before work started, caught only by exactly this probe. One command, and it
+kills a whole flow's spend. A hit is a stop-with-evidence: present the
+delivering commit(s); the founder decides whether anything remains.
+
 **Dispatched.** One investigator, whose record is what Phase 2 builds the ticket
 from. Split into two only when a ticket has genuinely independent sub-questions.
 
