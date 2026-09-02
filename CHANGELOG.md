@@ -6,6 +6,15 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-09-03: epic-flow lands in planning mode - the altitude above
+  mission-flow for work bigger than one ticket. Gated stages E0-E6 (face,
+  evidence audit with an epic-scale already-delivered scan, SOLID-checked
+  lo-fi architecture with reuse-first as a gate, fragmentation cut by SRP/ISP/
+  OCP/DRY, a mechanical coverage gate, walking-skeleton sequencing, the
+  founder tree lock), diagram-first documents with lock status headers, and a
+  fragment-brief kit template. Execution (E7/E8) is stubbed honestly and lands
+  with the next build units. (MC-029, parent MC-017)
+
 - 2026-09-03: the project a flow runs in is now the design reference across
   the SDLC. Phase 1 records what the project already does for every touched
   surface (reference order: this project -> the front's sibling projects for
