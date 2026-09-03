@@ -6,6 +6,13 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-09-03: epic-flow's E7 runner is live - epic-branch lifecycle with an
+  explicit push grant scoped to that branch, serial child execution with the
+  three overrides, squash-per-fragment with CI watched per push, base-drift
+  merges (never rebase), and the no-PR child Phase 8 (park in review, batch
+  Done at the epic merge). mission-flow Phase 2 gains the epic-child pointer
+  mode. Shipped BY the first epic run itself (MC-038 = MC-017.1). (MC-038)
+
 - 2026-09-03: --spend lean's cap is arithmetically satisfiable again: it caps
   the CORRECTNESS batch at one reviewer; the principles and conformance passes
   may run inline under lean; and risk-triggered lenses (security, declared

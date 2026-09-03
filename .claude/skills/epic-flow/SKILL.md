@@ -36,8 +36,8 @@ authority where this text summarizes).
 
 Default run = PLAN: E0 through the E6 tree lock, then STOP - the founder's
 lock IS the execution grant. `--execute` resumes any later session from the
-folder. **Execution mode (E7/E8) lands with build units B1/B2; until they
-ship, `--execute` reports the locked tree and stops.** [STUB - B1/B2]
+folder and enters E7 below; execution in the same session proceeds directly
+from the lock.
 
 ## The execution surface
 
@@ -176,20 +176,58 @@ field, write `60-tree-lock.md` (tree summary, tracker keys, date, the
 founder's word). **The lock is the execution grant** for exactly this tree in
 E5's order.
 
-### E7 / E8 - Execute and close [STUB - lands with B1/B2]
+### E7 - Execute (the runner)
+
+**The epic branch first.** The first execution step creates
+`epic/<key>-<slug>` off the spoke base (or `--base`) under full Phase-3
+discipline - `--no-track`, the upstream read back and proven, the dirty-tree
+protocol - then pushes it with `-u`. The epic grant EXPLICITLY includes push
+authority to this branch and to it alone; the deploy base is excluded as
+everywhere else. Every squash below is followed by a push of the epic branch,
+which is what makes the CI watch real.
+
+**Per child, in E5's order, serially (v1):**
+
+1. **Re-read the folder.** Brief states and any founder amendments execute;
+   a stale plan does not. A fragment newly `invalidated` triggers the
+   re-plan cycle (below) before the lane continues.
+2. **Fresh per-phase task list** for the child (the execution-surface rule).
+3. **Run the child as a full `/mission-flow`** with three overrides, stated
+   in its Phase 0: `--parent <EPIC-ID>`, `--base <epic-branch>`, and
+   Phase 7 REPLACED - no child PR. Phase 2 uses the epic-child pointer mode
+   (the child's ticket.md points at the brief; criteria and outputs live
+   once, in the brief). Phase 6 runs in full - verification never amortizes
+   across children - and serializes on the shared stack.
+4. **Land the child:** squash-merge its branch onto the epic branch as ONE
+   commit - `<type>(<key>): <brief title>`, body a condensed Summary / Root
+   cause / Fix with NO instance paths - then set the brief's
+   `state: squashed` + `squash: <hash>`, and push the epic branch.
+5. **Watch the epic branch's CI** per the checks-green semantics: bounded,
+   red-caused-by-this-squash gets the one re-entry, infra reds are
+   founder-gated items, a repo with no checks configured reports exactly
+   that in one line.
+6. **Child Phase 8, adjusted for no-PR:** the link-back posts the squash
+   hash + the epic key; the child ticket transitions to its review state and
+   PARKS - children reach Done in a batch when the founder merges the epic
+   PR (that batch step is named in the E8 report). Capture, lesson
+   candidates, and the zero-loose-ends rule run per child unchanged.
+
+**Between lanes:** if the base moved, merge base INTO the epic branch -
+merge, never rebase; published history stays honest - with conflicts handled
+by the Phase-4 classes (trivial = resolve and note, semantic = stop the
+affected lane). Stops stay per-child and pause the fragment plus its
+dependents (the E5 graph); independent lanes continue.
+
+**Invalidation and re-plan** [STUB - lands with C2].
+
+### E8 - Close [STUB - lands with B2]
 
 The contract, so the lock is signed with eyes open (full text: the design):
-one epic branch (`epic/<key>-<slug>`, MC-018 discipline, push authority to
-THIS branch only - the deploy base excluded as everywhere); each child runs
-full `/mission-flow` with `--parent`, `--base <epic-branch>`, and Phase 7
-replaced by a squash onto the epic branch; epic-branch CI watched per squash
-(MC-022); base drift merged in at lane boundaries (merge, never rebase);
-serial lanes in v1; Phase 6 never amortized; children park in review at
-squash and reach Done in a batch when the founder merges the epic PR. E8:
 coverage re-run against shipped artifacts, the CROSS-FRAGMENT principles pass
 over the whole epic diff (per-child review structurally cannot see
 cross-child duplication), the E0 acceptance verified on the terminal
-artifact, the epic PR (commits = review index), `/as-built`, the tally.
+artifact, the epic PR (commits = review index, compliance evidence chain),
+checks-green, `/as-built`, the tally, the child batch transition.
 
 ## Autonomy
 

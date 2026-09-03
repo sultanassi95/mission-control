@@ -524,7 +524,11 @@ where `<ID>` is the tracker key (`AI-1639`, `#214`) or the native task id
 
 With an external tracker, replace Context / Acceptance criteria /
 Out-of-scope with the one-line pointer `> Tracked in: JIRA <KEY> - <url>`
-and **keep the Definition of Done checklist**. The remote issue is where
+and **keep the Definition of Done checklist**. An EPIC CHILD (a `--parent`
+naming an epic that carries a fragment brief) points at the BRIEF instead -
+`> Tracked in: the epic brief - <path>` - and carries only the checklist and
+the evidence log: criteria and outputs live once, in the brief, whose
+`ticket:` field carries this child's key (one fact, one layer). The remote issue is where
 the work is tracked; this folder is where the work is measured, and the
 checklist is the only thing that makes the integration-truth floor
 enforceable per ticket rather than remembered. A ticket folder without
