@@ -6,6 +6,11 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-09-03: /triage speaks epic. The size column gains EPIC (the correct
+  shape is several tickets) and step 4 hands /epic-flow invocations for those
+  items instead of filing them as single L tasks - one classification
+  language from inbox to epic. (MC-036)
+
 - 2026-09-03: lesson candidates become durable and gain their reader. Phase 8
   appends them to the ticket's evidence log as it reports (terminal output
   does not survive compaction; the file does), and /debrief's lessons step

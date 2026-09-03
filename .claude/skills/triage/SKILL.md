@@ -48,7 +48,7 @@ Split the paste into atomic items. Rules:
 |---|---|
 | Front | one of the board's fronts, or `NEW FRONT?` (flag, don't create) |
 | Kind | bug / task / enhancement / decision-for-founder / info-only |
-| Size | S (under an hour) / M (a session) / L (multi-session, needs a plan) |
+| Size | S (under an hour) / M (a session) / L (multi-session, needs a plan) / EPIC (the correct shape is several tickets) |
 | Next action | one concrete line, startable without thinking |
 | Notes | the clarifying question, a duplicate flag, or a dependency |
 
@@ -77,6 +77,10 @@ approval.
 - Items ready for delivery: hand the founder the one-line
   `/mission-flow <description> + <tracker ref>` invocation for each, one
   flow per item - never start the flows unasked.
+- EPIC-sized items: hand `/epic-flow <description>` instead - a single task
+  file cannot hold work whose correct shape is several tickets, and filing it
+  as one L task is how a plan's remainder gets lost. Never start the epic
+  unasked either.
 - `NEW FRONT?` items: point at `/new-front`, founder's call.
 
 Close with counts: N items in, N routed, N dropped, N awaiting answers.
