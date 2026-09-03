@@ -6,6 +6,14 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-09-03: four contradictions found by a full-document pass are
+  reconciled. The delivered probe is orchestrator-run before any dispatch and
+  the investigator's default type follows the path's duties (the read-only
+  universal default could not run the phase's own commands); the exhaustive
+  stop lists now name the delivered-probe hit and the dirty tree; Phase 5's
+  sizing statement lives in the orchestrator's output, never the record; the
+  conformance record is both-paths and placed there. (MC-033)
+
 - 2026-09-03: epic-flow E0 gains its docs-viewer mechanics: reuse-or-generate
   at the front's portfolio dir (the viewer is root-pinned; the proven pattern
   is generating it where the docs live), report the URL into 00-face.md, and

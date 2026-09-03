@@ -85,6 +85,7 @@ wait. The triggers are exhaustive:
 | A genuine design fork the request does not settle: a data-model or schema choice, a cross-cutting behaviour matrix (Phase 1) | the plan |
 | The ticket's acceptance criteria cannot be satisfied as written | the given ticket |
 | Scope found mid-flow materially exceeds what was described | the idea for the ticket |
+| The base branch already contains the work (Phase 1's delivered-probe hit) | the idea for the ticket |
 | An irreversible or outward-facing action is required that this invocation does not cover: a merge, a production write, a message to a third party | the prompt |
 
 **A blocking impediment** - the flow cannot proceed at all. STOP and report.
@@ -96,10 +97,13 @@ their call on a reported obstacle, never a gate the flow opens on its own:
 |---|---|
 | 0 | the description is missing, or the tracker situation is unclear |
 | 2 | Jira path with no parent and no existing ticket |
+| 3 | the working tree is dirty (the stop-with-inventory), or the ticket branch cannot be cleanly created |
 | 6 | the local stack genuinely cannot be brought up |
 | any | a phase's gate fails |
 
-Anything not on these two lists is not a reason to stop. A phase boundary is
+A missing or over-cap record and a failed dispatch are instances of "a
+phase's gate fails" - covered, not additions. Anything not on these two lists
+is not a reason to stop. A phase boundary is
 not a check-in, a draft is not a submission, and a decision the request
 already settled is not re-opened. `--confirm` adds back the two ticket and PR
 gates for one invocation without changing either list.
@@ -335,18 +339,25 @@ switches with it; work already done remains evidence.
 
 ## Phase 1 - Investigate (produces: root cause OR agreed approach)
 
-**First move, both paths: is this already delivered?** Before investigating,
-search the base branch's history for the ticket key and the feature's terms -
+**First move, both paths: is this already delivered? (the ORCHESTRATOR runs
+this inline, before any dispatch - one command that can end the flow should
+not cost a dispatch.)** Before investigating, search the base branch's history for the ticket key and the feature's terms -
 `git log origin/<base> --grep=<key|terms>` - plus one targeted look at the
 surface itself. On two real epics, 3 of 8 tickets were already delivered
 before work started, caught only by exactly this probe. One command, and it
 kills a whole flow's spend. A hit is a stop-with-evidence: present the
 delivering commit(s); the founder decides whether anything remains.
 
-**Dispatched.** One investigator - default agent type: a read-only explorer
-(`feature-dev:code-explorer` where available), which satisfies the
-least-capable rule by construction - whose record is what Phase 2 builds the
-ticket from. Split into two only when a ticket has genuinely independent sub-questions.
+**Dispatched.** One investigator, whose record is what Phase 2 builds the
+ticket from - typed by what the path needs, per the dispatch-safety table:
+the BUG path's duties run commands (telemetry pulls, repro, data-path probes),
+so its default is the investigate row - `Bash`, no `Edit`/`Write`; the TASK
+path's reading-and-mapping default is a read-only explorer
+(`feature-dev:code-explorer` where available), escalated to the investigate
+row only when its probes genuinely need a shell. A read-only agent cannot run
+the phase's commands - naming it the universal default was a contradiction,
+found and retired. Split into two investigators only when a ticket has
+genuinely independent sub-questions.
 
 **For bugs (via systematic debugging):** reproduce, gather evidence at
 every component boundary, trace to the root cause, paste literal proof.
@@ -372,16 +383,6 @@ reads). And before any bulk retrieval or mutation, run it against exactly ONE
 item and inspect the payload - a wrong pointer or schema assumption is almost
 always wrong for the entire set.
 
-**Record the project's existing pattern (source first, all 13 layers).** For
-every surface the ticket touches - UI components and tokens, UX interaction
-idiom, logging/metric idiom, API shape - the investigator records what THIS
-project already does, as part of the approach. The reference order for any
-design choice: (1) this project's existing patterns; (2) sibling projects on
-the front, when this project is new or the surface is novel; (3) the front's
-declared quality profile as override and tie-break. Deviating from the
-reference is a decision the ticket must state, never a default the diff
-quietly takes.
-
 **For tasks/enhancements (via a brainstorming discipline, dispatched):** the
 flow is autonomous, so there is nobody to "align with" mid-run and the text
 does not pretend otherwise. The investigator returns a PROPOSED approach
@@ -398,6 +399,16 @@ shape (capacity, config, schema) before adopting it as the approach. On a real
 ticket that said "raise concurrency 8 -> 32", the arithmetic showed the
 instruction was both unsafe and ineffective, and the evidence-backed
 alternative is what shipped (`_command/learning/02`).
+
+**Record the project's existing pattern (both paths - source first, all 13
+layers).** For every surface the ticket touches - UI components and tokens, UX
+interaction idiom, logging/metric idiom, API shape - the investigator records
+what THIS project already does, as part of the approach. The reference order
+for any design choice: (1) this project's existing patterns; (2) sibling
+projects on the front, when this project is new or the surface is novel;
+(3) the front's declared quality profile as override and tie-break. Deviating
+from the reference is a decision the ticket must state, never a default the
+diff quietly takes.
 
 **Cross-cutting behaviour change (audit before you proceed).** When a ticket
 expands from a point fix into a change across a MATRIX - every status x role, a
@@ -695,9 +706,10 @@ gate for `--auto` or `--spend lean`.
 
 ### Size the batch before dispatching it
 
-State the fan-out for the whole phase in one line in the record BEFORE the
-first dispatch, covering the correctness reviewers and the principles pass
-together: `N agents x model x effort ~ tokens`, within the
+State the fan-out for the whole phase in one line in the ORCHESTRATOR'S OWN
+OUTPUT before the first dispatch (never in the record - the record is authored
+by the agent and does not exist yet; the orchestration section owns this
+rule), covering the correctness reviewers and the principles pass together: `N agents x model x effort ~ tokens`, within the
 `CONSTITUTION.local.md` section 2 ceilings and the presets in
 `framework/roles.md`. The criteria check above adds no agents at its default,
 because it runs inline; say so rather than leaving it uncounted.
