@@ -6,6 +6,10 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-09-03: --decide minor is operational - the real-time announcement line,
+  the decide_log entry shape in the brief's frontmatter, and E8's enumeration
+  with per-decision /adr proposals (founder-gated). (MC-040)
+
 - 2026-09-03: epic-flow's E8 close is live - coverage against shipped
   artifacts (mechanical where a script can assert, an explicit manual line
   where it cannot), the cross-fragment principles pass over the whole epic

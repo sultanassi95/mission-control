@@ -269,10 +269,21 @@ five rubric conditions - reversible within the epic branch AND no
 schema/data-model choice AND no cross-fragment contract change AND no
 product-visible behaviour fork AND no new dependency (dev included; an
 authored migration is a schema choice; config only if reversible, not
-product-visible, and touching no secret/infra surface). Each minor decision:
-one real-time line, appended to the brief's `decide_log`, enumerated at E8,
-proposed to `/adr`. This rubric IS the definition of a trivial fork for every
-child under the run - one vocabulary, not two. Anything failing it stops.
+product-visible, and touching no secret/infra surface). Each minor decision is
+plumbed three ways, mechanically:
+
+- **The real-time line**, as the decision is taken:
+  `DECIDE minor · <fragment-id> · <the choice> · passes all five` - one line
+  in the orchestrator's output, so the founder watching the run sees it land.
+- **The `decide_log` entry**, appended to the fragment's brief frontmatter:
+  `{at: <ISO time>, chose: <the choice>, over: <the alternative>, why-minor:
+  <which conditions were closest>, evidence: <record or file:line>}`.
+- **The E8 enumeration**: the close report lists every entry from every
+  brief, and each becomes a one-line `/adr` proposal - filed only on the
+  founder's yes, never self-approved.
+
+This rubric IS the definition of a trivial fork for every child under the
+run - one vocabulary, not two. Anything failing it stops.
 
 **Retiring an epic** is the founder's call at any boundary: children closed
 with the reason, the branch left in place, the folder's status `retired`. An
