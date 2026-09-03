@@ -6,6 +6,11 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-09-03: Phase 0 completes its verdict set. Epic-sized is a live exit to
+  /epic-flow (the "until then" clause outlived its truth by one hour); all
+  three exits announce with rationale shapes; and the per-phase task list is
+  created on a flow-entering verdict only, so exits strand nothing. (MC-032)
+
 - 2026-09-03: four contradictions found by a full-document pass are
   reconciled. The delivered probe is orchestrator-run before any dispatch and
   the investigator's default type follows the path's duties (the read-only

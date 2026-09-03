@@ -111,9 +111,12 @@ gates for one invocation without changing either list.
 ## The execution surface - one session task per phase
 
 The founder watches an autonomous run through the session task list, so the
-list is part of the flow's contract, not a nicety. At Phase 0 of EVERY ticket
-run, create one session task per phase - `<key> · P0 Classify` through
-`<key> · P8 Capture` - with the harness task tools. Set a phase's task
+list is part of the flow's contract, not a nicety. Upon a FLOW-ENTERING
+verdict (bug / task / enhancement) - immediately after the Phase-0
+announcement, with P0's task created already completed - create one session
+task per phase, `<key> · P0 Classify` through `<key> · P8 Capture`, with the
+harness task tools. Exit verdicts (decision, info, epic) create no list:
+classification itself runs list-free, so an exit strands nothing. Set a phase's task
 `in_progress` on entry and `completed` when its gate passes; a failed gate
 leaves the task in progress, which is the honest picture. Starting a NEW
 ticket completes or clears the previous ticket's phase tasks and creates a
@@ -319,16 +322,21 @@ classification language from inbox to PR. Pick one:
 - **Info-only** (nothing to build - a fact, a status, a pointer): EXIT the
   flow - route the fact to the layer that owns it (progress log, hub, spoke;
   `framework/continuity-stack.md`) and say where it went.
+- **Epic-sized** (the correct shape is several tickets): EXIT to `/epic-flow`,
+  whose E0 takes this description as its input. This verdict belongs to
+  Phase 0 only - scope that GROWS to epic size mid-flow is still the "scope
+  exceeds the description" stop, never a mid-run escape hatch.
 
-The two exits are verdicts, not failures: naming why an item is not
-flow-shaped is this phase doing its job. Epic-sized work gains its own exit
-when the epic playbook exists (MC-017); until then, materially-multi-ticket
-scope found here is the "scope exceeds the description" stop.
+The three exits are verdicts, not failures: naming why an item is not
+flow-shaped is this phase doing its job.
 
 Announce the classification WITH its one-line rationale - "defect against
-shipped behaviour: <what shipped, what broke>" or "new work: <what does not
-exist yet>" - before Phase 1, so a misroute is contestable before the
-investigation spends anything. If genuinely ambiguous, ask.
+shipped behaviour: <what shipped, what broke>" · "new work: <what does not
+exist yet>" · "decision-for-founder: <the decision, the options>" ·
+"info-only: <the fact, the layer that owns it>" · "epic-sized: <why one
+ticket cannot hold it>" - before anything else happens, so a misroute is
+contestable before a single token is spent past it. If genuinely ambiguous,
+ask.
 
 **Reclassification.** Phase-1 evidence that flips the class (a "task" that is
 really a defect; a "bug" that is really an undecided product behaviour)
