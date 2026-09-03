@@ -220,14 +220,44 @@ dependents (the E5 graph); independent lanes continue.
 
 **Invalidation and re-plan** [STUB - lands with C2].
 
-### E8 - Close [STUB - lands with B2]
+### E8 - Close
 
-The contract, so the lock is signed with eyes open (full text: the design):
-coverage re-run against shipped artifacts, the CROSS-FRAGMENT principles pass
-over the whole epic diff (per-child review structurally cannot see
-cross-child duplication), the E0 acceptance verified on the terminal
-artifact, the epic PR (commits = review index, compliance evidence chain),
-checks-green, `/as-built`, the tally, the child batch transition.
+Runs when every locked fragment reads `squashed` (or the founder retires the
+remainder). Six steps, in order:
+
+1. **Coverage against SHIPPED artifacts.** Re-run the coverage tool, then
+   verify each claimed output EXISTS in the epic diff - mechanically for the
+   kinds a script or grep can assert (a file present, a schema model defined,
+   a route registered, a section landed), and as an explicit manual line in
+   the close report for the kinds it cannot (job behaviour). Never implied.
+2. **The cross-fragment principles pass.** One review over the WHOLE epic
+   diff (`git diff <base>..<epic-branch>`): DRY across fragments,
+   responsibility placement, contract drift between fragments - the failure
+   modes per-child review is structurally blind to, because each child's
+   reviewers saw one diff. Standard verdict vocabulary, named counterparts,
+   vacuous assertions non-reportable. Findings fix on the epic branch (one
+   polish squash) or persist as tracker items.
+3. **Outcome acceptance on the terminal artifact.** Execute `00-face.md`'s
+   declared terminal assertion and paste the literal output. The epic-level
+   acceptance criteria settle here the way a ticket's DoD settles at
+   Phase 7 - each line evidenced or N/A with a reason.
+4. **The epic PR.** `<base> <- epic/<key>-<slug>`, body per the design: epic
+   summary, the commit-by-ticket index table (one commit = one reviewed
+   ticket - the review index), test plan (per-child Phase 6 + this close's
+   proofs), blast radius. Where the front declares a compliance profile, the
+   epic PR is the evidence surface and the per-child review records back it.
+   Watch to checks-green per the standard semantics. Merging stays with the
+   founder - and the founder's merge is the trigger for the CHILD BATCH
+   TRANSITION: every parked child moves to Done, a step the close report
+   names explicitly as pending.
+5. **`/as-built`.** The epic shipped: promote the plan into the living
+   as-built record and retire the planning documents (status headers ->
+   `superseded`); the folder keeps the audit trail, the as-built doc keeps
+   the rationale that still matters.
+6. **The tally and the report.** Spend per child from the records; decisions
+   taken (deviations, stops, minor-decision log, /adr proposals); lesson
+   candidates appended durably per child; zero untracked loose ends - the
+   epic ends owning nothing unnamed.
 
 ## Autonomy
 

@@ -6,6 +6,13 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-09-03: epic-flow's E8 close is live - coverage against shipped
+  artifacts (mechanical where a script can assert, an explicit manual line
+  where it cannot), the cross-fragment principles pass over the whole epic
+  diff, the terminal assertion executed literally, the epic PR as review
+  index with the child batch transition at merge, /as-built promotion, and
+  the closing tally. (MC-039)
+
 - 2026-09-03: epic-flow's E7 runner is live - epic-branch lifecycle with an
   explicit push grant scoped to that branch, serial child execution with the
   three overrides, squash-per-fragment with CI watched per push, base-drift
