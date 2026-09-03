@@ -52,9 +52,13 @@ skip a phase, never reorder, never invent new phases.
   changes WHO does the work and nothing else: the stop triggers, the Phase-5
   acceptance-criteria check and every evidence requirement are identical either
   way.
-- **`--spend <lean|standard|deep>` (optional).** lean = reviewer cap 1,
-  tightest prose; standard (default) = the Phase-5 sizing table as-is;
-  deep = the full multi-angle review sweep. **`--deep-review` remains as
+- **`--spend <lean|standard|deep>` (optional).** lean = the CORRECTNESS
+  batch caps at one reviewer and prose is tightest - the principles and
+  conformance passes may run inline by the orchestrator instead of as
+  dispatches, and RISK-TRIGGERED lenses (security, declared compliance
+  control families) are never waived by a spend dial: a dial that can turn
+  off a security check is not a spend dial. standard (default) = the Phase-5
+  sizing table as-is; deep = the full multi-angle review sweep. **`--deep-review` remains as
   an alias for `--spend deep`.** `--thinking` (default high - Phase 1 is
   root-cause work) and `--verbosity` per the universal grammar (the stop
   triggers and evidence pastes are discipline at every tier).
@@ -741,6 +745,11 @@ per the sizing table below).
   angles.
 - **`--deep-review` flag:** the full multi-angle recall sweep. Reserved
   for pre-release / high-stakes changes.
+
+Under `--spend lean` this table's cap applies to the CORRECTNESS batch only:
+the principles and conformance passes run inline by the orchestrator, and
+risk-triggered lenses are never waived by any spend dial (the Inputs section
+owns this rule).
 
 Rationale: on a moderate diff, five reviewers burn tokens without
 producing five distinct classes of finding; most overlap. Prefer one agent

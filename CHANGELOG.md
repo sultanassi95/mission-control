@@ -6,6 +6,11 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-09-03: --spend lean's cap is arithmetically satisfiable again: it caps
+  the CORRECTNESS batch at one reviewer; the principles and conformance passes
+  may run inline under lean; and risk-triggered lenses (security, declared
+  compliance families) are never waived by a spend dial. (MC-037)
+
 - 2026-09-03: /triage speaks epic. The size column gains EPIC (the correct
   shape is several tickets) and step 4 hands /epic-flow invocations for those
   items instead of filing them as single L tasks - one classification
