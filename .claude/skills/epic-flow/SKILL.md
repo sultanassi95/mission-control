@@ -36,8 +36,8 @@ authority where this text summarizes).
 
 Default run = PLAN: E0 through the E6 tree lock, then STOP - the founder's
 lock IS the execution grant. `--execute` resumes any later session from the
-folder. **Execution mode (E7/E8) lands with build units B1/B2; until they
-ship, `--execute` reports the locked tree and stops.** [STUB - B1/B2]
+folder and enters E7 below; execution in the same session proceeds directly
+from the lock.
 
 ## The execution surface
 
@@ -176,20 +176,99 @@ field, write `60-tree-lock.md` (tree summary, tracker keys, date, the
 founder's word). **The lock is the execution grant** for exactly this tree in
 E5's order.
 
-### E7 / E8 - Execute and close [STUB - lands with B1/B2]
+### E7 - Execute (the runner)
 
-The contract, so the lock is signed with eyes open (full text: the design):
-one epic branch (`epic/<key>-<slug>`, MC-018 discipline, push authority to
-THIS branch only - the deploy base excluded as everywhere); each child runs
-full `/mission-flow` with `--parent`, `--base <epic-branch>`, and Phase 7
-replaced by a squash onto the epic branch; epic-branch CI watched per squash
-(MC-022); base drift merged in at lane boundaries (merge, never rebase);
-serial lanes in v1; Phase 6 never amortized; children park in review at
-squash and reach Done in a batch when the founder merges the epic PR. E8:
-coverage re-run against shipped artifacts, the CROSS-FRAGMENT principles pass
-over the whole epic diff (per-child review structurally cannot see
-cross-child duplication), the E0 acceptance verified on the terminal
-artifact, the epic PR (commits = review index), `/as-built`, the tally.
+**The epic branch first.** The first execution step creates
+`epic/<key>-<slug>` off the spoke base (or `--base`) under full Phase-3
+discipline - `--no-track`, the upstream read back and proven, the dirty-tree
+protocol - then pushes it with `-u`. The epic grant EXPLICITLY includes push
+authority to this branch and to it alone; the deploy base is excluded as
+everywhere else. Every squash below is followed by a push of the epic branch,
+which is what makes the CI watch real.
+
+**Per child, in E5's order, serially (v1):**
+
+1. **Re-read the folder.** Brief states and any founder amendments execute;
+   a stale plan does not. A fragment newly `invalidated` triggers the
+   re-plan cycle (below) before the lane continues.
+2. **Fresh per-phase task list** for the child (the execution-surface rule).
+3. **Run the child as a full `/mission-flow`** with three overrides, stated
+   in its Phase 0: `--parent <EPIC-ID>`, `--base <epic-branch>`, and
+   Phase 7 REPLACED - no child PR. Phase 2 uses the epic-child pointer mode
+   (the child's ticket.md points at the brief; criteria and outputs live
+   once, in the brief). Phase 6 runs in full - verification never amortizes
+   across children - and serializes on the shared stack.
+4. **Land the child:** squash-merge its branch onto the epic branch as ONE
+   commit - `<type>(<key>): <brief title>`, body a condensed Summary / Root
+   cause / Fix with NO instance paths - then set the brief's
+   `state: squashed` + `squash: <hash>`, and push the epic branch.
+5. **Watch the epic branch's CI** per the checks-green semantics: bounded,
+   red-caused-by-this-squash gets the one re-entry, infra reds are
+   founder-gated items, a repo with no checks configured reports exactly
+   that in one line.
+6. **Child Phase 8, adjusted for no-PR:** the link-back posts the squash
+   hash + the epic key; the child ticket transitions to its review state and
+   PARKS - children reach Done in a batch when the founder merges the epic
+   PR (that batch step is named in the E8 report). Capture, lesson
+   candidates, and the zero-loose-ends rule run per child unchanged.
+
+**Between lanes:** if the base moved, merge base INTO the epic branch -
+merge, never rebase; published history stays honest - with conflicts handled
+by the Phase-4 classes (trivial = resolve and note, semantic = stop the
+affected lane). Stops stay per-child and pause the fragment plus its
+dependents (the E5 graph); independent lanes continue.
+
+**Invalidation and re-plan.** A fragment whose premise died - an earlier
+fragment reshaped its surface, the founder re-scoped it, evidence refuted its
+brief - gets `state: invalidated` with the reason in the brief. The lane
+stops and a bounded re-plan cycle runs: **E3'** re-cuts the AFFECTED subtree
+only (new or amended briefs), **E4'** re-runs the coverage gate (the diff
+must pass again), **E6'** presents the CHANGED subtree to the founder for
+re-lock - the unchanged remainder stays locked and its lanes keep running.
+If the invalidated fragment had already squashed, its commits are `git
+revert`ed on the epic branch by the runner - revert, never rebase: published
+history stays honest - logged as a deviation and named in the next boundary's
+report. Nothing is silently rewritten, and nothing invalidated is silently
+kept.
+
+### E8 - Close
+
+Runs when every locked fragment reads `squashed` (or the founder retires the
+remainder). Six steps, in order:
+
+1. **Coverage against SHIPPED artifacts.** Re-run the coverage tool, then
+   verify each claimed output EXISTS in the epic diff - mechanically for the
+   kinds a script or grep can assert (a file present, a schema model defined,
+   a route registered, a section landed), and as an explicit manual line in
+   the close report for the kinds it cannot (job behaviour). Never implied.
+2. **The cross-fragment principles pass.** One review over the WHOLE epic
+   diff (`git diff <base>..<epic-branch>`): DRY across fragments,
+   responsibility placement, contract drift between fragments - the failure
+   modes per-child review is structurally blind to, because each child's
+   reviewers saw one diff. Standard verdict vocabulary, named counterparts,
+   vacuous assertions non-reportable. Findings fix on the epic branch (one
+   polish squash) or persist as tracker items.
+3. **Outcome acceptance on the terminal artifact.** Execute `00-face.md`'s
+   declared terminal assertion and paste the literal output. The epic-level
+   acceptance criteria settle here the way a ticket's DoD settles at
+   Phase 7 - each line evidenced or N/A with a reason.
+4. **The epic PR.** `<base> <- epic/<key>-<slug>`, body per the design: epic
+   summary, the commit-by-ticket index table (one commit = one reviewed
+   ticket - the review index), test plan (per-child Phase 6 + this close's
+   proofs), blast radius. Where the front declares a compliance profile, the
+   epic PR is the evidence surface and the per-child review records back it.
+   Watch to checks-green per the standard semantics. Merging stays with the
+   founder - and the founder's merge is the trigger for the CHILD BATCH
+   TRANSITION: every parked child moves to Done, a step the close report
+   names explicitly as pending.
+5. **`/as-built`.** The epic shipped: promote the plan into the living
+   as-built record and retire the planning documents (status headers ->
+   `superseded`); the folder keeps the audit trail, the as-built doc keeps
+   the rationale that still matters.
+6. **The tally and the report.** Spend per child from the records; decisions
+   taken (deviations, stops, minor-decision log, /adr proposals); lesson
+   candidates appended durably per child; zero untracked loose ends - the
+   epic ends owning nothing unnamed.
 
 ## Autonomy
 
@@ -201,10 +280,21 @@ five rubric conditions - reversible within the epic branch AND no
 schema/data-model choice AND no cross-fragment contract change AND no
 product-visible behaviour fork AND no new dependency (dev included; an
 authored migration is a schema choice; config only if reversible, not
-product-visible, and touching no secret/infra surface). Each minor decision:
-one real-time line, appended to the brief's `decide_log`, enumerated at E8,
-proposed to `/adr`. This rubric IS the definition of a trivial fork for every
-child under the run - one vocabulary, not two. Anything failing it stops.
+product-visible, and touching no secret/infra surface). Each minor decision is
+plumbed three ways, mechanically:
+
+- **The real-time line**, as the decision is taken:
+  `DECIDE minor · <fragment-id> · <the choice> · passes all five` - one line
+  in the orchestrator's output, so the founder watching the run sees it land.
+- **The `decide_log` entry**, appended to the fragment's brief frontmatter:
+  `{at: <ISO time>, chose: <the choice>, over: <the alternative>, why-minor:
+  <which conditions were closest>, evidence: <record or file:line>}`.
+- **The E8 enumeration**: the close report lists every entry from every
+  brief, and each becomes a one-line `/adr` proposal - filed only on the
+  founder's yes, never self-approved.
+
+This rubric IS the definition of a trivial fork for every child under the
+run - one vocabulary, not two. Anything failing it stops.
 
 **Retiring an epic** is the founder's call at any boundary: children closed
 with the reason, the branch left in place, the folder's status `retired`. An

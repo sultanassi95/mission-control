@@ -6,6 +6,30 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-09-03: the invalidation re-plan cycle is live - invalidated fragments
+  stop their lane, E3'/E4'/E6' re-plan and re-lock only the changed subtree,
+  and already-squashed work reverts on the epic branch (revert, never rebase),
+  logged as a deviation. epic-flow is now STUB-free: the tool finished itself
+  as its own first epic (MC-038..041 = MC-017.1..4). (MC-041)
+
+- 2026-09-03: --decide minor is operational - the real-time announcement line,
+  the decide_log entry shape in the brief's frontmatter, and E8's enumeration
+  with per-decision /adr proposals (founder-gated). (MC-040)
+
+- 2026-09-03: epic-flow's E8 close is live - coverage against shipped
+  artifacts (mechanical where a script can assert, an explicit manual line
+  where it cannot), the cross-fragment principles pass over the whole epic
+  diff, the terminal assertion executed literally, the epic PR as review
+  index with the child batch transition at merge, /as-built promotion, and
+  the closing tally. (MC-039)
+
+- 2026-09-03: epic-flow's E7 runner is live - epic-branch lifecycle with an
+  explicit push grant scoped to that branch, serial child execution with the
+  three overrides, squash-per-fragment with CI watched per push, base-drift
+  merges (never rebase), and the no-PR child Phase 8 (park in review, batch
+  Done at the epic merge). mission-flow Phase 2 gains the epic-child pointer
+  mode. Shipped BY the first epic run itself (MC-038 = MC-017.1). (MC-038)
+
 - 2026-09-03: --spend lean's cap is arithmetically satisfiable again: it caps
   the CORRECTNESS batch at one reviewer; the principles and conformance passes
   may run inline under lean; and risk-triggered lenses (security, declared
