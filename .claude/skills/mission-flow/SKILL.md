@@ -311,6 +311,10 @@ estimate.
 
 ## Phase 0 - Classify the work
 
+> **Skills in play:** routes to `superpowers:systematic-debugging` (bug) or
+> `superpowers:brainstorming` (task/enhancement); epic-sized exits to
+> `/epic-flow`; `/triage` upstream shares this vocabulary.
+
 Classify with the same five-kind vocabulary `/triage` uses at intake - one
 classification language from inbox to PR. Pick one:
 
@@ -350,6 +354,11 @@ classifications it takes (`_command/learning/04`). The Phase-1 discipline
 switches with it; work already done remains evidence.
 
 ## Phase 1 - Investigate (produces: root cause OR agreed approach)
+
+> **Skills in play:** `superpowers:systematic-debugging` (bug path) ·
+> `superpowers:brainstorming` (task path) · `feature-dev:code-explorer` for
+> task-path reading (the bug path dispatches the Bash-carrying investigate
+> row) · `/map-front`'s `_map.md` read for blast radius.
 
 **First move, both paths: is this already delivered? (the ORCHESTRATOR runs
 this inline, before any dispatch - one command that can end the flow should
@@ -465,6 +474,10 @@ Deliverable: a paragraph the Phase-2 ticket description can be built on.
 
 ## Phase 2 - Ticket (produces: a tracked unit of work, In Progress)
 
+> **Skills in play:** none - the template, the tracker API, and the
+> leak-guard hook are the floor. Bolting a skill on here for its own sake is
+> the two-controls-one-job anti-pattern.
+
 ### First: is the issue already tracked? (every path)
 
 Search the tracker for an existing ticket owning this ISSUE before creating
@@ -568,6 +581,9 @@ first and wait for an explicit go.
 
 ## Phase 3 - Branch
 
+> **Skills in play:** none - doctrine executed inline by the orchestrator; a
+> git write is never delegated.
+
 **Never delegated.** This phase writes to git, and the upstream check below is
 hard rule 8.
 
@@ -611,6 +627,12 @@ git rev-parse --abbrev-ref '@{upstream}'  # must NOT name the base branch
   `feat/tick-214-forward-invite-params`.
 
 ## Phase 4 - Implement (produces: 1-N phase commits, all green in isolation)
+
+> **Skills in play:** `superpowers:test-driven-development` ·
+> `superpowers:using-git-worktrees` (the CLI-native EnterWorktree/ExitWorktree
+> tools are the mechanism) · `/log-deviation` before any unit's merge.
+> **Denied here:** `commit-commands:commit` - it appends the AI-attribution
+> trailer these commit rules ban.
 
 **Dispatched, one agent per logical unit, each in its own worktree on its own
 branch** off the ticket branch, whether one unit runs or several. Uniform on
@@ -681,6 +703,13 @@ accepting that unit's merge. Drift that does not trip the scope stop is
 recorded, never silently absorbed.
 
 ## Phase 5 - Code review
+
+> **Skills in play:** `/code-review --fix` (sized by the ladder) ·
+> `superpowers:receiving-code-review` (findings verified, never blindly
+> applied) · `/simplify` for the polish commit · `/security-review` on the
+> risk-class trigger · the named lenses (silent-failure, test-coverage,
+> type-design) dispatched as prompts on weak-tool agents with the diff file -
+> never the stock full-toolset agents against a live tree.
 
 Two checks gate this phase, and `--auto` waives neither: the ticket's
 acceptance criteria are verified before any reviewer is dispatched, and the
@@ -832,6 +861,11 @@ loop. Review fixes are code too.
 
 ## Phase 6 - Verify locally (produces: literal green terminal output)
 
+> **Skills in play:** `superpowers:verification-before-completion` · `/run`
+> (drive the real app) · Playwright MCP for the browser path · the
+> chrome-devtools skills when the ticket is UI perf/a11y-facing · the
+> declared compliance/quality profiles' checks.
+
 **Hybrid.** An agent may run the gauntlet and return its literal output; the
 orchestrator runs the terminal assertion itself. See "How this flow runs".
 
@@ -938,6 +972,12 @@ real bug it surfaced.
 
 ## Phase 7 - Push + PR
 
+> **Skills in play:** the `gh` CLI · the Monitor tool for the bounded checks
+> watch · the leak-guard hook on the PR body. **Denied here:**
+> `commit-commands:commit-push-pr` (the banned trailer, and three gated
+> actions fused into one call) and `superpowers:finishing-a-development-branch`
+> (it re-opens the integration question this flow has already settled).
+
 **Never delegated.** Pushing and opening a PR are outward-facing, and the
 autonomy carve-out belongs to the orchestrator alone.
 
@@ -1014,6 +1054,11 @@ left. An integration branch once sat red for five days with nothing noticing
 checks configured reports exactly that in one line.
 
 ## Phase 8 - Link back + capture (produces: two-way traceability, current front context)
+
+> **Skills in play:** `/spend` (reads the tally's records) · `/debrief`
+> (consumes the lesson candidates) · `/learn-from-session` ->
+> `/promote-learnings` (the loop) · `/adr` per settled fork · `/as-built` at
+> an epic's close.
 
 ### Link back
 
@@ -1124,6 +1169,28 @@ PR opens: a red caused by this diff is still this ticket's work, and it gets
 exactly ONE bounded re-entry into the Phase 4-6 loop. Next task = re-ask. This skill is the
 explicit carve-out from the standing "no git writes unasked" default; the
 carve-out is exactly as wide as one invocation.
+
+## The deny-list, consolidated (and why)
+
+The rosters above are also a boundary. Denied outright, with the reason -
+because the convenient built-in is sometimes the wrong tool:
+
+- `commit-commands:commit` and `commit-commands:commit-push-pr` - both append
+  an AI-attribution trailer Phase 4's commit rules ban outright, and the
+  latter fuses commit, push, and PR into one call across three separately
+  gated actions.
+- `superpowers:finishing-a-development-branch` - it ASKS how to integrate
+  (merge vs PR), a question this flow settles doctrinally; invoking it
+  re-opens settled scope.
+
+Cautioned, decided at MC-020: the pr-review-toolkit agents carry full
+toolsets, which the reviewer safety row forbids - their LENSES ride weak-tool
+dispatches with the diff file; the stock agents never touch a live tree.
+
+"None" is a valid roster entry (Phases 2 and 3 carry it): a phase whose floor
+is a template, an API, and a hook does not get a skill bolted on for its own
+sake. The team-demo deck's skills-in-play strips mirror these rosters; when a
+roster changes, the deck changes in the same ticket.
 
 ## Ordering rules
 
