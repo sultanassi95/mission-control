@@ -2,7 +2,7 @@
 name: mission-flow
 description: >-
   The standard playbook for turning a bug, task, or enhancement into a
-  merged-ready PR on any front. Runs the fixed 8-phase sequence: classify,
+  checks-green PR on any front. Runs the fixed 8-phase sequence: classify,
   investigate (systematic debugging OR brainstorming), ticket, branch,
   phase-commits, code review with fixes, local verification gauntlet, PR,
   link back and capture what the ticket taught about the front. Works with
@@ -17,7 +17,7 @@ description: >-
 # Mission Flow
 
 The standing playbook for turning a bug / task / enhancement into a
-merged-ready PR on any front. Sequence executed in fixed order - never
+checks-green PR on any front. Sequence executed in fixed order - never
 skip a phase, never reorder, never invent new phases.
 
 ## Inputs
@@ -657,7 +657,8 @@ gets the negative control once: break the guarded thing, see red, restore. And
 a forced failure or injection must self-report firing, with the test asserting
 it fired. A threshold equal to the current value, a mock missing the key the
 code reaches for, and an expectation computed from empty config are all green
-and all vacuous.
+and all vacuous. The control's literal output - the break, the red, the
+restore - lands in the unit's record; an unproven control is a comment.
 
 **Each commit's green is evidence, not a claim.** The unit's record carries
 per-commit literal output (build + affected tests at that commit); when a unit
@@ -867,9 +868,11 @@ work is complete: a sync once exited 0 having transferred 65% of its objects
 workflows, `infra/`, or config/secret-hydration surfaces, the gauntlet
 includes the deploy path's own dry checks - the validate script, `cdk diff`
 or the stack's equivalent, a lint of the changed workflow - BEFORE the PR
-exists. Two lived defects rode this gap: a secret-hydration script that
-exited silently on an empty variable, and an empty DB_HOST caught only by a
-hand-run validate before merge.
+exists. Like telemetry reads, these may need cloud access - confirm it up
+front (an interactive login is the founder's to run); a check that cannot run
+is reported, never silently skipped. Two lived defects rode this gap: a
+secret-hydration script that exited silently on an empty variable, and an
+empty DB_HOST caught only by a hand-run validate before merge.
 
 **Dependency vulnerabilities gate on the DELTA.** When the diff touches a
 dependency manifest or lockfile, run the ecosystem's audit (`npm audit` /

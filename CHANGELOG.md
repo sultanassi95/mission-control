@@ -6,6 +6,12 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-09-03: three small hardenings - the negative control's break/red/restore
+  output has a stated home (the unit's record), deploy-path dry checks carry
+  the cloud-access clause telemetry already had, and the skill's own
+  description now ends at a checks-green PR, where MC-022 moved the finish
+  line. (MC-034)
+
 - 2026-09-03: Phase 0 completes its verdict set. Epic-sized is a live exit to
   /epic-flow (the "until then" clause outlived its truth by one hour); all
   three exits announce with rationale shapes; and the per-phase task list is
