@@ -218,7 +218,18 @@ by the Phase-4 classes (trivial = resolve and note, semantic = stop the
 affected lane). Stops stay per-child and pause the fragment plus its
 dependents (the E5 graph); independent lanes continue.
 
-**Invalidation and re-plan** [STUB - lands with C2].
+**Invalidation and re-plan.** A fragment whose premise died - an earlier
+fragment reshaped its surface, the founder re-scoped it, evidence refuted its
+brief - gets `state: invalidated` with the reason in the brief. The lane
+stops and a bounded re-plan cycle runs: **E3'** re-cuts the AFFECTED subtree
+only (new or amended briefs), **E4'** re-runs the coverage gate (the diff
+must pass again), **E6'** presents the CHANGED subtree to the founder for
+re-lock - the unchanged remainder stays locked and its lanes keep running.
+If the invalidated fragment had already squashed, its commits are `git
+revert`ed on the epic branch by the runner - revert, never rebase: published
+history stays honest - logged as a deviation and named in the next boundary's
+report. Nothing is silently rewritten, and nothing invalidated is silently
+kept.
 
 ### E8 - Close
 

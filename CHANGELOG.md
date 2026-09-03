@@ -6,6 +6,12 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-09-03: the invalidation re-plan cycle is live - invalidated fragments
+  stop their lane, E3'/E4'/E6' re-plan and re-lock only the changed subtree,
+  and already-squashed work reverts on the epic branch (revert, never rebase),
+  logged as a deviation. epic-flow is now STUB-free: the tool finished itself
+  as its own first epic (MC-038..041 = MC-017.1..4). (MC-041)
+
 - 2026-09-03: --decide minor is operational - the real-time announcement line,
   the decide_log entry shape in the brief's frontmatter, and E8's enumeration
   with per-decision /adr proposals (founder-gated). (MC-040)
