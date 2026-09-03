@@ -6,6 +6,13 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-09-03: every mission-flow phase now names its skills roster in place -
+  what implements the phase (yours or CLI-shipped), where "none" is the honest
+  entry - plus a consolidated deny-list with reasons (the attribution-trailer
+  commit commands; the integration-question re-opener) and the MC-020 caution
+  (stock reviewer agents' toolsets vs the diff-file rule). The demo deck's
+  strips mirror the rosters by rule. (MC-026)
+
 - 2026-09-03: the invalidation re-plan cycle is live - invalidated fragments
   stop their lane, E3'/E4'/E6' re-plan and re-lock only the changed subtree,
   and already-squashed work reverts on the epic branch (revert, never rebase),
