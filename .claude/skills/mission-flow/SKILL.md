@@ -1083,10 +1083,12 @@ Confidential fronts stay pointers-only: nothing employer-owned enters
   pending on their side + what was written to front context, or that
   nothing structural was learned.
 - **Lesson candidates:** unvetted one-liners with an evidence pointer,
-  consumed by `/debrief`'s learn-from-session step. This line writes to NO
-  lesson store - it is a handoff buffer so an 11:00 lesson survives to a 19:00
-  debrief, and candidates die by default if the debrief's critique rejects
-  them.
+  consumed by `/debrief`'s learn-from-session step. The report line alone is
+  terminal output and does not survive compaction, so the SAME candidates are
+  APPENDED to the ticket's evidence log as they are reported - the file is the
+  durable half of the buffer, and the debrief reads the day's touched ticket
+  folders. This writes to NO lesson store - candidates die by default if the
+  debrief's critique rejects them.
 - **Decisions taken:** deviations logged (register ids), stops taken and how
   the founder resolved them, and a one-line `/adr` proposal for each settled
   design fork - filed only on the founder's yes, never self-approved.

@@ -6,6 +6,13 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-09-03: lesson candidates become durable and gain their reader. Phase 8
+  appends them to the ticket's evidence log as it reports (terminal output
+  does not survive compaction; the file does), and /debrief's lessons step
+  reads the day's touched ticket folders and feeds the candidates into
+  learn-from-session's critique gate - same gate, no special treatment.
+  (MC-035)
+
 - 2026-09-03: three small hardenings - the negative control's break/red/restore
   output has a stated home (the unit's record), deploy-path dry checks carry
   the cloud-access clause telemetry already had, and the skill's own

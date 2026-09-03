@@ -94,8 +94,13 @@ hub Status block instead; the consolidating debrief lifts them into
 
 Invoke `/learn-from-session`. It scans the session, runs every candidate
 through its 8-rule critique gate, and routes survivors to the right store
-(session memory vs `_command/learning/`). The debrief is not complete
-until it has run and reported.
+(session memory vs `_command/learning/`). Before it runs, gather the day's
+DURABLE candidates: each mission-flow run appends its lesson-candidate
+one-liners to its ticket's evidence log (the chat report does not survive
+compaction), so read the evidence logs of today's touched ticket folders and
+feed those candidates into the same critique gate - they get no special
+treatment and die by default if the gate rejects them. The debrief is not
+complete until it has run and reported.
 
 ## Step 5 - Close
 
