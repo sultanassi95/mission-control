@@ -18,8 +18,15 @@ if the note link is lost. Agronomists sort by location first.
 
 ## Acceptance criteria
 
-- Import preserves the GPS EXIF block (only thumbnails are stripped).
-- A photo with GPS data shows its plot association in the gallery.
+- Import preserves the GPS EXIF block (only thumbnails are stripped) -
+  evidence: `exiftool` output on an imported file, pasted.
+- A photo with GPS data shows its plot association in the gallery -
+  evidence: runtime - Phase 6, the real gallery on the reference device.
+
+**Terminal assertion:** import one real GPS-tagged photo, then read its
+coordinates back off the STORED file and confirm the gallery names the plot -
+`exiftool -GPSLatitude -GPSLongitude <stored-path>`. A successful import
+status is not the artifact; the coordinates on the stored file are.
 
 ## Definition of Done (the integration-truth floor)
 

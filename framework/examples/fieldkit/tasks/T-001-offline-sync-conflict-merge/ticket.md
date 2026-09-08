@@ -21,11 +21,17 @@ forgive.
 ## Acceptance criteria
 
 - Concurrent edits to DIFFERENT fields of the same note both survive a
-  sync (field-level merge, not row-level).
+  sync (field-level merge, not row-level) - evidence: runtime - Phase 6,
+  two devices against the real server.
 - A true same-field conflict keeps both values and surfaces a pick-one
-  prompt on next open; nothing is silently discarded.
+  prompt on next open; nothing is silently discarded - evidence: e2e test
+  `sync-conflict.e2e.ts`.
 - Sync of 200 notes with 20 conflicts completes under 5 seconds on the
-  reference device.
+  reference device - evidence: command output from the timed sync script.
+
+**Terminal assertion:** after the two-device sync, query the stored note row
+on device A and show BOTH edits present - `fieldkit db notes get <id>`. Not
+the sync event count, not a green sync status: the row the agronomist reads.
 
 ## Definition of Done (the integration-truth floor)
 
