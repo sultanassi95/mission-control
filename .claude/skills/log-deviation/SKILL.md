@@ -56,3 +56,11 @@ Target: the current project's `deviations-register.md` (create it from
 Confirm the row + body to the founder in two lines, then proceed to the
 fix (or the escalation, if the deviation changes scope - scope changes are
 the founder's call, not the register's).
+
+## Who calls this
+
+The founder or the session at any drift - and two callers by rule:
+`/mission-flow` Phase 4, where a unit's record declares a deviation and it is
+logged BEFORE that unit's merge is accepted; and `/epic-flow`, where editing a
+document already marked `locked` is a logged deviation rather than a silent
+rewrite.

@@ -220,3 +220,12 @@ Give the founder a short, direct summary:
 Close by confirming the session's learning is captured in both stores as
 routed. This skill only performs the learn step; it does not end the
 session.
+
+## Candidates arrive from two places
+
+The session scan below is one source. The other is the day's ticket folders:
+`/mission-flow` Phase 8 appends its lesson candidates to each ticket's evidence
+log as it reports, because a chat window does not survive compaction and a file
+does. `/debrief` collects those before invoking this skill. Candidates from
+either source get no special treatment - they enter the same eight-rule gate,
+and most die there.

@@ -91,7 +91,7 @@ context, your harness's permission gates on tool use, and your own review
 gates. Prose does not sandbox a model - which is why liftoff ends by
 demonstrating the discipline (the refusal), not just declaring it.
 
-## The 18 skills
+## The 20 skills
 
 Pre-installed rituals: they ship at `.claude/skills/` inside the repo, so
 cloning IS installing and pulling updates them. The portfolio-wide ones
@@ -102,11 +102,22 @@ it talks). The full table is in
 
 - **Cadence:** `briefing` (morning) · `debrief` (evening) · `retro`
   (weekly)
-- **Delivery:** `mission-flow` (bug/task to merged-ready PR, 8 phases) ·
-  `triage` · `log-deviation` · `standup`
+- **Delivery:** `mission-flow` (one ticket to a checks-green PR, 8 phases) ·
+  `epic-flow` (work too big for one ticket: planned into fragments, executed
+  as mission-flow children) · `triage` · `log-deviation` · `standup`
 - **Learning:** `learn-from-session` · `promote-learnings`
-- **Portfolio:** `new-front` · `retire-front` · `map-front` · `preflight` · `spend`
+- **Portfolio:** `new-front` · `retire-front` · `map-front` · `preflight` ·
+  `spend` · `compliance-ref` (per-front standards the flows read)
 - **Docs:** `as-built` · `doc-voice` · `adr` · `docs-viewer`
+
+**Two altitudes, one discipline.** Anything that fits one ticket runs
+`mission-flow`; anything whose correct shape is several tickets runs
+`epic-flow`, which plans it into decoupled fragments behind a founder-locked
+tree and then executes each fragment as a full mission-flow child - one
+squashed commit each, one PR at the end. The child inherits every standard
+the single-ticket flow enforces; the epic layer adds only what per-ticket
+machinery cannot see: decomposition discipline, mechanical coverage of the
+plan, and a cross-fragment review.
 
 ## Updating doctrine
 

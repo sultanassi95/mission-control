@@ -264,6 +264,14 @@ is done only when the probe passes.**
   (index: `.claude/skills/README.md`). Want them in ALL your projects,
   not just this portfolio? Copy the folders to `~/.claude/skills/`. The
   cadence: `/briefing` mornings, `/debrief` evenings, `/retro` Fridays.
+- **Deliver at the right altitude:** `/mission-flow` takes one ticket to a
+  checks-green PR. When the work's correct shape is several tickets,
+  `/epic-flow` plans it into decoupled fragments behind a tree you lock, then
+  runs each fragment as a mission-flow child - Phase 0 of the single-ticket
+  flow exits to it the moment it classifies something as epic-sized.
+- **Declare your standards once:** `/compliance-ref` binds a front's profile -
+  which standards apply, which collector samples the evidence - and the review,
+  verify and PR steps read it. Fronts declaring nothing pay nothing.
 - **Grow:** `/learn-from-session` captures, `/promote-learnings`
   promotes into your standing rules - that loop is what makes this
   system sharper every week.

@@ -52,3 +52,10 @@ design drafts) and WAIT for founder approval before deleting anything.
 Deletion without a gate is exactly the destructive habit the doctrine
 bans. On approval: remove the plan file, link the as-built doc from the
 project's README or docs index, and note the promotion in `progress.md`.
+
+## Who calls this
+
+The founder, when a plan is done and verified - and `/epic-flow` at its E8
+close, where the thing being promoted is the epic folder's stage documents and
+the thing being retired is the plan they carried. The STOP gate before deletion
+is unchanged in both cases.

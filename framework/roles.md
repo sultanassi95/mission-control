@@ -28,6 +28,8 @@ Model tiers here mean: the cheap tier, the mid tier, and the frontier tier of wh
 | Security | a silent-failure / security review | mid · medium | - |
 | Docs / ADR | the session (light) | mid · low | - |
 | Orchestration | the session itself | frontier · high | final synthesis: xhigh |
+| Epic current-state audit (E1) | a read-only explorer agent | mid · medium | a data-path or infra surface in question: mid · high |
+| Epic architecture (E2) | an architect/plan agent + the session | frontier · high | - |
 
 **Review-depth is a third dial** (see `learning-seed/02-integration-truth-and-review-economy.md`): heavy two-stage review (spec, then quality, separate reviewers) for new core logic, security-critical code, and the make-or-break feature; lighter combined single-reviewer passes for small fixes, config, and mechanical threading. Log the choice as deliberate, never a silent skip.
 

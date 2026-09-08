@@ -112,3 +112,12 @@ Present the written files for founder review - no self-approval; the
 front is not live until the founder says so. On approval, re-read the
 board and state the new front's next action back in one line, proving the
 instance is coherent.
+
+## Ask once about standards
+
+If the new front carries real compliance obligations (an auditor, a
+certification, a client contract that names controls), say so in the interview
+and hand the founder `/compliance-ref --add --front <name> --standards <list>
+--monitor <collector>`. This skill does not write the profile block itself -
+that skill owns it, and two writers for one fact is exactly what the layer
+rules forbid.

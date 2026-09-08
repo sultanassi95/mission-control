@@ -28,6 +28,8 @@ the templates the skills instantiate.
 | `_mental-model.template.md` | LIFTOFF Stage 2 | `_command/mental-model.md` |
 | `_deviations-register.md.template` | `/log-deviation` | a project's `deviations-register.md` |
 | `_progress.md.template` | `/debrief` (first touch of a project) | a project's `progress.md` |
+| `_task.template.md` | `/triage`, `/mission-flow` Phase 2 | a ticket folder's `ticket.md` - criteria that name their evidence type, the declared terminal assertion, the Definition-of-Done checklist |
+| `_epic-fragment.template.md` | `/epic-flow` E3 | one fragment brief inside an epic's `30-fragments/` - the state machine an epic run reads between children |
 
 ## Root files
 

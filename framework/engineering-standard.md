@@ -32,7 +32,7 @@ flowchart LR
 
 | # | Layer | The standard we hold |
 |---|---|---|
-| 1 | Product & Requirements | vision to roadmap to epics to stories; explicit acceptance criteria + definition of done |
+| 1 | Product & Requirements | vision to roadmap to epics to stories; acceptance criteria that name their own evidence type (a test, a command's output, a `file:line`, or runtime) + definition of done |
 | 2 | Research & Validation | real-evidence-only; cited sources; no invented personas or claims |
 | 3 | UX | documented flows + wireframes; accessibility contract |
 | 4 | UI & Design System | tokens + components + brand; no one-off styling |
@@ -69,7 +69,10 @@ done.
    thing that works locally but cannot run in prod is a planning defect.
 4. **Terminal artifact verified** - query the thing the user consumes, broken
    down by the unit that can partially fail; a green checkpoint is a promise,
-   not a receipt.
+   not a receipt. **The command that proves it is DECLARED when the ticket is
+   written, not chosen after the implementation exists** - choosing the proof
+   once the code is in front of you invites choosing one that passes. A better
+   assertion found later is adopted as a logged deviation, never a silent swap.
 5. **Designed for scale** - bulk semantics, idempotency, backpressure; N rows is
    one bulk call plus a queue, never N requests.
 6. **Tested at the altitude of the risk** - user-critical flows get e2e; unit is

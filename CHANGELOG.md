@@ -6,6 +6,26 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-09-09: the documentation surface is reconciled with the 2026-09-02/09
+  burst, which had shipped two skills, a tool, a template and eighteen tickets
+  of flow hardening while leaving every top-level doc untouched. A scan of all
+  79 tracked docs found `epic-flow` and `compliance-ref` appearing ZERO times
+  in README, the skills index, LIFTOFF, the CONSTITUTION, task-board,
+  continuity-stack, and the generated operating CLAUDE.md - so a cloner could
+  not discover half of what shipped. Corrected: the skill count (18 -> 20) and
+  the outcome ("merged-ready PR" -> checks-green); both altitudes named
+  wherever delivery is described; the Definition-of-Done floor now requires the
+  proving command to be DECLARED when the ticket is written rather than chosen
+  once the code exists; the continuity stack gains the three layers it did not
+  know about (the deviations register, the epic folder, the lesson-candidate
+  buffer); task-board documents the epic folder, the fragment brief as the
+  state machine, the EPIC size class and the coverage gate; the kit inventory
+  lists the task and epic-fragment templates; the shipped fieldkit example was
+  teaching the pre-change ticket shape and now matches the template; and nine
+  skills name the callers the burst gave them. Reconciled as an epic
+  (MC-043, children MC-044..049) - the doc surface was the first thing
+  epic-flow planned that was not itself.
+
 - 2026-09-03: every mission-flow phase now names its skills roster in place -
   what implements the phase (yours or CLI-shipped), where "none" is the honest
   entry - plus a consolidated deny-list with reasons (the attribution-trailer
