@@ -11,8 +11,14 @@
 3. **The board** - `_command/trackers/fronts.md` *(auto-loaded below)*
 4. On demand: `_command/mental-model.md` (the whole picture) ·
    `framework/roles.md` (before dispatching sub-agents) ·
-   `framework/task-board.md` (the work queues) ·
+   `framework/task-board.md` (the work queues, and the epic folder shape) ·
    `framework/continuity-stack.md` · `.claude/skills/README.md` (the rituals).
+
+**Delivery has two altitudes.** `/mission-flow` runs one ticket to a
+checks-green PR; `/epic-flow` plans work bigger than one ticket into a
+founder-locked fragment tree and executes each fragment as a mission-flow
+child. Where a front declares standards via `/compliance-ref`, the review,
+verify and PR steps read that profile; fronts declaring nothing pay nothing.
 
 ## The fronts
 <PLACEHOLDER-FRONTS: one bullet per front - name, posture, one line;
