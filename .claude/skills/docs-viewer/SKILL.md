@@ -871,3 +871,11 @@ Tell the user:
 - Fresh: `"Created docs-viewer-server.cjs and docs-viewer.html, added marked + dompurify + @mermaid-js/mermaid-cli devDeps and the docs-viewer script, and installed. Run npm run docs-viewer - opens at http://localhost:4321 (auto-detects free port). The root README opens by default; the file tree and content update live. Mermaid diagrams are rendered to SVG in the background on first run and cached in .docs-viewer-cache/ - delete that directory to force regeneration."`
 - Update mode: `"docs-viewer is already live-reload capable. Run npm run docs-viewer to launch it."` (If the existing copy predates Mermaid support or the local-vendoring fix, offer to regenerate: it adds diagram pre-rendering to .docs-viewer-cache/, removes the CDN dependency, fixes the slow file-list scan, and adds the collapsible/resizable sidebar.)
 - Legacy migration: `"Renamed docs-viewer-server.js → docs-viewer-server.cjs and updated the npm script (your project has \"type\": \"module\", which made Node refuse to load the .js file as CommonJS). Run npm run docs-viewer."`
+
+## Launching it somewhere other than the project root
+
+The generated server serves the directory it is generated into. `/epic-flow`
+E0 uses that deliberately: it brings a viewer up at the FRONT's portfolio
+directory (`_command/portfolio/<front>/`) so an epic's stage documents render
+live while the plan is being written - reusing a viewer already serving that
+directory when one is running, and leaving it running at every stage exit.

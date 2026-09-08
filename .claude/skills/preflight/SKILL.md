@@ -86,3 +86,14 @@ fixed.
 A short table: check, PASS/FAIL, evidence. Then the cold-read summary.
 FAILs come with the exact file to fix and the proposed fix, presented for
 approval - preflight diagnoses, the founder decides.
+
+## Also audit the surfaces the epic layer added
+
+Four surfaces exist now that predate no check: the project's
+`deviations.md` register (present where drift has been logged, format per
+`/log-deviation`), any epic folder under `tasks/` (its stage documents each
+carry a `status:` header, and a `locked` document edited without a logged
+deviation is a finding), each fragment brief's state field (a brief reading
+`in-progress` with no branch behind it is stale), and a front's declared
+compliance or quality profile block (declared standards with no reader is a
+finding, as is a profile naming a collector that no PR evidence reaches).

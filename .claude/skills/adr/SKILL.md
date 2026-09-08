@@ -54,3 +54,11 @@ Link the ADR from the thing it governs (the spoke, the plan, the as-built
 doc) and confirm to the founder in one line: number, title, where it
 lives. If the decision was the founder's and the wording infers their
 intent anywhere, show them the Context + Decision text before filing.
+
+## Who proposes a record
+
+The founder, at any decision worth remembering - and two flows that propose
+them automatically: `/mission-flow` Phase 8 lists a one-line proposal per
+design fork settled during the run, and `/epic-flow` records each fork settled
+at E2 plus every `--decide minor` entry enumerated at E8. A proposal is filed
+only on the founder's yes; nothing here self-approves.

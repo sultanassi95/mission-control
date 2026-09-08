@@ -64,3 +64,11 @@ with the biggest expected saving, worded as a rule the founder can approve
 into practice (and, if it keeps proving out, promote via
 `/promote-learnings`). One adjustment per report keeps the dial-turning
 deliberate.
+
+## Epic runs aggregate per child
+
+An epic run writes one set of dispatch records per CHILD, all on one branch.
+Report it as a per-child table (child key, model x effort, tokens) plus the
+epic total, so an expensive child is visible rather than averaged away. The
+no-invented-numbers rule is unchanged: where the harness surfaced nothing, say
+so for that child rather than estimating it.

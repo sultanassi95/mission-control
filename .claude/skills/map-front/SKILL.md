@@ -82,3 +82,9 @@ medium - edge inference) and `--verbosity` per the universal grammar.
   older than the front's last structural change.
 - Non-git and registered-in-place projects map identically - the scan
   follows the spoke's recorded path.
+
+## Who reads the map
+
+`/mission-flow` Phase 1, for the blast radius a ticket must name - and
+`/epic-flow` E1, where the same edges scope an epic's current-state audit
+before any fragment is cut.
