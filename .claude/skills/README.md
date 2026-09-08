@@ -4,6 +4,8 @@
 flowchart LR
   subgraph DAY["a working day"]
     B["/briefing<br/>morning · lock the day"] --> W["/mission-flow · /triage<br/>the work itself"]
+    W -.->|too big for one ticket| E["/epic-flow<br/>plan · lock · run children"]
+    E -.->|one child at a time| W
     W --> D["/debrief<br/>evening · campsite clean"]
   end
   D -->|invokes| LS["/learn-from-session"]
@@ -12,7 +14,7 @@ flowchart LR
   P["/preflight · /spend<br/>on demand"] -.- DAY
 ```
 
-Eighteen skills, five groups - each maps to a ritual a real engineering
+Twenty skills, five groups - each maps to a ritual a real engineering
 lead already runs. None overlaps another's job. The portfolio-wide ones
 take `--front <name>` / `--project <name>` scope flags: unscoped keeps
 the whole-portfolio default; scoped invocations read and write only that
@@ -61,7 +63,8 @@ default):
 | **Cadence** | `briefing` | Read the board, report state per front, lock today's ONE objective | every morning |
 | | `debrief` | Roll up progress, rewrite the pointer, surface founder-gated items, capture lessons | every evening |
 | | `retro` | Shipped / live / stuck per front, scoreboard, week-scale lessons, next week locked | Fridays |
-| **Delivery** | `mission-flow` | Bug/task to merged-ready PR: the fixed 8-phase playbook (Jira, GitHub Issues, or the native task board) | per work item |
+| **Delivery** | `mission-flow` | One ticket to a checks-green PR: the fixed 8-phase playbook (Jira, GitHub Issues, or the native task board) | per work item |
+| | `epic-flow` | Work too big for one ticket: gated stages E0-E6 plan it into decoupled fragments behind a founder-locked tree, then each fragment runs as a mission-flow child - one squashed commit each, one epic PR | when the shape is several tickets |
 | | `triage` | Messy inbox to per-project task boards, one table, STOP-gated | when items pile up |
 | | `log-deviation` | Canonical register row + body, logged BEFORE the fix | on any drift from plan |
 | | `standup` | Paste-ready standup for Slack / Jira / WhatsApp | end of day |
@@ -72,6 +75,7 @@ default):
 | | `map-front` | Dependency graph per front at chosen depth (`--depth 1|2|3`); feeds mission-flow's blast radius | intersecting projects |
 | | `preflight` | Instance health check + cold-read proof + size-cap enforcement | after pulls / changes |
 | | `spend` | The token-economy meter: model x effort tally, doctrine violations, one adjustment | heavy days |
+| | `compliance-ref` | Binds a per-front profile - which standards apply, which collector samples the evidence - that mission-flow's review, verify and PR steps then read | once per front with obligations |
 | **Docs** | `as-built` | Promote a done+verified plan into a living doc; retire the plan | feature ships |
 | | `doc-voice` | Neutral professional register pass; removes AI tells and process leakage | before a doc ships |
 | | `adr` | Decision record: context, decision, alternatives rejected, consequences | decisions |
