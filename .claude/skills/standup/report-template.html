@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{SCOPE}} standup · {{WINDOW_SHORT}}</title>
+<!--
+  standup report template  ·  mission-control  ·  MC-053
+
+  SELF-CONTAINED BY CONTRACT. No CDN, no web font, no remote image, no fetch.
+  The only http(s) strings in the rendered file are the tracker and PR links
+  that are the report's own content. This file must open on a machine with no
+  network, which is also what keeps a confidential front's report local.
+
+  CONTRAST: every foreground/background pairing in BOTH themes was computed
+  against WCAG AA (4.5:1); the lowest is 4.52:1. The design hook's low-contrast
+  rule is suppressed for this file in .impeccable/config.json because it pairs
+  dark-mode tokens with the light-mode background and cannot read the media
+  query - but that suppression is file-wide, so it will NOT catch a real
+  regression here. Recompute by hand if you change a colour.
+
+  Placeholders the skill fills:
+    {{SCOPE}} {{SCOPE_ORIGIN}} {{WINDOW}} {{WINDOW_SHORT}} {{GENERATED}}
+    {{WINDOW_ORIGIN}}  which rule set the window, e.g.
+                       "continuing the last smileshape report, 29 Sep 14:12"
+    {{COUNTS}}      one <span class="count"> per state
+    {{TIMELINE}}    day > group > item, see the markup sketch at the bottom
+    {{EXCLUSIONS}}  the inferred-scope footer, or empty
+    {{COPYBLOCKS}}  one <section class="copy"> per chat format
+    {{SOURCES}}     what was read, and what could not be
+-->
+<style>
+  :root {
+    --bg: #ffffff;
+    --surface: #f7f7f8;
+    --line: #e4e4e7;
+    --ink: #18181b;
+    --ink-soft: #52525b;
+    --ink-faint: #6b6b74;
+    --accent: #3f3f46;
+    --merged-bg: #e7f5ec; --merged-ink: #145c31;
+    --openpr-bg: #fff4e0; --openpr-ink: #7a4f00;
+    --new-bg: #e8f0fe;    --new-ink: #1a4f9c;
+    --event-bg: #efeff1;  --event-ink: #55555e;
+    --out-bg: #f2f2f4;    --out-ink: #6e6e76;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141416;
+      --surface: #1c1c1f;
+      --line: #2c2c31;
+      --ink: #ededf0;
+      --ink-soft: #a9a9b2;
+      --ink-faint: #84848d;
+      --accent: #c9c9d1;
+      --merged-bg: #14331f; --merged-ink: #6fd898;
+      --openpr-bg: #3a2a08; --openpr-ink: #f0b944;
+      --new-bg: #14284a;    --new-ink: #7fb0f5;
+      --event-bg: #26262b;  --event-ink: #a5a5ae;
+      --out-bg: #232327;    --out-ink: #8d8d96;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 2.5rem 1.25rem 4rem;
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.6 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 56rem; margin: 0 auto; }
+
+  /* ---- header ------------------------------------------------------- */
+  header { border-bottom: 1px solid var(--line); padding-bottom: 1.25rem; }
+  h1 { margin: 0 0 .3rem; font-size: 1.4rem; letter-spacing: -.01em; }
+  .window { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+  .provenance { margin-top: .25rem; color: var(--ink-faint); font-size: .82rem; }
+  .origin {
+    display: inline-block; margin-left: .5rem; padding: .05rem .45rem;
+    font-size: .72rem; text-transform: uppercase; letter-spacing: .06em;
+    border: 1px solid var(--line); border-radius: 3px; color: var(--ink-faint);
+  }
+
+  /* ---- counts strip: carries what state-grouping used to ------------ */
+  .counts {
+    display: flex; flex-wrap: wrap; gap: .4rem .5rem;
+    margin: 1rem 0 2rem; padding: 0; list-style: none;
+  }
+  .count {
+    padding: .2rem .55rem; border-radius: 4px; font-size: .82rem;
+    background: var(--surface); color: var(--ink-soft);
+    font-variant-numeric: tabular-nums;
+  }
+  .count strong { color: var(--ink); font-weight: 600; }
+
+  .filter { display: flex; gap: .4rem; margin: 0 0 1.75rem; }
+  .filter button.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+  /* ---- timeline ------------------------------------------------------ */
+  /* <details>, so a day collapses with no JS and stays keyboard reachable.
+     The h2 lives inside the summary to keep the heading outline intact. */
+  .day { margin-bottom: 2.25rem; }
+  .day > summary {
+    cursor: pointer; list-style: none; margin-bottom: 1rem;
+    padding-bottom: .4rem; border-bottom: 1px solid var(--line);
+    display: flex; align-items: baseline; gap: .5rem;
+  }
+  .day > summary::-webkit-details-marker { display: none; }
+  .day > summary::before {
+    content: "\25B8"; color: var(--ink-faint); font-size: .7rem;
+    transition: transform .12s ease; transform-origin: center;
+  }
+  .day[open] > summary::before { transform: rotate(90deg); }
+  .day > summary:hover h2 { color: var(--ink-soft); }
+  .day > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .day > summary h2 {
+    display: inline; margin: 0;
+    font-size: .82rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .08em; color: var(--ink-faint);
+  }
+  .group { margin: 0 0 1.35rem; padding-left: 1rem; border-left: 2px solid var(--line); }
+  .group > h3 {
+    margin: 0 0 .5rem; font-size: .9rem; font-weight: 600;
+    color: var(--accent); font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  .item { display: flex; gap: .7rem; padding: .35rem 0; align-items: baseline; flex-wrap: wrap; }
+  .time {
+    flex: 0 0 3.2rem; color: var(--ink-faint); font-size: .82rem;
+    font-variant-numeric: tabular-nums;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .key {
+    flex: 0 0 5.2rem; font-weight: 600; font-size: .86rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .key.none { color: var(--ink-faint); font-weight: 400; }
+  .chip {
+    flex: 0 0 auto; padding: .1rem .45rem; border-radius: 3px;
+    font-size: .72rem; font-weight: 600; letter-spacing: .02em; white-space: nowrap;
+  }
+  .chip.done       { background: var(--merged-bg); color: var(--merged-ink); }
+  .chip.inprogress { background: var(--openpr-bg); color: var(--openpr-ink); }
+  /* Sub-status: merged / in PR / deploying / deployed. Quieter than the status
+     on purpose - it says HOW, and the reader is scanning for WHETHER. */
+  .sub {
+    flex: 0 0 auto; font-size: .72rem; color: var(--ink-faint); white-space: nowrap;
+  }
+  .what { flex: 1 1 18rem; min-width: 0; }
+
+  /* The title carries the ticket's own words; the summary is on hover, so a
+     reader scanning nine rows is not made to read past it. */
+  .what[data-summary] { border-bottom: 1px dotted var(--line); cursor: help; position: relative; }
+  .what[data-summary]:hover::after,
+  .what[data-summary]:focus-visible::after {
+    content: attr(data-summary);
+    position: absolute; left: 0; top: calc(100% + .4rem); z-index: 10;
+    width: max-content; max-width: 32rem; padding: .55rem .7rem;
+    background: var(--ink); color: var(--bg);
+    border-radius: 5px; font-size: .82rem; line-height: 1.45;
+    white-space: normal; box-shadow: 0 2px 10px rgba(0,0,0,.18);
+  }
+  .links { flex: 0 0 auto; display: flex; gap: .55rem; font-size: .82rem; }
+  a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--line); }
+  a:hover { border-bottom-color: currentColor; }
+
+  /* ---- exclusions: only rendered when the scope was inferred -------- */
+  /* No side accent. A thick coloured border on one edge of a card is the most
+     recognisable tell of a generated interface, and the surface tint plus a
+     hairline border already separate this from the timeline. */
+  .exclusions {
+    margin: 0 0 2rem; padding: .7rem .9rem; border-radius: 5px;
+    background: var(--surface); color: var(--ink-soft); font-size: .88rem;
+    border: 1px solid var(--line);
+  }
+  .exclusions code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .85em;
+  }
+
+  /* ---- copy blocks --------------------------------------------------- */
+  /* Its own h2, so the copy blocks do not read as belonging to the last day of
+     the timeline. Three h3s trailing an h2 from two sections earlier breaks the
+     outline a screen reader navigates by. */
+  /* Collapsed by default: these are a tool, not the report. Three fenced
+     blocks open would be most of the page, and the reader who wants one knows
+     which one. Same <details> mechanism as a day, so the behaviour is learned
+     once. */
+  .chat > summary {
+    cursor: pointer; list-style: none;
+    margin: 2.5rem 0 1rem; padding-bottom: .4rem;
+    border-bottom: 1px solid var(--line);
+    display: flex; align-items: baseline; gap: .5rem;
+  }
+  .chat > summary::-webkit-details-marker { display: none; }
+  .chat > summary::before {
+    content: "\25B8"; color: var(--ink-faint); font-size: .7rem;
+    transition: transform .12s ease;
+  }
+  .chat[open] > summary::before { transform: rotate(90deg); }
+  .chat > summary:hover h2 { color: var(--ink-soft); }
+  .chat > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .chat > summary h2 {
+    display: inline; margin: 0;
+    font-size: .82rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .08em; color: var(--ink-faint);
+  }
+  .copy { margin-bottom: 1.25rem; }
+  .copy-head { display: flex; align-items: center; gap: .6rem; margin-bottom: .4rem; }
+  .copy-head h3 {
+    margin: 0; font-size: .78rem; text-transform: uppercase;
+    letter-spacing: .07em; color: var(--ink-faint); font-weight: 600;
+  }
+  button {
+    font: inherit; font-size: .76rem; padding: .18rem .6rem; cursor: pointer;
+    background: var(--surface); color: var(--ink-soft);
+    border: 1px solid var(--line); border-radius: 4px;
+  }
+  button:hover { color: var(--ink); }
+  pre {
+    margin: 0; padding: .85rem 1rem; overflow-x: auto; border-radius: 5px;
+    background: var(--surface); border: 1px solid var(--line);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: .8rem; line-height: 1.55; white-space: pre-wrap; word-break: break-word;
+  }
+
+  footer {
+    margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid var(--line);
+    color: var(--ink-faint); font-size: .82rem;
+  }
+
+  @media print {
+    body { padding: 0; color: #000; background: #fff; }
+    .copy, button, .chat { display: none; }
+    .day[open] > summary::before, .day > summary::before { display: none; }
+    a { border: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>{{SCOPE}}</h1>
+    <div class="window">{{WINDOW}}<span class="origin">{{SCOPE_ORIGIN}}</span></div>
+    <div class="provenance">{{WINDOW_ORIGIN}}</div>
+  </header>
+
+  <ul class="counts">{{COUNTS}}</ul>
+
+  <div class="filter">
+    <button data-filter="all" class="on">All</button>
+    <button data-filter="done">Done</button>
+    <button data-filter="inprogress">In progress</button>
+  </div>
+
+  {{EXCLUSIONS}}
+
+  {{TIMELINE}}
+
+  <details class="chat">
+    <summary><h2>Copy for chat</h2></summary>
+    {{COPYBLOCKS}}
+  </details>
+
+  <footer>{{SOURCES}}<br>Generated {{GENERATED}}. Local file, nothing uploaded.</footer>
+
+</div>
+
+<script>
+  // Inline and tiny on purpose: the page must work from file:// with no network.
+  // Filter: hides items, then hides any group or day left empty, so the
+  // timeline never shows a repo heading with nothing under it.
+  document.querySelectorAll('button[data-filter]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var want = b.getAttribute('data-filter');
+      document.querySelectorAll('button[data-filter]').forEach(function (o) { o.classList.remove('on'); });
+      b.classList.add('on');
+      document.querySelectorAll('.item').forEach(function (it) {
+        var chip = it.querySelector('.chip');
+        var is = chip ? chip.className.replace('chip', '').trim() : '';
+        it.style.display = (want === 'all' || is === want) ? '' : 'none';
+      });
+      document.querySelectorAll('.group').forEach(function (g) {
+        var any = [].slice.call(g.querySelectorAll('.item')).some(function (i) { return i.style.display !== 'none'; });
+        g.style.display = any ? '' : 'none';
+      });
+      document.querySelectorAll('.day').forEach(function (d) {
+        var any = [].slice.call(d.querySelectorAll('.group')).some(function (g) { return g.style.display !== 'none'; });
+        d.style.display = any ? '' : 'none';
+      });
+    });
+  });
+
+  document.querySelectorAll('button[data-copy]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var pre = document.getElementById(b.getAttribute('data-copy'));
+      if (!pre) return;
+      var done = function () { b.textContent = 'copied'; setTimeout(function () { b.textContent = 'copy'; }, 1400); };
+      // navigator.clipboard is unavailable on file:// in some browsers, so the
+      // execCommand path is a real fallback rather than belt-and-braces.
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(pre.innerText).then(done);
+      } else {
+        var t = document.createElement('textarea');
+        t.value = pre.innerText; document.body.appendChild(t); t.select();
+        try { document.execCommand('copy'); done(); } finally { document.body.removeChild(t); }
+      }
+    });
+  });
+</script>
+
+<!--
+  MARKUP SKETCH - what the skill emits into each placeholder.
+
+  {{COUNTS}}
+    <li class="count"><strong>7</strong> items</li>
+    <li class="count"><strong>3</strong> merged</li>
+
+  {{TIMELINE}}
+    <details class="day" open>
+      <summary><h2>29 Sep 2026</h2></summary>
+      <div class="group">
+        <h3>annotation-studio-3d</h3>
+        <div class="item">
+          <span class="time">18:21</span>
+          <span class="key">AI-2151</span>
+          <span class="chip done">Done</span>
+          <span class="sub">merged</span>
+          <span class="what" data-summary="Ships honest counts on the project import
+            screen and a pool that only offers data not already held.">Duplicate-aware
+            import</span>
+          <span class="links"><a href="...">ticket</a><a href="...">PR #190</a></span>
+        </div>
+        NOTE: the visible text is the TICKET'S OWN title; the summary is the hover.
+        Do not nest an HTML comment in here - comments cannot nest, the browser
+        ends the outer one at the inner close delimiter, and the rest of this
+        sketch renders as a second, fake copy-for-chat section in every report.
+      </div>
+    </details>
+
+  {{EXCLUSIONS}}  (omit entirely when the scope was given)
+    <p class="exclusions">Scope inferred from this session: smileshape.
+      4 items on 2 other fronts fall in this window and are not shown -
+      run <code>/standup --all</code>.</p>
+
+  {{COPYBLOCKS}}
+    <section class="copy">
+      <div class="copy-head"><h3>Slack</h3><button data-copy="fmt-slack">copy</button></div>
+      <pre id="fmt-slack">...exactly what ## Formatting rules specifies...</pre>
+    </section>
+-->
+</body>
+</html>
