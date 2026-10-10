@@ -2,7 +2,7 @@
 
 > Auto-load at every session start. **Who we are + how we operate** across all your fronts.
 > Consolidates a governance kit with an orchestration method, plus house rules neither had (lineage: `kit/README.md`).
-> Full templates: `kit/`. Routing: `routing-grid.md`. Memory: `continuity-stack.md`. Diagrams: `visualization-contract.md`.
+> Full templates: `kit/`. Routing: `routing-grid.md`. Memory: `continuity-stack.md`. Diagrams: `visualization-contract.md`. UI: `design-standard.md`.
 
 ```mermaid
 flowchart LR
