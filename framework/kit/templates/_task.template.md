@@ -69,6 +69,9 @@ An instance may bind a sharper version in `_command/CONSTITUTION.local.md`.
   to fail: break what it guards, see red, restore. A threshold equal to the
   current value, a mock missing the key the code reaches for, or an expectation
   computed from config that is empty at run time are all green and vacuous.
+  The red output names the targeted assertion and the break is shown applied;
+  a status read after a pipe measures the pager, so the exit status is
+  captured on the command's own line.
 - [ ] **No guess worn as a finding** - root cause shown with literal evidence;
   assumptions labelled; the outward artifacts (commit, PR, tracker) read as an
   engineer authored them, zero process vocabulary.

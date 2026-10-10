@@ -690,6 +690,22 @@ code reaches for, and an expectation computed from empty config are all green
 and all vacuous. The control's literal output - the break, the red, the
 restore - lands in the unit's record; an unproven control is a comment.
 
+**Read the red, do not count it (`_command/learning/13`, the appended
+sections).** Four instruments lie in the same direction. The red run is read
+by name: confirm the break applied by asserting on the edited text (a `grep -c`
+for the broken form in the same command as the run), and the pasted output
+names the assertion that failed, because a harness that died before reporting
+also exits non-zero and proves nothing about the check. A status read after a
+pipe measures the pager: `cmd | tail; echo $?` reports tail, which never
+fails, so capture the exit status on the command's own line
+(`cmd > log 2>&1; rc=$?`) and format the log afterwards; three real runs
+printed a failure and `exit=0` in the same breath, one of them a security
+gate. A gate that repairs its input cannot fail: a CI lint or format step runs
+its check form (`--check`, `-l`, no `--fix`, `--write` or `--auto-correct`),
+and the drift it had been hiding lands in the same change. A test rewritten to
+cure vacuity is a new untested change: break the guarded thing again, because
+the rewrite can be hollow for a reason the original was not.
+
 **Each commit's green is evidence, not a claim.** The unit's record carries
 per-commit literal output (build + affected tests at that commit); when a unit
 produced more than two commits, the orchestrator spot-checks one mid-stack
