@@ -36,7 +36,7 @@ default):
   **`/spend`**, the skill: that is the METER (retrospective, reads the
   records); `--spend` is the DIAL (prospective, sets one invocation's
   posture).
-- **`--thinking <low | medium | high | max>`** - how HARD the agent
+- **`--thinking <low | medium | high | xhigh | max>`** - how HARD the agent
   reasons about the judgments inside one invocation. The vocabulary is
   the routing grid's effort dial on purpose - one dial, one vocabulary.
   Three real effects, one honest limit: it sets deliberation depth in

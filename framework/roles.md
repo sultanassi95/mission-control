@@ -12,7 +12,7 @@ flowchart TB
   T -->|orchestrate, integrate, report| O["frontier tier · high"]
 ```
 
-Model tiers here mean: the cheap tier, the mid tier, and the frontier tier of whatever model family your harness runs (on Claude Code today: haiku, sonnet, opus-class).
+Model tiers here mean: the cheap tier, the mid tier, and the frontier tier of whatever model family your harness runs (on Claude Code: the current cheap, mid and frontier models plus the one above the frontier for final synthesis - named, priced and dated in your instance's `CONSTITUTION.local.md`, because the framework speaks in tiers and never pins a model).
 
 **Ceilings first:** the routing ceilings in `_command/CONSTITUTION.local.md` cap these presets - a frugal posture steps each row down; a missing tier maps to the nearest available one (no frontier tier at all: every frontier row falls to the mid tier, and judgment work earns `--thinking high` instead). Presets are defaults, not entitlements. An invocation's `--spend lean` steps dispatches one further tier down, always below the ceilings, never above.
 
