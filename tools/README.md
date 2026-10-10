@@ -145,4 +145,4 @@ every comment, and fails when a count rises above the baseline recorded in
 A front adopting the standard late wires it at today's count: drift stops on
 that day, and each conversion lowers the number for good. A front whose own
 tests already hold a value class keeps that idiom. Tests:
-`tools/tests/token-lint.tests.sh`, 13 cases with negative controls both ways.
+`tools/tests/token-lint.tests.sh`, 14 cases with negative controls both ways.

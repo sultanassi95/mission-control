@@ -463,7 +463,7 @@ always wrong for the entire set.
 `framework/design-standard.md`).** A ticket is UI-shaped when it adds or
 changes something a user sees: a view, a component, a state, copy, layout.
 For those, Phase 1 reads the front's DESIGN.md beside the spoke (a UI front
-without one gets it from `kit/templates/_design.template.md` in this ticket,
+without one gets it from `framework/kit/templates/_design.template.md` in this ticket,
 derived from the shipped code, before any change), and the approach carries a
 comp of each touched view plus its row of the six-state matrix: empty,
 loading, error, long content, direction, narrow. The comp is drawn by the
