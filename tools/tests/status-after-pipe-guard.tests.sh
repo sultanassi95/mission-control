@@ -15,4 +15,8 @@ run "PASSES: PIPESTATUS read"                                0 Bash 'npm test | 
 run "PASSES: a pipe with no status read"                     0 Bash 'git log --oneline | head -5'
 run "PASSES: a status read with no pipe"                     0 Bash 'npm test; echo $?'
 run "IGNORES: a non-Bash tool"                               0 Read 'npm test | tail; echo $?'
+run "PASSES: a pipe elsewhere, the status captured directly (first live false positive)" 0 Bash 'git show main:f | grep -c x; bash t.sh > /tmp/l 2>&1; rc=$?; tail -1 /tmp/l'
+run "BLOCKS: a pipe into grep then an if on the status"      2 Bash 'make check | grep -v warn
+if [ $? -ne 0 ]; then echo bad; fi'
+run "BLOCKS: the status read inside the same statement, after the pipe" 2 Bash 'npm test | tail -5 && rc=$?'
 echo "---"; echo "status-after-pipe-guard tests: $PASS passed, $FAIL failed"; [ "$FAIL" -eq 0 ]
