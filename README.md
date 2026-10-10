@@ -102,7 +102,7 @@ it talks). The full table is in
 
 - **Cadence:** `briefing` (morning) · `debrief` (evening) · `retro`
   (weekly)
-- **Delivery:** `product-flow` (an idea to a launched product, four gates) ·
+- **Delivery:** `product-flow` (an idea to a launched product, five gates) ·
   `mission-flow` (one ticket to a checks-green PR, 8 phases) ·
   `epic-flow` (work too big for one ticket: planned into fragments, executed
   as mission-flow children) · `triage` · `log-deviation` · `standup`

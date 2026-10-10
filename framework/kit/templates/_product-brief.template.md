@@ -4,9 +4,10 @@ name: <working name - a placeholder until naming in Phase 3>
 front: <front>
 created: <YYYY-MM-DD>
 budget: <the --budget envelope>
-research_ttl_days: <e.g. 30 - claims older than this are re-checked before Gate 3a>
+research_ttl_days: <e.g. 30 - claims older than this are re-checked before the deploy gate>
 gates:
   bet: <pending | YYYY-MM-DD, the founder's word>
+  design: <pending | ...>
   blueprint: <pending | ...>
   deploy: <pending | ...>
   go_public: <pending | ...>
@@ -54,7 +55,7 @@ Checked at every gate. Any one tripped is a stop recommendation, not a
 rationalisation.
 
 - <e.g. Discover finds a free alternative that does the job fully>
-- <e.g. unit economics at the Gate 1 price cannot cover the Phase 4 cost model>
+- <e.g. unit economics at the price set before the bet cannot cover the Phase 4 cost model>
 - <e.g. the launch bar missed by more than half at the first Learn run>
 
 ## Non-goals

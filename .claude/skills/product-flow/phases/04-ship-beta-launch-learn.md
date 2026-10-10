@@ -6,12 +6,12 @@ founder's behalf.
 
 ```mermaid
 flowchart LR
-  G3a{{Gate 3a}} --> D[deploy] --> B[8 Beta<br/>invited users] --> G3b{{Gate 3b}} --> L[9 Launch] -.->|weeks later| R[10 Learn<br/>--learn]
+  G3a{{deploy}} --> D[deploy] --> B[8 Beta<br/>invited users] --> G3b{{go public}} --> L[9 Launch] -.->|weeks later| R[10 Learn<br/>--learn]
 ```
 
 ## Phase 8 - Deploy and beta
 
-1. **Deploy** by the skeleton's separate act, under the Gate 3a grant. Read
+1. **Deploy** by the skeleton's separate act, under the deploy gate grant. Read
    back what is live (the health endpoint's release identifier, not the
    deploy job's colour) before calling it deployed.
 2. **Watch the first hour:** alarms quiet, error rate and latency within
@@ -28,12 +28,12 @@ readiness (account deletion, privacy labels, screenshots), payments moving
 from test to live, the announcement drafts, the support channel, and what
 is still untested.
 
-**Gate 3b - go public.** It merges into Gate 3a when launch falls on deploy
+**The go-public gate.** It merges into the deploy gate when launch falls on deploy
 day.
 
 ## Phase 9 - Launch
 
-Under the Gate 3b grant:
+Under the go-public gate grant:
 
 - Store submission, and the review loop: a rejection is read, fixed in a
   ticket, and resubmitted.

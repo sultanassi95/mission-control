@@ -64,7 +64,7 @@ default):
 | | `debrief` | Roll up progress, rewrite the pointer, surface founder-gated items, capture lessons | every evening |
 | | `retro` | Shipped / live / stuck per front, scoreboard, week-scale lessons, next week locked | Fridays |
 | **Delivery** | `mission-flow` | One ticket to a checks-green PR: the fixed 8-phase playbook (Jira, GitHub Issues, or the native task board) | per work item |
-| | `product-flow` | A product from an idea to launch: frame, research, define, design, architect, then each epic via epic-flow, verify, deploy, beta, launch; four founder gates at irreversibility and money; `--learn` weeks later | an idea, a vision or a problem to build for |
+| | `product-flow` | A product from an idea to launch: frame, research, define, design, architect, then each epic via epic-flow, verify, deploy, beta, launch; five founder gates, at irreversibility, money and the design; `--learn` weeks later | an idea, a vision or a problem to build for |
 | | `epic-flow` | Work too big for one ticket: gated stages E0-E6 plan it into decoupled fragments behind a founder-locked tree, then each fragment runs as a mission-flow child - one squashed commit each, one epic PR | when the shape is several tickets |
 | | `triage` | Messy inbox to per-project task boards, one table, STOP-gated | when items pile up |
 | | `log-deviation` | Canonical register row + body, logged BEFORE the fix | on any drift from plan |
@@ -108,12 +108,12 @@ commit + push + PR creation for that one ticket, expiring when the PR
 opens. `epic-flow`'s lock, or its `--auto` invocation, carries the same
 grant for the epic branch alone: landing each child as one squashed commit,
 pushing that branch, and opening the epic PR, never merging it into the base.
-`product-flow` grants only what each of its four gates writes into its pack:
+`product-flow` grants only what each of its five gates writes into its pack:
 the blueprint gate grants creating the product's repo, committing its
-skeleton, running each epic, and merging epic PRs into that repo's main until
-the deploy gate, because the skeleton makes deploy a separate act; the deploy
-and go-public gates grant the deploy and the launch steps. Nothing is ever
-posted, sent or paid on the founder's behalf.
+skeleton, and running each epic stacked on the one before, each with its own
+PR that the founder merges; the deploy and go-public gates grant the deploy
+and the launch steps. It never merges a PR, and nothing is ever posted, sent
+or paid on the founder's behalf.
 Every other skill observes the standing default: no git writes
 unless the founder asks in the moment. Skills that write files
 (`triage`, `as-built`, `promote-learnings`, `retire-front`) carry their
