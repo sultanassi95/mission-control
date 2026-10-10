@@ -11,10 +11,9 @@ flowchart LR
 
 ## Phase 3 - Design
 
-Run `/design-new` in full mode, on the product's front, with one change
-forced by the order: the stack is not chosen yet, so tokens are written in
-the DTCG format only, and the component foundation is named as a
-requirement ("accessible primitives for a web app"), not a package.
+Run `/design-new --front <front> --stack-neutral --local` in full mode: the
+stack is chosen in Architect, so tokens are DTCG only and the foundation is a
+requirement, and the proof stays on the founder's machine.
 
 1. Information architecture and the key flows, from the story map's slice.
 2. Identity and its deciding sentence, from the positioning.
@@ -22,9 +21,10 @@ requirement ("accessible primitives for a web app"), not a package.
    locales and direction from Define.
 4. Content: the voice, naming of the product and its parts, the words on
    every primary action, every error and every empty state.
-5. The clickable proof, kept local: the bet gate approved the bet, not an upload.
-   It may be published privately when the founder asks.
-6. `/design-review --mode proposal` on the proof, once.
+5. The clickable proof, kept local: the bet gate approved the bet, not an
+   upload. It may be published privately when the founder asks.
+6. `/design-new`'s own review of the proof is the design review; the run
+   does not repeat it.
 
 **The design pack:** the identity and its deciding sentence, the key screens
 in every state of their matrix, the proof (local, opened on the founder's

@@ -66,7 +66,7 @@ Each phase's sub-phases, outputs and honesty rules live in its playbook under
 | 0 | Frame | `phases/01-frame-discover-define.md` | `/new-front` |
 | 1 | Discover | same | research agents with web search |
 | 2 | Define | same | - |
-| 3 | Design | `phases/02-design-architect.md` | `/design-new` (stack-neutral tokens), `/design-review --mode proposal` |
+| 3 | Design | `phases/02-design-architect.md` | `/design-new --stack-neutral --local`, which reviews its own proof |
 | 4 | Architect and skeleton | same | `/adr`; the compliance block is drafted for the founder to run `/compliance-ref` |
 | 5 | Release plan | `phases/02-design-architect.md` | epic faces only, in each epic's folder |
 | 6 | Build | `phases/03-build-verify.md` | `/epic-flow <key> --auto --decide minor` per epic, in release order |
