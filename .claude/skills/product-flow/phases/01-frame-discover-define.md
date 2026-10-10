@@ -1,11 +1,11 @@
 # Phases 0-2: Frame, Discover, Define
 
-The phases before Gate 1. Nothing is built, so every fork is recorded, the
+The phases before the bet gate. Nothing is built, so every fork is recorded, the
 recommended branch is taken, and the fork goes into the bet pack.
 
 ```mermaid
 flowchart LR
-  F[0 Frame<br/>brief] --> D[1 Discover<br/>research record] --> DF[2 Define<br/>bet pack] --> G1{{Gate 1}}
+  F[0 Frame<br/>brief] --> D[1 Discover<br/>research record] --> DF[2 Define<br/>bet pack] --> G1{{the bet}}
 ```
 
 ## Phase 0 - Frame
@@ -20,7 +20,7 @@ flowchart LR
 4. Constraints and non-goals.
 5. **Kill criteria**, at least three, each one checkable at a gate.
 6. Create the front with `/new-front` as a non-git front; its approval step
-   applies. The repo comes at Gate 2.
+   applies. The repo comes at the blueprint gate.
 
 ## Phase 1 - Discover
 
@@ -53,7 +53,7 @@ and into the bet pack's recommendation.
    attributes, the value they enable, the customers who care most, the
    market category. One positioning statement.
 2. **Business model and pricing:** who pays, how, how much, and the unit
-   economics the price implies, to be re-checked at Gate 2 against the cost
+   economics the price implies, to be re-checked at the blueprint gate against the cost
    model.
 3. **MVP scope** from a story map: the backbone of activities, the walking
    skeleton across it, and the first release's slice. Everything below the
@@ -67,5 +67,5 @@ and into the bet pack's recommendation.
    start now (store developer enrollment, a business entity, domains,
    trademark clearance).
 
-**Gate 1 - the bet.** On a yes, the run continues to Design. On a no, the
+**The bet gate.** On a yes, the run continues to Design. On a no, the
 pack's recommendation names what would have to change, and the run stops.

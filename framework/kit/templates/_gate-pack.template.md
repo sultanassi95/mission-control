@@ -1,6 +1,6 @@
 ---
 product: <PRODUCT-ID>
-gate: <bet | blueprint | deploy | go_public>
+gate: <bet | design | blueprint | deploy | go_public>
 status: <awaiting | approved | approved-with-changes | stopped>
 prepared: <YYYY-MM-DD>
 decided: <YYYY-MM-DD, the founder's word quoted>

@@ -6,8 +6,8 @@ description: >-
   research through positioning, design, architecture, build, verification,
   deploy, beta and launch, and later a separate learn run. Composes the
   existing skills (/design-new, /adr, /new-front, /epic-flow, /mission-flow,
-  /triage, /retro) and stops only at four gates placed at irreversibility and
-  money. Use whenever the founder types /product-flow, asks to build a
+  /triage, /retro) and stops only at five founder gates: four placed at
+  irreversibility and money, and one where the founder reviews the design. Use whenever the founder types /product-flow, asks to build a
   product end to end, or hands over an idea or a problem to take to launch.
 ---
 
@@ -20,10 +20,10 @@ costs money, or reaches people.
 
 ```mermaid
 flowchart LR
-  I[idea + --budget] --> P0[0 Frame] --> P1[1 Discover] --> P2[2 Define] --> G1{{Gate 1<br/>the bet}}
-  G1 --> P3[3 Design] --> P4[4 Architect + skeleton] --> P5[5 Release plan] --> G2{{Gate 2<br/>the blueprint}}
-  G2 --> P6[6 Build<br/>epic-flow --auto per epic] --> P7[7 Verify] --> G3a{{Gate 3a<br/>deploy}}
-  G3a --> P8[8 Beta] --> G3b{{Gate 3b<br/>go public}} --> P9[9 Launch]
+  I[idea + --budget] --> P0[0 Frame] --> P1[1 Discover] --> P2[2 Define] --> G1{{the bet}}
+  G1 --> P3[3 Design] --> GD{{the design}} --> P4[4 Architect + skeleton] --> P5[5 Release plan] --> G2{{the blueprint}}
+  G2 --> P6[6 Build<br/>stacked epics, epic-flow --auto] --> P7[7 Verify] --> G3a{{deploy}}
+  G3a --> P8[8 Beta] --> G3b{{go public}} --> P9[9 Launch]
   P9 -.->|weeks later, a separate run| P10[10 Learn]
 ```
 
@@ -75,10 +75,11 @@ Each phase's sub-phases, outputs and honesty rules live in its playbook under
 | 9 | Launch | same | launch surfaces are built as an epic in Phase 6, never with `/design-artifact` |
 | 10 | Learn | same | `/triage`, `/retro` |
 
-## The four gates
+## The five gates
 
 Gates sit where something becomes irreversible, costs money, or reaches
-people, never at a phase boundary for its own sake. Each gate is one pack, one
+people, plus one where the founder judges the design, never at a phase
+boundary for its own sake. Each gate is one pack, one
 decision, written from `_gate-pack.template.md`: the decision asked, the
 evidence, the forks taken on the founder's behalf since the last gate with
 the alternative for each, the kill-criteria check, the spend so far against
@@ -87,21 +88,23 @@ lists: needed now, and **start now**, for anything with a long lead time.
 
 | Gate | After | The founder decides | It grants |
 |---|---|---|---|
-| **1 · The bet** | Define | positioning, MVP scope, the north-star metric, kill criteria; the value risk is shown as untested | Design and Architect; the proof stays local, published privately only when the founder asks |
-| **2 · The blueprint** | Release plan | identity, data model, stack, release plan with each epic's face | repo bootstrap and the skeleton commit; the cloud account and a staging spend cap; every epic run in release order, each face counting as that epic's E0 lock; merging epic PRs into the new repo's main until Gate 3a, because the skeleton makes deploy a separate act |
-| **3a · Deploy** | Verify | the production deploy, live keys, alarm routing, the runbook | the deploy itself; beta invitations |
-| **3b · Go public** | Beta | store submission, payments live, the announcement drafts the founder will send | the launch steps; nothing is posted on the founder's behalf |
+| **The bet** | Define | positioning, MVP scope, the north-star metric, kill criteria; the value risk is shown as untested | Design and Architect; the proof stays local, published privately only when the founder asks |
+| **The design** | Design | the designed web and mobile app: identity, the key screens in every state of their matrix, the proof | Architect builds on the approved design; a change the founder names is made before Architect starts |
+| **The blueprint** | Release plan | identity, data model, stack, release plan with each epic's face | repo bootstrap and the skeleton commit; the cloud account and a staging spend cap; every epic run in release order, each face counting as that epic's E0 lock; merging epic PRs into the new repo's main until the deploy gate, because the skeleton makes deploy a separate act |
+| **Deploy** | Verify | the production deploy, live keys, alarm routing, the runbook | the deploy itself; beta invitations |
+| **Go public** | Beta | store submission, payments live, the announcement drafts the founder will send | the launch steps; nothing is posted on the founder's behalf |
 
-3a and 3b merge into one gate when launch falls on deploy day.
+Deploy and go-public merge into one gate when launch falls on deploy day,
+which makes four.
 
 ## What stops a run, and what does not
 
-**Before Gate 2, forks never stop.** Nothing is built yet, so each fork is
+**Before the blueprint gate, forks never stop.** Nothing is built yet, so each fork is
 recorded with its options, the recommended branch is taken, and the fork goes
 into the next gate pack, where the founder can overturn it at the cost of a
 redraft, not a rebuild.
 
-**After Gate 2,** the run stops only on epic-flow's list (a real fork failing
+**After the blueprint gate,** the run stops only on epic-flow's list (a real fork failing
 its rubric, a blocker, a red CI the one re-entry did not clear, an action
 outside the grant), plus two of its own: a kill criterion tripped, and the
 spend ledger crossing three quarters of the envelope. Nothing else is a stop:
@@ -116,12 +119,12 @@ Hard rules 1 and 6 apply to the product, not only to its code:
 - Personas built from public evidence are **proto-personas**, labelled so.
 - Market size is a sourced range or `[UNVERIFIED]`; every claim carries its
   source and retrieval date, and claims older than the run's TTL are
-  re-checked before Gate 3a.
+  re-checked before the deploy gate.
 - Value and usability risk are **untested** until real people use the
   product; the bet is the founder's, never validated by the run.
 - Legal text, pricing willingness and trademark clearance are drafts, marked
   as such, with the founder's action named.
-- Gate 3a claims nothing for a risk that was not tested.
+- The deploy gate claims nothing for a risk that was not tested.
 
 ## Scope and the existing rules
 
@@ -134,7 +137,7 @@ Hard rules 1 and 6 apply to the product, not only to its code:
   Learn is a separate run.
 - `/compliance-ref` is run by the founder; the flow drafts the block.
   `/design-artifact` is never called by the flow. `/new-front`'s approval
-  step is honoured at Phase 0 and its repo binding at Gate 2.
+  step is honoured at Phase 0 and its repo binding at the blueprint gate.
 - The tracker is the native board unless the founder names one; every epic
   and ticket is assigned and transitioned live (hard rule 10).
 

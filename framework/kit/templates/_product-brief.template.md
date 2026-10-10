@@ -4,9 +4,10 @@ name: <working name - a placeholder until naming in Phase 3>
 front: <front>
 created: <YYYY-MM-DD>
 budget: <the --budget envelope>
-research_ttl_days: <e.g. 30 - claims older than this are re-checked before Gate 3a>
+research_ttl_days: <e.g. 30 - claims older than this are re-checked before the deploy gate>
 gates:
   bet: <pending | YYYY-MM-DD, the founder's word>
+  design: <pending | ...>
   blueprint: <pending | ...>
   deploy: <pending | ...>
   go_public: <pending | ...>
