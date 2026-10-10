@@ -43,6 +43,12 @@ An instance may bind a sharper version in `_command/CONSTITUTION.local.md`.
   external boundary got one live integration pass against a non-production
   instance or a downloaded copy, never a production system; any stub is
   `[STUB]` and the ticket stays open.
+- [ ] **Reachability proven** - each new service, handler, job or provider is
+  obtained the way production obtains it in at least one test (the container,
+  the route, the event, the scheduler), never only constructed; every value the
+  code reads has a named writer in the deployed environment; any string a
+  remote service parses was executed against that service, output pasted. Code
+  that nothing calls passes every test it has.
 - [ ] **Whole vertical slice** - both sides wired and verified against the
   acceptance criteria, proven by >=1 test exercising the actual serialized
   request across the boundary (not two mocks of the same idea) + request

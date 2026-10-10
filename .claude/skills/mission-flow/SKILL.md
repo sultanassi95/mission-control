@@ -895,6 +895,25 @@ error production emits, quoted side by side - and firing - the injection
 self-reports, and the test asserts it fired. A forced-failure test that
 silently stops forcing anything is a happy-path test that still passes.
 
+**Then prove the path is live (`_command/learning/32`, `/35`, `/34`, `/25`).**
+Code that nothing calls passes every test it has, code that nothing configures
+runs and does nothing, and a string a remote service parses has no local
+validation. Three checks, each about one command. For every new service,
+handler, job or provider, one test obtains it the way production does - from
+the container, the route, the event or the scheduler - and a whole-repo grep
+shows a call site outside the spec. For every value the code reads, name the
+line that writes it in the environment it will run in, and for every list,
+registry or allow-list entry added, ask whether a second one exists (a parse
+list and a fetch list, a route table and a permission table). A query, a policy
+document, a template, a regex or a cron expression is executed against the real
+service before the PR, and a green suite is read as evidence about everything
+except that string. A search that returns nothing is a claim about the search:
+show the instrument finds a known positive, or reach the fact by a second
+route, before reporting absence. Lived instances, all green at the time: a
+duplicate check with no caller over 7,739 rows, a worker never registered in
+its module, a queue URL no deploy path ever set, a query that threw on every
+call after two reviews read it.
+
 **The terminal assertion is the one the ticket declared.** Phase 2 wrote it
 into ticket.md; Phase 6 executes that pre-committed command, and the
 orchestrator runs it itself. Choosing the proof after seeing the
