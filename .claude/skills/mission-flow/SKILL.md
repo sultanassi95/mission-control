@@ -488,6 +488,17 @@ ticket (`_command/learning/04` - a ticket filed as attempt #2 at an
 already-tracked issue was rejected in plain words). New tickets are for new,
 distinct work.
 
+### Second: can the tracker be written? (every external-tracker path)
+
+Verify write access before creating anything. A tracker that cannot be written
+(the MCP unauthenticated, the transition refused) is a Phase-2 stop to raise
+and settle, never a draft-for-paste deferral at the end: re-run the
+authentication, re-surface the ask, and proceed only once a write has landed.
+A run that limps through on local-only tracking leaves the ticket unassigned
+and in Backlog while work lands, which is exactly what the founder catches at
+the end. A stored service token is not the fallback; a token issued to a
+colleague misattributes every write.
+
 ### Jira path
 
 Determine child issue type by reading the parent - do NOT assume:
@@ -506,7 +517,11 @@ user-facing capability from the user's perspective.
 
 Once created: transition to In Progress (read
 `getTransitionsForJiraIssue` to discover the transition id - never assume
-one), and assign to the founder or the named owner.
+one), and assign to the founder or the named owner in the same turn, before
+any work starts; a ticket left unassigned at filing is the recurring tell. The
+tracker is the founder's live view, so every later state change - work starts,
+a commit lands, a PR opens - is transitioned in the turn it happens, never
+batched into a comment on a ticket still sitting in Backlog.
 
 ### GitHub Issues path
 
@@ -1023,7 +1038,11 @@ implementation diverged - scope added or dropped, an approach or parameter
 changed, a deferred behaviour got built - the ticket description is now
 stale. Before drafting the PR body: update the ticket (or task file)
 so it describes the behaviour actually delivered, and write the PR body to
-the final shipped state. The criteria table is part of the reconcile: if the
+the final shipped state. Reconcile means the LOCAL ticket.md, the PR body and
+a comment on the remote ticket: the remote description belongs to its
+reporter and is edited only when it is yours or on explicit request; findings,
+a stale premise and verified criteria go in a comment, where the record of
+what was found sits beside the statement of intent instead of overwriting it. The criteria table is part of the reconcile: if the
 acceptance criteria changed after Phase 5's verdicts were produced - scope
 moved by a logged deviation, an approach change - the CHANGED rows get fresh
 verdicts before the PR opens. Skip only when nothing changed, and say so in
@@ -1105,6 +1124,10 @@ checks configured reports exactly that in one line.
   column to review where one exists. Native board: fill the task's `pr:`
   field, set state `review`, regenerate `_board.md` (state `done` comes when
   the founder merges).
+- Everywhere the founder reads - the comment, the PR, the report, the
+  standup - name the work by its tracker key, never by an epic fragment
+  number; the fragment numbering is the planning folder's, and "what is .9?"
+  mid-deploy is friction the key would have spared.
 
 ### Update the front's context
 

@@ -162,8 +162,10 @@ riskiest interface first thereafter.
 
 Every brief meets the Phase-2 floor before the founder is asked - the lock is
 informed, not hopeful. File the children in the tracker (`--parent <EPIC-ID>`
-per child; child type derived from the epic), fill each brief's `ticket:`
-field, write `60-tree-lock.md` (tree summary, tracker keys, date, the
+per child; child type derived from the epic), set the founder or the named
+owner as assignee on the epic and on every child at filing (an unassigned set
+of children once sat through two full fragments of work), fill each brief's
+`ticket:` field, write `60-tree-lock.md` (tree summary, tracker keys, date, the
 founder's word). **The lock is the execution grant** for exactly this tree in
 E5's order.
 
@@ -183,8 +185,10 @@ which is what makes the CI watch real.
    a stale plan does not. A fragment newly `invalidated` triggers the
    re-plan cycle (below) before the lane continues.
 2. **Fresh per-phase task list** for the child (the execution-surface rule).
-3. **Run the child as a full `/mission-flow`** with three overrides, stated
-   in its Phase 0: `--parent <EPIC-ID>`, `--base <epic-branch>`, and
+3. **Transition the child's ticket to its in-progress state** in the turn
+   the run starts - the tracker is the live view, and a comment on a Backlog
+   ticket is not a state. Then **run the child as a full `/mission-flow`**
+   with three overrides, stated in its Phase 0: `--parent <EPIC-ID>`, `--base <epic-branch>`, and
    Phase 7 REPLACED - no child PR. Phase 2 uses the epic-child pointer mode
    (the child's ticket.md points at the brief; criteria and outputs live
    once, in the brief). Phase 6 runs in full - verification never amortizes
