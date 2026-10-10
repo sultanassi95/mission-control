@@ -13,7 +13,8 @@
   network, which is also what keeps a confidential front's report local.
 
   CONTRAST: every foreground/background pairing in BOTH themes was computed
-  against WCAG AA (4.5:1); the lowest is 4.52:1. The design hook's low-contrast
+  against WCAG AA (4.5:1); the lowest is 5.25:1 (light) and 5.95:1 (dark).
+  Palette, scales and the pairs: .claude/skills/DESIGN.md. The design hook's low-contrast
   rule is suppressed for this file in .impeccable/config.json because it pairs
   dark-mode tokens with the light-mode background and cannot read the media
   query - but that suppression is file-wide, so it will NOT catch a real
@@ -31,33 +32,38 @@
 -->
 <style>
   :root {
-    --bg: #ffffff;
-    --surface: #f7f7f8;
-    --line: #e4e4e7;
-    --ink: #18181b;
-    --ink-soft: #52525b;
-    --ink-faint: #6b6b74;
-    --accent: #3f3f46;
-    --merged-bg: #e7f5ec; --merged-ink: #145c31;
-    --openpr-bg: #fff4e0; --openpr-ink: #7a4f00;
-    --new-bg: #e8f0fe;    --new-ink: #1a4f9c;
-    --event-bg: #efeff1;  --event-ink: #55555e;
-    --out-bg: #f2f2f4;    --out-ink: #6e6e76;
+    --bg: #FFFFFF;
+    --surface: #F1F5F5;
+    --line: #D3DDDE;
+    --ink: #1B2A2E;
+    --ink-soft: #44575C;
+    --ink-faint: #56696E;
+    --accent: #0A6A70;
+    --merged-bg: #E3F3EA; --merged-ink: #1D6B42;
+    --openpr-bg: #FBF0DC; --openpr-ink: #7A4A00;
+    --new-bg: #E6EFFA;    --new-ink: #1E4F8C;
+    --event-bg: #EBF0F1;  --event-ink: #4A5B5F;
+    --out-bg: #EEF2F2;    --out-ink: #56676B;
+    /* scales - .claude/skills/DESIGN.md. The faces are system faces by contract. */
+    --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --s1: .25rem; --s2: .5rem; --s3: .75rem; --s4: 1rem; --s5: 1.5rem; --s6: 2rem; --s7: 3rem;
+    --t-xs: .75rem; --t-sm: .82rem; --t-md: .9375rem; --t-lg: 1.4rem;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #141416;
-      --surface: #1c1c1f;
-      --line: #2c2c31;
-      --ink: #ededf0;
-      --ink-soft: #a9a9b2;
-      --ink-faint: #84848d;
-      --accent: #c9c9d1;
-      --merged-bg: #14331f; --merged-ink: #6fd898;
-      --openpr-bg: #3a2a08; --openpr-ink: #f0b944;
-      --new-bg: #14284a;    --new-ink: #7fb0f5;
-      --event-bg: #26262b;  --event-ink: #a5a5ae;
-      --out-bg: #232327;    --out-ink: #8d8d96;
+      --bg: #111819;
+      --surface: #182123;
+      --line: #2B3A3D;
+      --ink: #E4EDEE;
+      --ink-soft: #B3C3C6;
+      --ink-faint: #94A8AC;
+      --accent: #5CC4CB;
+      --merged-bg: #13301F; --merged-ink: #66CF95;
+      --openpr-bg: #33270F; --openpr-ink: #F0B35A;
+      --new-bg: #14284A;    --new-ink: #8DB8F2;
+      --event-bg: #222D30;  --event-ink: #A7B6B9;
+      --out-bg: #1F282A;    --out-ink: #95A6A9;
     }
   }
 
@@ -67,8 +73,7 @@
     padding: 2.5rem 1.25rem 4rem;
     background: var(--bg);
     color: var(--ink);
-    font: 15px/1.6 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
-          Roboto, Helvetica, Arial, sans-serif;
+    font: var(--t-md)/1.6 var(--sans);
     -webkit-font-smoothing: antialiased;
   }
   .wrap { max-width: 56rem; margin: 0 auto; }
