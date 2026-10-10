@@ -6,6 +6,19 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-10-10 (evening): epic-flow gains `--auto`. The invocation locks an
+  existing plan (an epic folder, or child tickets already in the tracker) and
+  approves landing every child on the epic branch, pushing it, and opening the
+  epic PR; the base merge stays outside the grant. The runner gets an explicit
+  list of what stops a locked run and what never does (a child landing, a
+  summary, a restated plan, a question the lock answers), with one LANDED line
+  per child between them. Branches are named by shape: a feature epic on its
+  capability, a batch epic on its origin and kind, never on the areas it
+  touches. The skills README names epic-flow's branch grant beside
+  mission-flow's. The status-after-pipe guard now checks only the statement
+  before each status read, after its first live run blocked a command whose
+  pipe and status read were unrelated.
+
 - 2026-10-10 (later): the harness and model generation shift, planned as an
   epic (MC-060) and landed one commit per fragment on the same branch as the
   promotion pass. The routing grid now asks for effort on every dispatch
