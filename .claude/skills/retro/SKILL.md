@@ -64,6 +64,9 @@ its slot.
 - Any cadence items due (a promotion pass via `/promote-learnings` if
   lessons have been reinforcing, a `/preflight` if the instance took a
   beating this week).
+- **A learn run due:** any product `/product-flow` launched whose launch-bar
+  window (in its brief) has passed gets `/product-flow --learn <id>`
+  proposed. It reads production, so it runs only on the founder's word.
 
 Present and STOP for the founder's lock. On approval, write the locked
 objectives into `today.md` (and the board if postures changed), so Monday's

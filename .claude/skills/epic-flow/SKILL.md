@@ -55,6 +55,10 @@ answers:
   fork, a choice failing the five conditions in "Autonomy" below, which stops
   with the options and the evidence exactly as it would without the flag
   (`_command/learning/02`: auto waives the pauses, not the design judgment).
+- **A face locked by a parent run counts as E0's lock.** When `/product-flow`
+  hands over an epic whose `00-face.md` its blueprint gate approved, E0 is
+  not redrafted or re-asked: E1 to E5 are drafted against the code earlier
+  epics wrote, and E6 locks the tree under that gate's grant.
 - **Landing every child on the epic branch is approved**, and so are the
   pushes of that branch and opening the epic PR at E8. Merging the epic PR
   into the base is not in the grant: the base is often a deploy trigger, so
@@ -257,6 +261,11 @@ record it in `00-face.md` as `shape: feature` or `shape: batch`:
    PR (that batch step is named in the E8 report). Capture, lesson
    candidates, and the zero-loose-ends rule run per child unchanged.
 
+**Stacked on an unmerged epic.** An epic run with `--base` set to another
+epic's branch opens its PR against that branch. When the lower PR merges as a
+squash, its commits come back under new hashes: merge main into this branch,
+prove the merged tree equals this branch's tree, and continue.
+
 **Between lanes:** if the base moved, merge base INTO the epic branch -
 merge, never rebase; published history stays honest - with conflicts handled
 by the Phase-4 classes (trivial = resolve and note, semantic = stop the
@@ -327,7 +336,9 @@ Under `--decide minor` the orchestrator may settle decisions that pass ALL
 five rubric conditions - reversible within the epic branch AND no
 schema/data-model choice AND no cross-fragment contract change AND no
 product-visible behaviour fork AND no new dependency (dev included; an
-authored migration is a schema choice; config only if reversible, not
+authored migration is a schema choice, unless it implements a data model a
+parent gate already approved, which is settled by the request - a departure
+from that model is still a fork; config only if reversible, not
 product-visible, and touching no secret/infra surface). Each minor decision is
 plumbed three ways, mechanically:
 

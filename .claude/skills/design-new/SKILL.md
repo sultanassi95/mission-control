@@ -28,13 +28,21 @@ flowchart LR
 
 ```
 /design-new <idea or brief> [--front <f>] [--platform web|mobile|both]
-            [--comp <view or pattern>] [--thinking ...] [--verbosity ...]
+            [--comp <view or pattern>] [--local] [--stack-neutral]
+            [--thinking ...] [--verbosity ...]
 ```
 
 - **Full mode** (default): a product from nothing.
 - **Comp mode** (`--comp`): one new view or pattern inside a front that
   already has a DESIGN.md. Skips straight to the comps step against that
   file. This is the mode the delivery flows call.
+- **`--local`**: the proof is written to the scratchpad and opened on the
+  founder's machine; nothing is published. The default for any product that
+  has not launched.
+- **`--stack-neutral`**: no stack is chosen yet, so tokens are written in the
+  DTCG format only and the component foundation is named as a requirement
+  ("accessible primitives for a web app"), not a package. A later step
+  converts them once the stack is chosen.
 
 **Scope guard.** The skill writes only inside the front `--front` names, or,
 with no front, only to the session scratchpad and published artifacts. It
@@ -52,18 +60,21 @@ never uses another front's repo as a reference implementation or a test bed.
    the frontend-design and mobile-app-ui-design skills for direction.
 3. **DESIGN.md.** From `framework/kit/templates/_design.template.md`, filled.
    The token file is written in the front's stack format and mirrored in the
-   DTCG format the standard names.
+   DTCG format the standard names; under `--stack-neutral`, DTCG only.
 4. **Component foundation.** Name the mature foundation for the stack (the
-   standard's guidance) and why; hand-rolled controls need a reason.
+   standard's guidance) and why; hand-rolled controls need a reason. Under
+   `--stack-neutral`, name the requirement instead.
 5. **Comps.** The key screens, each with its row of the six-state matrix:
    empty, loading, error, long content, direction, narrow. Mobile follows the
    DESIGN.md platform section (HIG and Material behaviour, never their look).
 6. **Proof of concept.** One clickable page showing the key screen in every
    state from one token set; on `--platform both`, web and mobile side by
-   side from one model. Published as a private artifact, or written to the
-   scratchpad where publishing is not available.
-7. **Self-review.** Run `/design-review` on the proof before presenting it;
-   fix what it finds once, then present. No loop.
+   side from one model. Under `--local`, written to the scratchpad only;
+   otherwise published as a private artifact, or written to the scratchpad
+   where publishing is not available.
+7. **Self-review.** Run `/design-review --mode proposal` on the proof before
+   presenting it; fix what it finds once, then present. No loop. A calling
+   flow relies on this review and does not run its own.
 
 ## Comp mode
 
