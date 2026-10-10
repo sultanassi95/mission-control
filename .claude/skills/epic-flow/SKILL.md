@@ -10,7 +10,9 @@ description: >-
   founder types /epic-flow with an epic description or key, when /mission-flow
   Phase 0 returns an epic-sized verdict, or when work is being planned that
   will clearly become several tickets. Sibling of mission-flow, never a
-  replacement: children run the full 8-phase flow.
+  replacement: children run the full 8-phase flow. With --auto the
+  invocation locks an existing plan and approves landing every child, so the
+  run goes end to end without pausing between children.
 ---
 
 # epic-flow
@@ -30,8 +32,8 @@ authority where this text summarizes).
 ```
 /epic-flow <description | epic-key> [--front <f>] [--project <p>]
            [--tracker jira|github|native] [--decide minor]
-           [--spend lean|standard|deep]
-/epic-flow --execute <epic-id>
+           [--spend lean|standard|deep] [--auto]
+/epic-flow --execute <epic-id> [--auto]
 ```
 
 Default run = PLAN: E0 through the E6 tree lock, then STOP - the founder's
@@ -39,11 +41,30 @@ lock IS the execution grant. `--execute` resumes any later session from the
 folder and enters E7 below; execution in the same session proceeds directly
 from the lock.
 
+**`--auto` makes the invocation the lock and the landing grant.** With it,
+the run does not stop at E6 and does not ask anything a locked plan already
+answers:
+
+- **A plan that exists is locked by the invocation.** An epic folder whose
+  stage documents and briefs exist, or an epic whose child tickets already
+  sit in the tracker, is the tree: E4 re-runs as the gate, `60-tree-lock.md`
+  records the invocation as the lock, and E7 starts. A plan already approved
+  in the conversation counts the same; restating it back is not a step.
+- **A plan that does not exist yet** is drafted E0 to E5 without stage gates
+  and locks itself at E6. The one thing `--auto` cannot settle is a genuine
+  fork, a choice failing the five conditions in "Autonomy" below, which stops
+  with the options and the evidence exactly as it would without the flag
+  (`_command/learning/02`: auto waives the pauses, not the design judgment).
+- **Landing every child on the epic branch is approved**, and so are the
+  pushes of that branch and opening the epic PR at E8. Merging the epic PR
+  into the base is not in the grant: the base is often a deploy trigger, so
+  that merge stays with the founder.
+
 ## The execution surface
 
 Plan mode surfaces one session task per stage (`<EPIC> · E0 Face` ...
 `<EPIC> · E8 Close`), transitioned at stage gates - the same contract as
-mission-flow's per-phase list (MC-027). Execution mode additionally creates a
+mission-flow's per-phase list. Execution mode additionally creates a
 fresh per-phase list per child, per that rule.
 
 ## The epic folder
@@ -162,8 +183,10 @@ riskiest interface first thereafter.
 
 Every brief meets the Phase-2 floor before the founder is asked - the lock is
 informed, not hopeful. File the children in the tracker (`--parent <EPIC-ID>`
-per child; child type derived from the epic), fill each brief's `ticket:`
-field, write `60-tree-lock.md` (tree summary, tracker keys, date, the
+per child; child type derived from the epic), set the founder or the named
+owner as assignee on the epic and on every child at filing (an unassigned set
+of children once sat through two full fragments of work), fill each brief's
+`ticket:` field, write `60-tree-lock.md` (tree summary, tracker keys, date, the
 founder's word). **The lock is the execution grant** for exactly this tree in
 E5's order.
 
@@ -177,14 +200,33 @@ authority to this branch and to it alone; the deploy base is excluded as
 everywhere else. Every squash below is followed by a push of the epic branch,
 which is what makes the CI watch real.
 
+**Name the branch for what its tickets share.** Decide the shape at E2 and
+record it in `00-face.md` as `shape: feature` or `shape: batch`:
+
+- **Feature** - the children compose one capability a user could name. The
+  branch is named on it, `epic/<key>-<feature>` as in
+  `epic/ai-2114-mesh-identity`, and the PR title states the capability.
+- **Batch** - the children are scattered across the app and sum to no one
+  area. Name the branch for what produced the set and the kind of change it
+  makes, never for the areas it touches: `epic/<key>-<origin>-<kind>`, where
+  the origin is the review, audit, incident, retro or promotion pass the
+  tickets came from and the kind is what they do (`fixes`, `polish`,
+  `hardening`, `a11y`), as in `epic/js-151-ux-review-p1s`. With no shared
+  origin, the kind and the date: `epic/<key>-hardening-2026-10-10`. A list of
+  areas, `misc`, or a ticket count is never a name. The batch PR's commit
+  index is grouped by app area, so a reviewer still reads it by surface.
+
 **Per child, in E5's order, serially (v1):**
 
 1. **Re-read the folder.** Brief states and any founder amendments execute;
    a stale plan does not. A fragment newly `invalidated` triggers the
    re-plan cycle (below) before the lane continues.
 2. **Fresh per-phase task list** for the child (the execution-surface rule).
-3. **Run the child as a full `/mission-flow`** with three overrides, stated
-   in its Phase 0: `--parent <EPIC-ID>`, `--base <epic-branch>`, and
+3. **Transition the child's ticket to its in-progress state** in the turn
+   the run starts - the tracker is the live view, and a comment on a Backlog
+   ticket is not a state. Then **run the child as a full `/mission-flow`**
+   with three overrides, stated in its Phase 0: `--parent <EPIC-ID>`,
+   `--base <epic-branch>`, and
    Phase 7 REPLACED - no child PR. Phase 2 uses the epic-child pointer mode
    (the child's ticket.md points at the brief; criteria and outputs live
    once, in the brief). Phase 6 runs in full - verification never amortizes
@@ -192,7 +234,11 @@ which is what makes the CI watch real.
 4. **Land the child:** squash-merge its branch onto the epic branch as ONE
    commit - `<type>(<key>): <brief title>`, body a condensed Summary / Root
    cause / Fix with NO instance paths - then set the brief's
-   `state: squashed` + `squash: <hash>`, and push the epic branch.
+   `state: squashed` + `squash: <hash>`, and push the epic branch. Landing is
+   the runner's own step under the lock, never a question: a child that
+   passed its Phase 6 squashes, pushes, and the next child starts in the same
+   turn. Asking whether to merge a child onto its own epic branch re-asks
+   what the lock already granted.
 5. **Watch the epic branch's CI** per the checks-green semantics: bounded,
    red-caused-by-this-squash gets the one re-entry, infra reds are
    founder-gated items, a repo with no checks configured reports exactly
@@ -286,6 +332,26 @@ plumbed three ways, mechanically:
 
 This rubric IS the definition of a trivial fork for every child under the
 run - one vocabulary, not two. Anything failing it stops.
+
+**What stops a locked run, and what does not.** The run stops only on
+mission-flow's own triggers ("When the flow stops": critical misalignment, a
+blocking impediment), a fork failing the rubric above, the E4 gate failing
+after a re-plan, a semantic conflict between lanes, a red CI the one re-entry
+did not clear, and any action outside the grant: the base merge, a production
+write, a deploy. Nothing else is a stop, and in particular none of these:
+
+- a child finishing or landing - the next child starts in the same turn;
+- a summary of what was just done, or a reflection on it;
+- the plan restated back after it was locked or approved;
+- a question the lock or the folder already answers, including whether to
+  continue and whether to merge a child onto the epic branch.
+
+Between children the run's output is one line per landed child,
+`LANDED <key> · <hash> · next <key>`, plus a DECIDE line where one applies.
+The child's report lives in its record and its evidence log, not in the
+conversation; the whole run is read once, in the E8 report. A turn that ends
+on a plan or a summary while locked work remains has stopped for no reason,
+and that work is done in the same turn instead.
 
 **Retiring an epic** is the founder's call at any boundary: children closed
 with the reason, the branch left in place, the folder's status `retired`. An

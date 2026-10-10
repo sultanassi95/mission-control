@@ -76,3 +76,47 @@ architecture's declared outputs. Exit 1 on an unclaimed remainder or an
 over-claim; undeclared claims warn. Tests: `tests/epic-coverage.tests.sh`
 (both negative controls executable). A `.ps1` twin is deferred until a
 Windows operator exists.
+
+# tools/status-after-pipe-guard and tools/front-context
+
+Two settings hooks beside the leak guard, same contract: a shell script the
+harness runs regardless of the session's state, opt-in per instance, never
+calling a model.
+
+- **`status-after-pipe-guard.sh`** (`PreToolUse`, matcher `Bash`): blocks a
+  command that reads `$?` after a pipe into tail, head, grep, sed, jq, tee or
+  another presentation tool, because `$?` then reports the pager, which never
+  fails. Three real runs printed a failure line and `exit=0` in the same
+  breath, one of them a security gate. Allowed forms: capture on the
+  command's own line (`cmd > log 2>&1; rc=$?; tail log`), `set -o pipefail`,
+  or `${PIPESTATUS[0]}`. Exit 2 blocks with the fix on stderr. Tests:
+  `tools/tests/status-after-pipe-guard.tests.sh`, blocked and passed forms
+  both.
+- **`front-context.sh`** (`UserPromptSubmit`): when a prompt invokes
+  `/mission-flow` or `/epic-flow` with `--front <f>` (and optionally
+  `--project <p>`), prints that front's hub and the repo's spoke to stdout, so
+  they enter context before Phase 0. This is step zero of mission-flow made
+  mechanical: a note read while diagnosing has already cost what it existed to
+  prevent. Never blocks; a missing hub or spoke prints a notice instead. A
+  120 KB cap falls back to a one-line instruction to read the file. Tests:
+  `tools/tests/front-context.tests.sh`.
+
+Wiring, in the instance's `.claude/settings.local.json` (gitignored):
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      { "matcher": "Bash|mcp__.*", "hooks": [ { "type": "command", "command": "bash \"${CLAUDE_PROJECT_DIR}/tools/leak-guard.sh\"", "timeout": 10 } ] },
+      { "matcher": "Bash",         "hooks": [ { "type": "command", "command": "bash \"${CLAUDE_PROJECT_DIR}/tools/status-after-pipe-guard.sh\"", "timeout": 10 } ] }
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [ { "type": "command", "command": "bash \"${CLAUDE_PROJECT_DIR}/tools/front-context.sh\"", "timeout": 10 } ] }
+    ]
+  }
+}
+```
+
+Hooks load at session start, so a freshly wired hook is proven in the next
+session, not the one that wired it. Both scripts need `jq`, like the guard.
+

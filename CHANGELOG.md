@@ -6,6 +6,54 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-10-10 (evening): epic-flow gains `--auto`. The invocation locks an
+  existing plan (an epic folder, or child tickets already in the tracker) and
+  approves landing every child on the epic branch, pushing it, and opening the
+  epic PR; the base merge stays outside the grant. The runner gets an explicit
+  list of what stops a locked run and what never does (a child landing, a
+  summary, a restated plan, a question the lock answers), with one LANDED line
+  per child between them. Branches are named by shape: a feature epic on its
+  capability, a batch epic on its origin and kind, never on the areas it
+  touches. The skills README names epic-flow's branch grant beside
+  mission-flow's. The status-after-pipe guard now checks only the statement
+  before each status read, after its first live run blocked a command whose
+  pipe and status read were unrelated.
+
+- 2026-10-10 (later): the harness and model generation shift, planned as an
+  epic (MC-060) and landed one commit per fragment on the same branch as the
+  promotion pass. The routing grid now asks for effort on every dispatch
+  (defaults differ by model generation and harness version), names the Agent
+  tool's effort parameter and the workflow agents' env pin, and replaces the
+  blanket deny of the one-call fan-out tool with a narrow admission: model and
+  effort on every agent call, a budget ceiling, the sizing heads-up, or it
+  stays denied. roles and the skills README speak in tiers and gain xhigh.
+  Two settings hooks join the leak guard, each with a test suite: a
+  PreToolUse guard that blocks a status read after a pipe into a pager, and a
+  UserPromptSubmit injector that prints a front's hub and spoke into context
+  when a flow names the front. A prompt audit over the whole surface found it
+  clean on every greppable signal and landed four medium rewrites. The
+  identity header carries the three guidance lines (grounded progress, no
+  tidying, autonomy), and mission-flow gains a clause on keeping agents alive
+  across follow-ups instead of re-briefing them. Two mods (a sub-agent git
+  guard on tool checks, a spend recorder) wait on Claude Code 2.1.292.
+
+- 2026-10-10: a promotion pass over the learning log and memory landed its
+  artifact halves - the rule written while its file still emits the defect
+  changes nothing. Five changes, one commit each (MC-054, children
+  MC-055..059). The Definition of Done gains a Reachability proven item (a
+  unit obtained the way production obtains it, a named writer per value read,
+  remote-parsed strings executed against the service) and asks the red run to
+  name its assertion with the break shown applied; mission-flow Phase 6 carries
+  the live-path checks, Phase 4 the four instruments that lie green (a status
+  read after a pipe, a red counted not read, a gate that repairs its input, a
+  rewritten test never re-broken), Phase 1 a step zero that reads the hub, the
+  spoke and the repo's own agent file before the first design decision, Phase 2
+  a write-access stop and same-turn assignment, Phase 7 a comment on another
+  reporter's ticket rather than a rewrite, Phase 8 tracker keys over fragment
+  numbers; epic-flow assigns at filing and transitions a child as it starts;
+  the record schema gains the brief contract - goal, constraints, mechanism as
+  belief with its check - and `brief refuted` as a record outcome.
+
 - 2026-09-09: the documentation surface is reconciled with the 2026-09-02/09
   burst, which had shipped two skills, a tool, a template and eighteen tickets
   of flow hardening while leaving every top-level doc untouched. A scan of all

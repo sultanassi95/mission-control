@@ -35,7 +35,8 @@ is the state machine - a cold session resumes any epic by reading it.
   rule at E3; DRY mechanical at E4 (`tools/epic-coverage` exits 1 on unclaimed
   remainders AND over-claims - two owners of one output is duplication
   scheduled in advance); "real path end to end" as E5's walking skeleton.
-- **The E6 lock IS the autonomy grant** - exactly the locked tree, in order,
+- **The E6 lock IS the autonomy grant**, and `--auto` makes the invocation
+  that lock for a plan that already exists - exactly the locked tree, in order,
   no re-asking between children, nothing outside the tree ever. Stops stay
   per-child and pause a fragment plus its dependents; independent lanes
   continue.

@@ -4,6 +4,38 @@
 
 **Filename:** `records/NN-<scope>-<agent>.md` (zero-padded sequence, so the trail reads in order).
 
+## The brief - a hypothesis the agent can falsify
+
+The record answers a brief, and the brief states a mechanism the orchestrator
+has not executed. Write it so the agent can refute it, and read a refutation as
+information rather than as the agent getting it wrong. Every brief carries
+three parts, in this order:
+
+```markdown
+**Goal:** <the outcome, binding>
+**Constraints:** <what must stay true - scope, files, bans, budgets - binding>
+**Mechanism as belief:** <the orchestrator's current belief about HOW, each
+item with the check that would settle it - "bound the client to one attempt,
+and assert the attempt count in a test", never "set max_attempts to 1">
+```
+
+The agent holds the API, the file and the error message, so it is better placed
+than the brief to be right about mechanism. When its evidence contradicts the
+brief, the record says so (`status: brief refuted`, below) and the orchestrator
+changes the brief AND the ticket's acceptance criteria, not only the code: a
+criterion derived from a wrong mechanism fails a correct implementation at
+review. Three briefs were refuted by their agents in one real session - a retry
+key that counted retries rather than attempts, a shared helper hardened in
+place that changed two unrelated production paths, a bucket assumed mesh-only
+that also carried documents - and each refutation was cheaper than the defect.
+
+A reviewer's brief adds one line: any finding the reviewer cannot settle from
+the diff carries the one command that would confirm or refute it. A conditional
+finding costs a command to close; an unhedged wrong one costs an argument or a
+change.
+
+## The record
+
 ```markdown
 ---
 task: <one line - what this agent was asked to do>
@@ -12,7 +44,7 @@ model_used: <model x effort as dispatched + reason in 3-6 words>
 effort_used: <low|medium|high|xhigh|max + reason in 3-6 words>
 inputs: <exact files / sections / URLs consumed>
 date: <YYYY-MM-DD>
-status: <complete | partial - reason>
+status: <complete | partial - reason | brief refuted - the claim, and the evidence that refutes it>
 ---
 
 ## Findings

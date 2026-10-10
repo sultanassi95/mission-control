@@ -43,6 +43,12 @@ An instance may bind a sharper version in `_command/CONSTITUTION.local.md`.
   external boundary got one live integration pass against a non-production
   instance or a downloaded copy, never a production system; any stub is
   `[STUB]` and the ticket stays open.
+- [ ] **Reachability proven** - each new service, handler, job or provider is
+  obtained the way production obtains it in at least one test (the container,
+  the route, the event, the scheduler), never only constructed; every value the
+  code reads has a named writer in the deployed environment; any string a
+  remote service parses was executed against that service, output pasted. Code
+  that nothing calls passes every test it has.
 - [ ] **Whole vertical slice** - both sides wired and verified against the
   acceptance criteria, proven by >=1 test exercising the actual serialized
   request across the boundary (not two mocks of the same idea) + request
@@ -63,6 +69,9 @@ An instance may bind a sharper version in `_command/CONSTITUTION.local.md`.
   to fail: break what it guards, see red, restore. A threshold equal to the
   current value, a mock missing the key the code reaches for, or an expectation
   computed from config that is empty at run time are all green and vacuous.
+  The red output names the targeted assertion and the break is shown applied;
+  a status read after a pipe measures the pager, so the exit status is
+  captured on the command's own line.
 - [ ] **No guess worn as a finding** - root cause shown with literal evidence;
   assumptions labelled; the outward artifacts (commit, PR, tracker) read as an
   engineer authored them, zero process vocabulary.

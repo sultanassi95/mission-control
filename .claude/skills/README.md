@@ -36,7 +36,7 @@ default):
   **`/spend`**, the skill: that is the METER (retrospective, reads the
   records); `--spend` is the DIAL (prospective, sets one invocation's
   posture).
-- **`--thinking <low | medium | high | max>`** - how HARD the agent
+- **`--thinking <low | medium | high | xhigh | max>`** - how HARD the agent
   reasons about the judgments inside one invocation. The vocabulary is
   the routing grid's effort dial on purpose - one dial, one vocabulary.
   Three real effects, one honest limit: it sets deliberation depth in
@@ -100,7 +100,10 @@ project-scoped copies win (most specific wins).
 
 `mission-flow` carries a scoped git grant: one invocation authorizes
 commit + push + PR creation for that one ticket, expiring when the PR
-opens. Every other skill observes the standing default: no git writes
+opens. `epic-flow`'s lock, or its `--auto` invocation, carries the same
+grant for the epic branch alone: landing each child as one squashed commit,
+pushing that branch, and opening the epic PR, never merging it into the base.
+Every other skill observes the standing default: no git writes
 unless the founder asks in the moment. Skills that write files
 (`triage`, `as-built`, `promote-learnings`, `retire-front`) carry their
 own STOP gates.

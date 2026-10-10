@@ -208,7 +208,11 @@ The rules that make a record safe to integrate from live in
 `_record-schema.md`, because they bind every skill that dispatches and not just
 this one: point rather than characterise, cap at 150 lines, minimum context in,
 and re-decompose past about two prior records. Read them there; this flow adds
-nothing to them.
+nothing to them. The same file owns the BRIEF's shape (`_command/learning/36`):
+goal and constraints binding, mechanism stated as the orchestrator's belief with
+the check that settles it, and `status: brief refuted` as a first-class outcome.
+A record that refutes its brief with evidence is the dispatch working, not
+failing: the brief and the ticket's criteria change with the code.
 
 **Who writes the file.** An agent type with no `Write` tool cannot author its own
 record, and those are the RIGHT types for Phase 1 and Phase 5 under the safety
@@ -287,6 +291,45 @@ reuse it for every dispatch in that flow - assembling it per dispatch is how a
 field ends up blank. A spoke with blank required fields is not dispatch-ready:
 the flow stops there rather than dispatching an agent that is acting as nobody.
 
+**Three lines the header carries verbatim**, from the current model guidance,
+kept short because the models follow them: *Before reporting progress, audit
+each claim against a tool result from this session; report only work you can
+point to evidence for, and say plainly what is not yet verified.* *Do not add
+features, refactor or introduce abstractions beyond what the task requires; a
+bug fix needs no surrounding cleanup, and the simplest thing that works is the
+target.* *You are operating autonomously: for reversible actions inside the
+brief, proceed without asking; before ending your turn, check that your last
+paragraph is not a plan or a promise, and do that work now.* The first is
+hard rule 1 in the agent's own voice, the second keeps a higher-effort agent
+from tidying what it was not asked to touch, the third is what makes a
+dispatched agent finish instead of handing back a question.
+
+### Keep an agent alive instead of re-briefing one
+
+Spawn-and-block was a guardrail for models that lost the thread; the current
+generation sustains long-lived sub-agents and does better when the
+orchestrator keeps working while they run. Four consequences for this flow,
+none of which loosens the dispatch-safety table above:
+
+- **Dispatch in the background by default** for anything independent of the
+  orchestrator's next step - the investigator, each reviewer - and integrate
+  from the record when it lands rather than waiting on the slowest agent.
+- **Continue an agent by message** for a follow-up inside its own scope: a
+  reviewer asked what would settle its conditional finding, an investigator
+  asked to extend a probe one layer down. The agent keeps its context, which a
+  fresh dispatch would pay to rebuild, and its tools stay what the table gave it.
+- **One agent across investigate and implement is allowed only when it was
+  dispatched on the implement row from the start**, in its own worktree, so
+  the table still holds; an investigate-row agent cannot grow `Edit` mid-life
+  and is not continued into Phase 4.
+- **A forked agent inherits the orchestrator's context** and is the right
+  shape when the brief would otherwise restate most of the conversation; its
+  tool access is still the table's, and the identity header still leads.
+
+Where the harness lets a custom agent compact its own window earlier, set it
+on the long-lived ones so a continued agent does not silently lose its early
+context.
+
 ### Sizing, and the tally at the end
 
 State the sizing before the first dispatch of a phase, in the orchestrator's own
@@ -360,6 +403,18 @@ switches with it; work already done remains evidence.
 > task-path reading (the bug path dispatches the Bash-carrying investigate
 > row) · `/map-front`'s `_map.md` read for blast radius.
 
+**Step zero, both paths: read the front before deciding anything
+(`_command/learning/26`).** Open the front's hub, the repo's spoke and the
+repo's own `AGENTS.md` or `CLAUDE.md` now, inline, and carry what they bind
+into the approach: the base branch, the house PR and branch shape, the build
+quirks, the gotchas. The harness surfaces the repo's agent file only once a
+file inside it is touched, which is after the approach is formed: a PR once
+shipped in the generic section shape because the house shape arrived late,
+and one session paid three documented costs in full with the notes sitting at
+known lines of the spoke. Read the spoke again before Phase 6, where the
+environment traps bite. A documented cost paid a second time is a guess worn
+as a finding; when it happens, date the existing note instead of adding one.
+
 **First move, both paths: is this already delivered? (the ORCHESTRATOR runs
 this inline, before any dispatch - one command that can end the flow should
 not cost a dispatch.)** Before investigating, search the base branch's history for the ticket key and the feature's terms -
@@ -376,8 +431,8 @@ so its default is the investigate row - `Bash`, no `Edit`/`Write`; the TASK
 path's reading-and-mapping default is a read-only explorer
 (`feature-dev:code-explorer` where available), escalated to the investigate
 row only when its probes genuinely need a shell. A read-only agent cannot run
-the phase's commands - naming it the universal default was a contradiction,
-found and retired. Split into two investigators only when a ticket has
+the phase's commands, so it is never the bug path's default. Split into two
+investigators only when a ticket has
 genuinely independent sub-questions.
 
 **For bugs (via systematic debugging):** reproduce, gather evidence at
@@ -390,7 +445,7 @@ etc.), an error tracker, or metrics - pull the ACTUAL server error and its
 frequency + latency signature as PRIMARY evidence before theorizing from
 source. The literal error usually names the failing layer in one query and
 refutes the plausible-but-wrong guess (a status-guard theory died this way on
-AI-1502: the guards were fine; the real cause was `raw-body: request aborted`
+a real ticket: the guards were fine; the real cause was `raw-body: request aborted`
 500s from instance saturation, visible only in the logs + metrics). Confirm
 read access up front (it may need an interactive cloud login the founder runs);
 keep any confidential payloads in the session scratch, never in `_command/`.
@@ -461,7 +516,7 @@ pure code change, name the execution mechanism in the ticket and design to it:
   will rely on. If you don't know the deployed topology, read the infra
   (`infra/`, the spoke, machine profile) BEFORE choosing the design.
 The failure this prevents: shipping a prod backfill as an unrunnable laptop
-script because the ticket never asked "how does this reach prod?" (AI-1508).
+script because the ticket never asked "how does this reach prod?"
 
 **Blast radius (mapped fronts):** if the project's front has a
 `_map.md`, read it. A change touching a surface on any INBOUND edge is a
@@ -488,6 +543,17 @@ ticket (`_command/learning/04` - a ticket filed as attempt #2 at an
 already-tracked issue was rejected in plain words). New tickets are for new,
 distinct work.
 
+### Second: can the tracker be written? (every external-tracker path)
+
+Verify write access before creating anything. A tracker that cannot be written
+(the MCP unauthenticated, the transition refused) is a Phase-2 stop to raise
+and settle, never a draft-for-paste deferral at the end: re-run the
+authentication, re-surface the ask, and proceed only once a write has landed.
+A run that limps through on local-only tracking leaves the ticket unassigned
+and in Backlog while work lands, which is exactly what the founder catches at
+the end. A stored service token is not the fallback; a token issued to a
+colleague misattributes every write.
+
 ### Jira path
 
 Determine child issue type by reading the parent - do NOT assume:
@@ -506,7 +572,11 @@ user-facing capability from the user's perspective.
 
 Once created: transition to In Progress (read
 `getTransitionsForJiraIssue` to discover the transition id - never assume
-one), and assign to the founder or the named owner.
+one), and assign to the founder or the named owner in the same turn, before
+any work starts; a ticket left unassigned at filing is the recurring tell. The
+tracker is the founder's live view, so every later state change - work starts,
+a commit lands, a PR opens - is transitioned in the turn it happens, never
+batched into a comment on a ticket still sitting in Backlog.
 
 ### GitHub Issues path
 
@@ -690,6 +760,22 @@ code reaches for, and an expectation computed from empty config are all green
 and all vacuous. The control's literal output - the break, the red, the
 restore - lands in the unit's record; an unproven control is a comment.
 
+**Read the red, do not count it (`_command/learning/13`, the appended
+sections).** Four instruments lie in the same direction. The red run is read
+by name: confirm the break applied by asserting on the edited text (a `grep -c`
+for the broken form in the same command as the run), and the pasted output
+names the assertion that failed, because a harness that died before reporting
+also exits non-zero and proves nothing about the check. A status read after a
+pipe measures the pager: `cmd | tail; echo $?` reports tail, which never
+fails, so capture the exit status on the command's own line
+(`cmd > log 2>&1; rc=$?`) and format the log afterwards; three real runs
+printed a failure and `exit=0` in the same breath, one of them a security
+gate. A gate that repairs its input cannot fail: a CI lint or format step runs
+its check form (`--check`, `-l`, no `--fix`, `--write` or `--auto-correct`),
+and the drift it had been hiding lands in the same change. A test rewritten to
+cure vacuity is a new untested change: break the guarded thing again, because
+the rewrite can be hollow for a reason the original was not.
+
 **Each commit's green is evidence, not a claim.** The unit's record carries
 per-commit literal output (build + affected tests at that commit); when a unit
 produced more than two commits, the orchestrator spot-checks one mid-stack
@@ -870,8 +956,10 @@ loop. Review fixes are code too.
 orchestrator runs the terminal assertion itself. See "How this flow runs".
 
 Run the repo's own gauntlet, respecting any Node/tool version pin the repo
-declares (check the project's CLAUDE.md, the spoke, and your memory for
-pins), with every command composed for THIS machine - shell dialect and
+declares (re-read the spoke's gotchas and the project's CLAUDE.md at this
+point, not from memory: the gauntlet is where documented environment traps
+bite, and one session paid three of them twice), with every command composed
+for THIS machine - shell dialect and
 tool availability per `_command/machine.local.md`:
 
 ```
@@ -894,6 +982,25 @@ any ERROR-path verification carries two proofs of its own
 error production emits, quoted side by side - and firing - the injection
 self-reports, and the test asserts it fired. A forced-failure test that
 silently stops forcing anything is a happy-path test that still passes.
+
+**Then prove the path is live (`_command/learning/32`, `/35`, `/34`, `/25`).**
+Code that nothing calls passes every test it has, code that nothing configures
+runs and does nothing, and a string a remote service parses has no local
+validation. Three checks, each about one command. For every new service,
+handler, job or provider, one test obtains it the way production does - from
+the container, the route, the event or the scheduler - and a whole-repo grep
+shows a call site outside the spec. For every value the code reads, name the
+line that writes it in the environment it will run in, and for every list,
+registry or allow-list entry added, ask whether a second one exists (a parse
+list and a fetch list, a route table and a permission table). A query, a policy
+document, a template, a regex or a cron expression is executed against the real
+service before the PR, and a green suite is read as evidence about everything
+except that string. A search that returns nothing is a claim about the search:
+show the instrument finds a known positive, or reach the fact by a second
+route, before reporting absence. Lived instances, all green at the time: a
+duplicate check with no caller over 7,739 rows, a worker never registered in
+its module, a queue URL no deploy path ever set, a query that threw on every
+call after two reviews read it.
 
 **The terminal assertion is the one the ticket declared.** Phase 2 wrote it
 into ticket.md; Phase 6 executes that pre-committed command, and the
@@ -945,20 +1052,20 @@ mocked boundary is not "verified". Stand up the real stack locally and:
   failure/edge case the change targets. Paste the literal status + body. A
   contract proven only by a mocked unit test is not proven (hard rule 2).
 - **Full flow (browser / Playwright):** drive the real UI through the
-  user-visible path the ticket describes, INCLUDING the failure path the fix
-  targets. Inject the failure client-side (a `window.fetch` override returning
-  the exact status + body) - it reaches error states the UI itself gates
-  against reaching, and lets you assert BOTH the friendly message AND the
-  absence of any raw server detail on the page. Before asserting anything
-  role-gated, assert the acting identity first (the dev-user switcher /
-  logged-in user - a wrong-role default reads as a bug). Prefer seeding an
-  exact precondition via the API/DB over clicking the UI into it.
+  user-visible path the ticket describes, including the failure path the fix
+  targets. Reach the error state by whatever injection the stack allows (a
+  client-side fetch override returning the exact status and body is one way,
+  and it reaches states the UI gates against) and assert both the friendly
+  message and the absence of any raw server detail on the page. Before
+  asserting anything role-gated, assert the acting identity first, since a
+  wrong-role default reads as a bug. Prefer seeding an exact precondition via
+  the API or DB over clicking the UI into it.
   Paste/screenshot the outcome and any relevant server log line.
 
 If the local stack genuinely cannot be brought up, that is a STOP-and-report
 blocker (the founder decides to unblock or waive) - never a silent skip, and
 never inferred-done from unit green. This is the Phase-6 manual smoke made a
-firm gate; it was under-specified and got skipped once (AI-1502).
+firm gate; it was under-specified and got skipped once.
 
 **The local stack is shared.** It is the founder's stack too, and it is often
 running while they test. Do NOT switch branches or edit watched files while the
@@ -988,8 +1095,13 @@ implementation diverged - scope added or dropped, an approach or parameter
 changed, a deferred behaviour got built - the ticket description is now
 stale. Before drafting the PR body: update the ticket (or task file)
 so it describes the behaviour actually delivered, and write the PR body to
-the final shipped state. The criteria table is part of the reconcile: if the
-acceptance criteria changed after Phase 5's verdicts were produced - scope
+the final shipped state. Reconcile means the LOCAL ticket.md, the PR body and
+a comment on the remote ticket: the remote description belongs to its
+reporter and is edited only when it is yours or on explicit request; findings,
+a stale premise and verified criteria go in a comment, where the record of
+what was found sits beside the statement of intent instead of overwriting it.
+The criteria table is part of the reconcile: if the acceptance criteria changed
+after Phase 5's verdicts were produced - scope
 moved by a logged deviation, an approach change - the CHANGED rows get fresh
 verdicts before the PR opens. Skip only when nothing changed, and say so in
 one line. A ticket or PR
@@ -1050,7 +1162,7 @@ Phase-8 report. Red caused by THIS diff: one bounded re-entry into the
 Phase 4-6 loop - fix, verify, push, watch again, ONCE. Red from infra or
 flake, or a second red: a founder-gated item in the report, never silently
 left. An integration branch once sat red for five days with nothing noticing
-(AI-1814); the flow now cannot end without saying what CI said. A repo with no
+; the flow now cannot end without saying what CI said. A repo with no
 checks configured reports exactly that in one line.
 
 ## Phase 8 - Link back + capture (produces: two-way traceability, current front context)
@@ -1070,6 +1182,10 @@ checks configured reports exactly that in one line.
   column to review where one exists. Native board: fill the task's `pr:`
   field, set state `review`, regenerate `_board.md` (state `done` comes when
   the founder merges).
+- Everywhere the founder reads - the comment, the PR, the report, the
+  standup - name the work by its tracker key, never by an epic fragment
+  number; the fragment numbering is the planning folder's, and "what is .9?"
+  mid-deploy is friction the key would have spared.
 
 ### Update the front's context
 
@@ -1183,7 +1299,7 @@ because the convenient built-in is sometimes the wrong tool:
   (merge vs PR), a question this flow settles doctrinally; invoking it
   re-opens settled scope.
 
-Cautioned, decided at MC-020: the pr-review-toolkit agents carry full
+Cautioned: the pr-review-toolkit agents carry full
 toolsets, which the reviewer safety row forbids - their LENSES ride weak-tool
 dispatches with the diff file; the stock agents never touch a live tree.
 
