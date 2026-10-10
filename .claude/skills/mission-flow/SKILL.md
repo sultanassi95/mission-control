@@ -208,7 +208,11 @@ The rules that make a record safe to integrate from live in
 `_record-schema.md`, because they bind every skill that dispatches and not just
 this one: point rather than characterise, cap at 150 lines, minimum context in,
 and re-decompose past about two prior records. Read them there; this flow adds
-nothing to them.
+nothing to them. The same file owns the BRIEF's shape (`_command/learning/36`):
+goal and constraints binding, mechanism stated as the orchestrator's belief with
+the check that settles it, and `status: brief refuted` as a first-class outcome.
+A record that refutes its brief with evidence is the dispatch working, not
+failing: the brief and the ticket's criteria change with the code.
 
 **Who writes the file.** An agent type with no `Write` tool cannot author its own
 record, and those are the RIGHT types for Phase 1 and Phase 5 under the safety

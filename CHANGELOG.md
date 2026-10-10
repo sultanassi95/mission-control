@@ -6,6 +6,23 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-10-10: a promotion pass over the learning log and memory landed its
+  artifact halves - the rule written while its file still emits the defect
+  changes nothing. Five changes, one commit each (MC-054, children
+  MC-055..059). The Definition of Done gains a Reachability proven item (a
+  unit obtained the way production obtains it, a named writer per value read,
+  remote-parsed strings executed against the service) and asks the red run to
+  name its assertion with the break shown applied; mission-flow Phase 6 carries
+  the live-path checks, Phase 4 the four instruments that lie green (a status
+  read after a pipe, a red counted not read, a gate that repairs its input, a
+  rewritten test never re-broken), Phase 1 a step zero that reads the hub, the
+  spoke and the repo's own agent file before the first design decision, Phase 2
+  a write-access stop and same-turn assignment, Phase 7 a comment on another
+  reporter's ticket rather than a rewrite, Phase 8 tracker keys over fragment
+  numbers; epic-flow assigns at filing and transitions a child as it starts;
+  the record schema gains the brief contract - goal, constraints, mechanism as
+  belief with its check - and `brief refuted` as a record outcome.
+
 - 2026-09-09: the documentation surface is reconciled with the 2026-09-02/09
   burst, which had shipped two skills, a tool, a template and eighteen tickets
   of flow hardening while leaving every top-level doc untouched. A scan of all
