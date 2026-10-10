@@ -21,6 +21,8 @@ Model tiers here mean: the cheap tier, the mid tier, and the frontier tier of wh
 | Discovery / research | an explore/research agent + web search | mid · medium | cross-source judgment: frontier · high |
 | Product / requirements | the session + a brainstorming skill | frontier · high | - |
 | Architecture / API | an architect/plan agent | frontier · high | - |
+| Design direction (UI-shaped tickets, Phase 1) | the session + a design skill, against the front's DESIGN.md and `design-standard.md` | frontier · high | a new view pattern or a new front: xhigh |
+| Design review lens (Phase 5) | a design-review agent with the diff, the comp and the rendered screenshots | mid · medium | a new component, a cross-view change, or an accessibility finding it cannot settle: frontier · high |
 | Implementation | an implementer agent + test-driven development | mid · high | core / load-bearing logic: frontier |
 | Spec compliance review | a spec-reviewer agent | mid · medium | - |
 | Quality review | a code-quality reviewer | mid · medium | load-bearing: frontier · high (two-stage) |
@@ -30,6 +32,8 @@ Model tiers here mean: the cheap tier, the mid tier, and the frontier tier of wh
 | Orchestration | the session itself | frontier · high | final synthesis: xhigh |
 | Epic current-state audit (E1) | a read-only explorer agent | mid · medium | a data-path or infra surface in question: mid · high |
 | Epic architecture (E2) | an architect/plan agent + the session | frontier · high | - |
+
+**Design is not implementation.** Layout, hierarchy and states are decided at the design-direction row, before an implementer is dispatched; an implementer that has to invent a layout was briefed without a comp, and the brief goes back, not forward (`design-standard.md`, principle 1).
 
 **Review-depth is a third dial** (see `learning-seed/02-integration-truth-and-review-economy.md`): heavy two-stage review (spec, then quality, separate reviewers) for new core logic, security-critical code, and the make-or-break feature; lighter combined single-reviewer passes for small fixes, config, and mechanical threading. Log the choice as deliberate, never a silent skip.
 

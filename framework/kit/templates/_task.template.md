@@ -72,6 +72,11 @@ An instance may bind a sharper version in `_command/CONSTITUTION.local.md`.
   The red output names the targeted assertion and the break is shown applied;
   a status read after a pipe measures the pager, so the exit status is
   captured on the command's own line.
+- [ ] **Designed before built (UI-shaped tickets)** - the front's DESIGN.md
+  read in Phase 1; a comp and the six-state matrix row existed before the
+  first UI commit; the rendered views match them at the shipping sizes and
+  themes; no new raw value outside the token files; no new axe violation.
+  N/A with a reason for tickets that change nothing a user sees.
 - [ ] **No guess worn as a finding** - root cause shown with literal evidence;
   assumptions labelled; the outward artifacts (commit, PR, tracker) read as an
   engineer authored them, zero process vocabulary.

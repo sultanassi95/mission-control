@@ -6,6 +6,36 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-10-11 (later): the design standard gets its skills (MC-078, children
+  MC-079..083), a sixth group in the skills index. `/design-new` designs a
+  product from scratch and, in comp mode, one new view; `/design-adopt` derives
+  a front's DESIGN.md from its code, ratchets it at today's counts and, in
+  change mode, follows a token or component change to every view;
+  `/design-review` judges a product, a proposal, a diff or a whole epic, every
+  finding naming its source and element, with a content and localization lens;
+  `/design-artifact` makes pages, decks and reports for the audience named,
+  local by default for confidential content. mission-flow states UI-shaped in
+  Phase 0 and calls the skills in Phases 1 and 5; epic-flow calls them at E1,
+  E2 and E8. Three guards: they act only on the named front, only for
+  UI-shaped work, and the design lens on a new view or component is never
+  waived by a spend dial.
+
+- 2026-10-11: the portfolio gains a design layer (MC-071, children MC-072..077).
+  `framework/design-standard.md` owns six principles, the adopted stack with one
+  source per layer (the usability heuristics, WCAG 2.2 AA, Laws of UX,
+  Refactoring UI, the two mobile platform guides for behaviour only, the DTCG
+  token format with Atomic Design, the GOV.UK process model), the DESIGN.md
+  contract with a six-state matrix, and the gates; the kit gains its template.
+  roles.md routes design direction and the design review lens. mission-flow
+  designs UI-shaped tickets before building them: Phase 1 reads the front's
+  DESIGN.md and carries a comp and the state-matrix row, Phase 5 adds a design
+  lens whose findings name their source, Phase 6 renders each touched view at
+  its shipping sizes, themes and states and runs axe; the ticket template gains
+  the matching line. `tools/token-lint` ratchets raw design values outside a
+  front's token files: counts may only fall. The skills' own generated pages
+  get `.claude/skills/DESIGN.md`, and the standup report takes its palette,
+  with every contrast pair now at 5.25:1 or more in both themes.
+
 - 2026-10-10 (evening): epic-flow gains `--auto`. The invocation locks an
   existing plan (an epic folder, or child tickets already in the tracker) and
   approves landing every child on the epic branch, pushing it, and opening the

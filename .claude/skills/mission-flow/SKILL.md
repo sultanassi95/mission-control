@@ -56,8 +56,9 @@ skip a phase, never reorder, never invent new phases.
   batch caps at one reviewer and prose is tightest - the principles and
   conformance passes may run inline by the orchestrator instead of as
   dispatches, and RISK-TRIGGERED lenses (security, declared compliance
-  control families) are never waived by a spend dial: a dial that can turn
-  off a security check is not a spend dial. standard (default) = the Phase-5
+  control families, and the design lens on a new view or component) are
+  never waived by a spend dial: a dial that can turn off a security check is
+  not a spend dial. standard (default) = the Phase-5
   sizing table as-is; deep = the full multi-angle review sweep. **`--deep-review` remains as
   an alias for `--spend deep`.** `--thinking` (default high - Phase 1 is
   root-cause work) and `--verbosity` per the universal grammar (the stop
@@ -356,7 +357,9 @@ estimate.
 
 > **Skills in play:** routes to `superpowers:systematic-debugging` (bug) or
 > `superpowers:brainstorming` (task/enhancement); epic-sized exits to
-> `/epic-flow`; `/triage` upstream shares this vocabulary.
+> `/epic-flow`; `/triage` upstream shares this vocabulary. The UI-shaped call
+> below decides whether Phases 1 and 5 bring in `/design-adopt`,
+> `/design-new --comp` and `/design-review --mode diff`.
 
 Classify with the same five-kind vocabulary `/triage` uses at intake - one
 classification language from inbox to PR. Pick one:
@@ -389,6 +392,14 @@ ticket cannot hold it>" - before anything else happens, so a misroute is
 contestable before a single token is spent past it. If genuinely ambiguous,
 ask.
 
+**UI-shaped, one line, every class.** Beside the class, state whether the
+work is UI-shaped: it changes something a user sees - a view, a component, a
+state, copy, layout. A backend, infra or data ticket is not, and pays for
+none of the design steps. A UI-shaped ticket triggers the design skills in
+Phases 1 and 5, and they act only on the front and project this invocation
+names: a design skill never reads another front's repo as a reference, a
+pilot or a test bed.
+
 **Reclassification.** Phase-1 evidence that flips the class (a "task" that is
 really a defect; a "bug" that is really an undecided product behaviour)
 re-enters this phase: announce the new classification with its rationale and
@@ -401,7 +412,9 @@ switches with it; work already done remains evidence.
 > **Skills in play:** `superpowers:systematic-debugging` (bug path) ·
 > `superpowers:brainstorming` (task path) · `feature-dev:code-explorer` for
 > task-path reading (the bug path dispatches the Bash-carrying investigate
-> row) · `/map-front`'s `_map.md` read for blast radius.
+> row) · `/map-front`'s `_map.md` read for blast radius · for UI-shaped
+> work, `/design-adopt` (no DESIGN.md yet) and `/design-new --comp` (a new
+> view or pattern).
 
 **Step zero, both paths: read the front before deciding anything
 (`_command/learning/26`).** Open the front's hub, the repo's spoke and the
@@ -458,6 +471,20 @@ not the input set; a whole benchmark was once built on files the app never
 reads). And before any bulk retrieval or mutation, run it against exactly ONE
 item and inspect the payload - a wrong pointer or schema assumption is almost
 always wrong for the entire set.
+
+**UI-shaped tickets are designed before they are built (both paths,
+`framework/design-standard.md`).** A ticket is UI-shaped when it adds or
+changes something a user sees: a view, a component, a state, copy, layout.
+For those, Phase 1 reads the front's DESIGN.md beside the spoke (a UI front
+without one runs `/design-adopt --front <this front>` first, in this ticket,
+before any change), and the approach carries a comp of each touched view plus
+its row of the six-state matrix: empty, loading, error, long content,
+direction, narrow. `/design-new --comp <view>` draws it at the
+design-direction row of `framework/roles.md`, never the implementer at
+Phase 4; an implementer handed no comp is handed a layout decision it was not
+briefed for. A design fork the DESIGN.md does not settle - a new view
+pattern, a new component, a change to the identity - routes to the
+misalignment stop like any other genuine fork.
 
 **For tasks/enhancements (via a brainstorming discipline, dispatched):** the
 flow is autonomous, so there is nobody to "align with" mid-run and the text
@@ -795,7 +822,8 @@ recorded, never silently absorbed.
 > applied) · `/simplify` for the polish commit · `/security-review` on the
 > risk-class trigger · the named lenses (silent-failure, test-coverage,
 > type-design) dispatched as prompts on weak-tool agents with the diff file -
-> never the stock full-toolset agents against a live tree.
+> never the stock full-toolset agents against a live tree · `/design-review
+> --mode diff` as the design lens on UI-shaped tickets.
 
 Two checks gate this phase, and `--auto` waives neither: the ticket's
 acceptance criteria are verified before any reviewer is dispatched, and the
@@ -902,6 +930,17 @@ project has a logging/metric idiom - findings, each naming the CONCRETE
 counterpart (the component, the pattern, the idiom) it bypassed, same evidence
 bar as the principles pass. The reference order is Phase 1's: this project,
 then its front's siblings, then the declared quality profile.
+
+**Design lens (UI-shaped tickets), run by `/design-review --mode diff`.**
+One pass against the comp, the front's
+DESIGN.md and the adopted sources in `framework/design-standard.md`, run on
+the diff plus the rendered screenshots Phase 4 produced. Every finding names
+its source - a heuristic by number, a WCAG criterion, a DESIGN.md rule, a law
+- and the concrete element; "looks off" is not a finding. A raw value where a
+token exists, a state from the matrix that renders undesigned, a second
+saturated action on one view, and a target under 44 px are findings by
+construction. The lens rides a weak-tool agent with the diff file and the
+screenshots, never a live tree, per the dispatch-safety table.
 
 ### The engineering-principles pass
 
@@ -1061,6 +1100,14 @@ mocked boundary is not "verified". Stand up the real stack locally and:
   wrong-role default reads as a bug. Prefer seeding an exact precondition via
   the API or DB over clicking the UI into it.
   Paste/screenshot the outcome and any relevant server log line.
+- **Rendered, at the sizes it ships (UI-shaped tickets):** screenshot each
+  touched view at the front's shipping widths in every theme it ships, and in
+  each state of its matrix row; set them beside the comp. Run axe-core in the
+  same browser session where the stack has it, and report new violations as
+  red. Where the front keeps visual baselines, a changed snapshot is either
+  predicted by the comp or a regression; it is never refreshed to make the run
+  pass. A suite that asserts what a change removes says nothing about what it
+  leaves on screen (`_command/learning/30`); this check is the one that looks.
 
 If the local stack genuinely cannot be brought up, that is a STOP-and-report
 blocker (the founder decides to unblock or waive) - never a silent skip, and
