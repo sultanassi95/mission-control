@@ -1060,8 +1060,9 @@ the final shipped state. Reconcile means the LOCAL ticket.md, the PR body and
 a comment on the remote ticket: the remote description belongs to its
 reporter and is edited only when it is yours or on explicit request; findings,
 a stale premise and verified criteria go in a comment, where the record of
-what was found sits beside the statement of intent instead of overwriting it. The criteria table is part of the reconcile: if the
-acceptance criteria changed after Phase 5's verdicts were produced - scope
+what was found sits beside the statement of intent instead of overwriting it.
+The criteria table is part of the reconcile: if the acceptance criteria changed
+after Phase 5's verdicts were produced - scope
 moved by a logged deviation, an approach change - the CHANGED rows get fresh
 verdicts before the PR opens. Skip only when nothing changed, and say so in
 one line. A ticket or PR

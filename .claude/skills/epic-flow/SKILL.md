@@ -188,7 +188,8 @@ which is what makes the CI watch real.
 3. **Transition the child's ticket to its in-progress state** in the turn
    the run starts - the tracker is the live view, and a comment on a Backlog
    ticket is not a state. Then **run the child as a full `/mission-flow`**
-   with three overrides, stated in its Phase 0: `--parent <EPIC-ID>`, `--base <epic-branch>`, and
+   with three overrides, stated in its Phase 0: `--parent <EPIC-ID>`,
+   `--base <epic-branch>`, and
    Phase 7 REPLACED - no child PR. Phase 2 uses the epic-child pointer mode
    (the child's ticket.md points at the brief; criteria and outputs live
    once, in the brief). Phase 6 runs in full - verification never amortizes
