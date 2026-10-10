@@ -26,6 +26,9 @@ t "NEGATIVE CONTROL: one raw CSS spacing value fails" 1 bash "$L" "$W/css"
 mk "$W/tsx" 0 0; printf 'export const B = () => <p style={{ fontSize: 14 }} />;\n' > "$W/tsx/components/B.tsx"
 t "NEGATIVE CONTROL: one raw inline style value fails" 1 bash "$L" "$W/tsx"
 
+mk "$W/two" 1 1; printf 'export const C = () => <p style={{ fontSize: 14, lineHeight: 1.4 }} />;\n' > "$W/two/components/C.tsx"
+t "NEGATIVE CONTROL: two raw values on one line count as two (baseline 1 fails)" 1 bash "$L" "$W/two"
+
 mk "$W/at" 1 1; printf '.x{ color: #fff; padding: 4px; }\n' >> "$W/at/app/page.css"
 t "a count equal to its baseline passes" 0 bash "$L" "$W/at"
 

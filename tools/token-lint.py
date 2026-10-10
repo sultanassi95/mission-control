@@ -37,7 +37,7 @@ from pathlib import Path
 HEX = re.compile(r"(?<![\w&/])#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3})(?![0-9a-zA-Z_-])")
 PROPS = r"(?:padding|margin|gap|row-gap|column-gap|inset|font-size|line-height|letter-spacing" \
         r"|padding[A-Z]\w*|margin[A-Z]\w*|rowGap|columnGap|fontSize|lineHeight|letterSpacing)"
-CSS_DECL = re.compile(r"(?<![\w-])" + PROPS + r"(?:-[a-z-]+)?\s*:\s*([^;{}\n]+)")
+CSS_DECL = re.compile(r"(?<![\w-])" + PROPS + r"(?:-[a-z-]+)?\s*:\s*([^;{},\n]+)")
 NONZERO = re.compile(r"(?<![\w.-])(?:\d*\.\d+|[1-9]\d*)(?:px|rem|em|pt)?\b")
 VAR = re.compile(r"var\([^)]*\)")
 CSS_COMMENT = re.compile(r"/\*.*?\*/", re.S)
