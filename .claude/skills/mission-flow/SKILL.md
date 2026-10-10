@@ -459,6 +459,20 @@ reads). And before any bulk retrieval or mutation, run it against exactly ONE
 item and inspect the payload - a wrong pointer or schema assumption is almost
 always wrong for the entire set.
 
+**UI-shaped tickets are designed before they are built (both paths,
+`framework/design-standard.md`).** A ticket is UI-shaped when it adds or
+changes something a user sees: a view, a component, a state, copy, layout.
+For those, Phase 1 reads the front's DESIGN.md beside the spoke (a UI front
+without one gets it from `kit/templates/_design.template.md` in this ticket,
+derived from the shipped code, before any change), and the approach carries a
+comp of each touched view plus its row of the six-state matrix: empty,
+loading, error, long content, direction, narrow. The comp is drawn by the
+design-direction row of `framework/roles.md`, never by the implementer at
+Phase 4; an implementer handed no comp is handed a layout decision it was not
+briefed for. A design fork the DESIGN.md does not settle - a new view
+pattern, a new component, a change to the identity - routes to the
+misalignment stop like any other genuine fork.
+
 **For tasks/enhancements (via a brainstorming discipline, dispatched):** the
 flow is autonomous, so there is nobody to "align with" mid-run and the text
 does not pretend otherwise. The investigator returns a PROPOSED approach
@@ -903,6 +917,16 @@ counterpart (the component, the pattern, the idiom) it bypassed, same evidence
 bar as the principles pass. The reference order is Phase 1's: this project,
 then its front's siblings, then the declared quality profile.
 
+**Design lens (UI-shaped tickets).** One pass against the comp, the front's
+DESIGN.md and the adopted sources in `framework/design-standard.md`, run on
+the diff plus the rendered screenshots Phase 4 produced. Every finding names
+its source - a heuristic by number, a WCAG criterion, a DESIGN.md rule, a law
+- and the concrete element; "looks off" is not a finding. A raw value where a
+token exists, a state from the matrix that renders undesigned, a second
+saturated action on one view, and a target under 44 px are findings by
+construction. The lens rides a weak-tool agent with the diff file and the
+screenshots, never a live tree, per the dispatch-safety table.
+
 ### The engineering-principles pass
 
 Correctness review catches defects. It does not catch a change that duplicates
@@ -1061,6 +1085,14 @@ mocked boundary is not "verified". Stand up the real stack locally and:
   wrong-role default reads as a bug. Prefer seeding an exact precondition via
   the API or DB over clicking the UI into it.
   Paste/screenshot the outcome and any relevant server log line.
+- **Rendered, at the sizes it ships (UI-shaped tickets):** screenshot each
+  touched view at the front's shipping widths in every theme it ships, and in
+  each state of its matrix row; set them beside the comp. Run axe-core in the
+  same browser session where the stack has it, and report new violations as
+  red. Where the front keeps visual baselines, a changed snapshot is either
+  predicted by the comp or a regression; it is never refreshed to make the run
+  pass. A suite that asserts what a change removes says nothing about what it
+  leaves on screen (`_command/learning/30`); this check is the one that looks.
 
 If the local stack genuinely cannot be brought up, that is a STOP-and-report
 blocker (the founder decides to unblock or waive) - never a silent skip, and
