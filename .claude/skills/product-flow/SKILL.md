@@ -68,8 +68,8 @@ Each phase's sub-phases, outputs and honesty rules live in its playbook under
 | 2 | Define | same | - |
 | 3 | Design | `phases/02-design-architect.md` | `/design-new` (stack-neutral tokens), `/design-review --mode proposal` |
 | 4 | Architect and skeleton | same | `/adr`; the compliance block is drafted for the founder to run `/compliance-ref` |
-| 5 | Release plan | `phases/03-plan-build-verify.md` | epic faces only, in each epic's folder |
-| 6 | Build | same | `/epic-flow <key> --auto --decide minor` per epic, in release order |
+| 5 | Release plan | `phases/02-design-architect.md` | epic faces only, in each epic's folder |
+| 6 | Build | `phases/03-build-verify.md` | `/epic-flow <key> --auto --decide minor` per epic, in release order |
 | 7 | Verify | same | the flows' gauntlets, plus a release pass on staging |
 | 8 | Beta | `phases/04-ship-beta-launch-learn.md` | - |
 | 9 | Launch | same | launch surfaces are built as an epic in Phase 6, never with `/design-artifact` |
