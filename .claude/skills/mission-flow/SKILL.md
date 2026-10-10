@@ -291,6 +291,19 @@ reuse it for every dispatch in that flow - assembling it per dispatch is how a
 field ends up blank. A spoke with blank required fields is not dispatch-ready:
 the flow stops there rather than dispatching an agent that is acting as nobody.
 
+**Three lines the header carries verbatim**, from the current model guidance,
+kept short because the models follow them: *Before reporting progress, audit
+each claim against a tool result from this session; report only work you can
+point to evidence for, and say plainly what is not yet verified.* *Do not add
+features, refactor or introduce abstractions beyond what the task requires; a
+bug fix needs no surrounding cleanup, and the simplest thing that works is the
+target.* *You are operating autonomously: for reversible actions inside the
+brief, proceed without asking; before ending your turn, check that your last
+paragraph is not a plan or a promise, and do that work now.* The first is
+hard rule 1 in the agent's own voice, the second keeps a higher-effort agent
+from tidying what it was not asked to touch, the third is what makes a
+dispatched agent finish instead of handing back a question.
+
 ### Sizing, and the tally at the end
 
 State the sizing before the first dispatch of a phase, in the orchestrator's own
