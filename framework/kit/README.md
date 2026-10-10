@@ -31,6 +31,8 @@ the templates the skills instantiate.
 | `_task.template.md` | `/triage`, `/mission-flow` Phase 2 | a ticket folder's `ticket.md` - criteria that name their evidence type, the declared terminal assertion, the Definition-of-Done checklist |
 | `_epic-fragment.template.md` | `/epic-flow` E3 | one fragment brief inside an epic's `30-fragments/` - the state machine an epic run reads between children |
 | `_design.template.md` | a UI front's first design-shaped ticket; `/mission-flow` Phase 1 | an app's `DESIGN.md` - identity, tokens, components, the six-state matrix, platform, quality bar (`framework/design-standard.md`) |
+| `_product-brief.template.md` | `/product-flow` Phase 0 | a product's one-page frame - problem, who has it, the job, the success metric, constraints, kill criteria, non-goals; read first on resume |
+| `_gate-pack.template.md` | `/product-flow` at each of its four gates | one decision on one page - the recommendation, the evidence with its labels, forks taken, kill criteria, spend, what the gate grants, founder actions needed now and to start now |
 
 ## Root files
 
