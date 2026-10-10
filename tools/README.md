@@ -120,3 +120,29 @@ Wiring, in the instance's `.claude/settings.local.json` (gitignored):
 Hooks load at session start, so a freshly wired hook is proven in the next
 session, not the one that wired it. Both scripts need `jq`, like the guard.
 
+
+# tools/token-lint
+
+The design-token ratchet from `framework/design-standard.md`, "The gates". It
+counts raw colour literals and raw spacing and type values (padding, margin,
+gap, inset, font-size, line-height, letter-spacing, as CSS properties or
+camelCase style keys) in the files a front scans, skipping its token files and
+every comment, and fails when a count rises above the baseline recorded in
+`.token-lint.json` at the front's root:
+
+```json
+{ "tokens": ["app/globals.css"],
+  "scan": ["app/**/*.css", "components/**/*.tsx"],
+  "baseline": { "hex": 1, "spacing": 358 } }
+```
+
+- `tools/token-lint.sh <root>`: exit 0 at or under baseline, 1 over it, 2 when
+  it cannot judge (no config, no baseline yet, patterns matching nothing).
+- `tools/token-lint.sh <root> --update-baseline`: records today's counts the
+  first time, and afterwards only ever lowers them; it refuses while any count
+  is over.
+
+A front adopting the standard late wires it at today's count: drift stops on
+that day, and each conversion lowers the number for good. A front whose own
+tests already hold a value class keeps that idiom. Tests:
+`tools/tests/token-lint.tests.sh`, 13 cases with negative controls both ways.
