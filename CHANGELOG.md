@@ -6,6 +6,24 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-10-10 (later): the harness and model generation shift, planned as an
+  epic (MC-060) and landed one commit per fragment on the same branch as the
+  promotion pass. The routing grid now asks for effort on every dispatch
+  (defaults differ by model generation and harness version), names the Agent
+  tool's effort parameter and the workflow agents' env pin, and replaces the
+  blanket deny of the one-call fan-out tool with a narrow admission: model and
+  effort on every agent call, a budget ceiling, the sizing heads-up, or it
+  stays denied. roles and the skills README speak in tiers and gain xhigh.
+  Two settings hooks join the leak guard, each with a test suite: a
+  PreToolUse guard that blocks a status read after a pipe into a pager, and a
+  UserPromptSubmit injector that prints a front's hub and spoke into context
+  when a flow names the front. A prompt audit over the whole surface found it
+  clean on every greppable signal and landed four medium rewrites. The
+  identity header carries the three guidance lines (grounded progress, no
+  tidying, autonomy), and mission-flow gains a clause on keeping agents alive
+  across follow-ups instead of re-briefing them. Two mods (a sub-agent git
+  guard on tool checks, a spend recorder) wait on Claude Code 2.1.292.
+
 - 2026-10-10: a promotion pass over the learning log and memory landed its
   artifact halves - the rule written while its file still emits the defect
   changes nothing. Five changes, one commit each (MC-054, children
