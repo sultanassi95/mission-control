@@ -360,6 +360,18 @@ switches with it; work already done remains evidence.
 > task-path reading (the bug path dispatches the Bash-carrying investigate
 > row) · `/map-front`'s `_map.md` read for blast radius.
 
+**Step zero, both paths: read the front before deciding anything
+(`_command/learning/26`).** Open the front's hub, the repo's spoke and the
+repo's own `AGENTS.md` or `CLAUDE.md` now, inline, and carry what they bind
+into the approach: the base branch, the house PR and branch shape, the build
+quirks, the gotchas. The harness surfaces the repo's agent file only once a
+file inside it is touched, which is after the approach is formed: a PR once
+shipped in the generic section shape because the house shape arrived late,
+and one session paid three documented costs in full with the notes sitting at
+known lines of the spoke. Read the spoke again before Phase 6, where the
+environment traps bite. A documented cost paid a second time is a guess worn
+as a finding; when it happens, date the existing note instead of adding one.
+
 **First move, both paths: is this already delivered? (the ORCHESTRATOR runs
 this inline, before any dispatch - one command that can end the flow should
 not cost a dispatch.)** Before investigating, search the base branch's history for the ticket key and the feature's terms -
@@ -901,8 +913,10 @@ loop. Review fixes are code too.
 orchestrator runs the terminal assertion itself. See "How this flow runs".
 
 Run the repo's own gauntlet, respecting any Node/tool version pin the repo
-declares (check the project's CLAUDE.md, the spoke, and your memory for
-pins), with every command composed for THIS machine - shell dialect and
+declares (re-read the spoke's gotchas and the project's CLAUDE.md at this
+point, not from memory: the gauntlet is where documented environment traps
+bite, and one session paid three of them twice), with every command composed
+for THIS machine - shell dialect and
 tool availability per `_command/machine.local.md`:
 
 ```
