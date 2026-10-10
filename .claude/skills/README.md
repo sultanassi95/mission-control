@@ -14,7 +14,7 @@ flowchart LR
   P["/preflight · /spend<br/>on demand"] -.- DAY
 ```
 
-Twenty skills, five groups - each maps to a ritual a real engineering
+Twenty-four skills, six groups - each maps to a ritual a real engineering
 lead already runs. None overlaps another's job. The portfolio-wide ones
 take `--front <name>` / `--project <name>` scope flags: unscoped keeps
 the whole-portfolio default; scoped invocations read and write only that
@@ -80,6 +80,10 @@ default):
 | | `doc-voice` | Neutral professional register pass; removes AI tells and process leakage | before a doc ships |
 | | `adr` | Decision record: context, decision, alternatives rejected, consequences | decisions |
 | | `docs-viewer` | Live local docs browser with Mermaid rendered as diagrams | anytime (needs Node) |
+| **Design** | `design-new` | A product from scratch, web or mobile, under the design standard; comp mode for one new view | new product · called by the flows for a new view |
+| | `design-adopt` | Derive a front's DESIGN.md from its code, ratchet it at today's counts, list the gaps; change mode for a token or component | existing product · called when a UI front has no DESIGN.md |
+| | `design-review` | Product, proposal, diff or whole epic against the standard; every finding names its source and element | reviews · called as the design lens and at epic close |
+| | `design-artifact` | Pages, decks and reports for the founder, a team or a client, on the product's own system | deliverables · never automatic |
 
 ## Install
 

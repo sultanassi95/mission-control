@@ -91,7 +91,7 @@ context, your harness's permission gates on tool use, and your own review
 gates. Prose does not sandbox a model - which is why liftoff ends by
 demonstrating the discipline (the refusal), not just declaring it.
 
-## The 20 skills
+## The 24 skills
 
 Pre-installed rituals: they ship at `.claude/skills/` inside the repo, so
 cloning IS installing and pulling updates them. The portfolio-wide ones
@@ -109,6 +109,8 @@ it talks). The full table is in
 - **Portfolio:** `new-front` · `retire-front` · `map-front` · `preflight` ·
   `spend` · `compliance-ref` (per-front standards the flows read)
 - **Docs:** `as-built` · `doc-voice` · `adr` · `docs-viewer`
+- **Design:** `design-new` · `design-adopt` · `design-review` ·
+  `design-artifact` (`framework/design-standard.md`)
 
 **Two altitudes, one discipline.** Anything that fits one ticket runs
 `mission-flow`; anything whose correct shape is several tickets runs

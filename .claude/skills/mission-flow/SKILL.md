@@ -56,8 +56,9 @@ skip a phase, never reorder, never invent new phases.
   batch caps at one reviewer and prose is tightest - the principles and
   conformance passes may run inline by the orchestrator instead of as
   dispatches, and RISK-TRIGGERED lenses (security, declared compliance
-  control families) are never waived by a spend dial: a dial that can turn
-  off a security check is not a spend dial. standard (default) = the Phase-5
+  control families, and the design lens on a new view or component) are
+  never waived by a spend dial: a dial that can turn off a security check is
+  not a spend dial. standard (default) = the Phase-5
   sizing table as-is; deep = the full multi-angle review sweep. **`--deep-review` remains as
   an alias for `--spend deep`.** `--thinking` (default high - Phase 1 is
   root-cause work) and `--verbosity` per the universal grammar (the stop
@@ -356,7 +357,9 @@ estimate.
 
 > **Skills in play:** routes to `superpowers:systematic-debugging` (bug) or
 > `superpowers:brainstorming` (task/enhancement); epic-sized exits to
-> `/epic-flow`; `/triage` upstream shares this vocabulary.
+> `/epic-flow`; `/triage` upstream shares this vocabulary. The UI-shaped call
+> below decides whether Phases 1 and 5 bring in `/design-adopt`,
+> `/design-new --comp` and `/design-review --mode diff`.
 
 Classify with the same five-kind vocabulary `/triage` uses at intake - one
 classification language from inbox to PR. Pick one:
@@ -389,6 +392,14 @@ ticket cannot hold it>" - before anything else happens, so a misroute is
 contestable before a single token is spent past it. If genuinely ambiguous,
 ask.
 
+**UI-shaped, one line, every class.** Beside the class, state whether the
+work is UI-shaped: it changes something a user sees - a view, a component, a
+state, copy, layout. A backend, infra or data ticket is not, and pays for
+none of the design steps. A UI-shaped ticket triggers the design skills in
+Phases 1 and 5, and they act only on the front and project this invocation
+names: a design skill never reads another front's repo as a reference, a
+pilot or a test bed.
+
 **Reclassification.** Phase-1 evidence that flips the class (a "task" that is
 really a defect; a "bug" that is really an undecided product behaviour)
 re-enters this phase: announce the new classification with its rationale and
@@ -401,7 +412,9 @@ switches with it; work already done remains evidence.
 > **Skills in play:** `superpowers:systematic-debugging` (bug path) ·
 > `superpowers:brainstorming` (task path) · `feature-dev:code-explorer` for
 > task-path reading (the bug path dispatches the Bash-carrying investigate
-> row) · `/map-front`'s `_map.md` read for blast radius.
+> row) · `/map-front`'s `_map.md` read for blast radius · for UI-shaped
+> work, `/design-adopt` (no DESIGN.md yet) and `/design-new --comp` (a new
+> view or pattern).
 
 **Step zero, both paths: read the front before deciding anything
 (`_command/learning/26`).** Open the front's hub, the repo's spoke and the
@@ -463,11 +476,11 @@ always wrong for the entire set.
 `framework/design-standard.md`).** A ticket is UI-shaped when it adds or
 changes something a user sees: a view, a component, a state, copy, layout.
 For those, Phase 1 reads the front's DESIGN.md beside the spoke (a UI front
-without one gets it from `framework/kit/templates/_design.template.md` in this ticket,
-derived from the shipped code, before any change), and the approach carries a
-comp of each touched view plus its row of the six-state matrix: empty,
-loading, error, long content, direction, narrow. The comp is drawn by the
-design-direction row of `framework/roles.md`, never by the implementer at
+without one runs `/design-adopt --front <this front>` first, in this ticket,
+before any change), and the approach carries a comp of each touched view plus
+its row of the six-state matrix: empty, loading, error, long content,
+direction, narrow. `/design-new --comp <view>` draws it at the
+design-direction row of `framework/roles.md`, never the implementer at
 Phase 4; an implementer handed no comp is handed a layout decision it was not
 briefed for. A design fork the DESIGN.md does not settle - a new view
 pattern, a new component, a change to the identity - routes to the
@@ -809,7 +822,8 @@ recorded, never silently absorbed.
 > applied) · `/simplify` for the polish commit · `/security-review` on the
 > risk-class trigger · the named lenses (silent-failure, test-coverage,
 > type-design) dispatched as prompts on weak-tool agents with the diff file -
-> never the stock full-toolset agents against a live tree.
+> never the stock full-toolset agents against a live tree · `/design-review
+> --mode diff` as the design lens on UI-shaped tickets.
 
 Two checks gate this phase, and `--auto` waives neither: the ticket's
 acceptance criteria are verified before any reviewer is dispatched, and the
@@ -917,7 +931,8 @@ counterpart (the component, the pattern, the idiom) it bypassed, same evidence
 bar as the principles pass. The reference order is Phase 1's: this project,
 then its front's siblings, then the declared quality profile.
 
-**Design lens (UI-shaped tickets).** One pass against the comp, the front's
+**Design lens (UI-shaped tickets), run by `/design-review --mode diff`.**
+One pass against the comp, the front's
 DESIGN.md and the adopted sources in `framework/design-standard.md`, run on
 the diff plus the rendered screenshots Phase 4 produced. Every finding names
 its source - a heuristic by number, a WCAG criterion, a DESIGN.md rule, a law

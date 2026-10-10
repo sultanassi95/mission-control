@@ -130,6 +130,11 @@ conformance reference is recorded here for every surface the epic touches -
 what THIS project and this front already do (reference order: this project ->
 front siblings -> declared quality profile).
 
+For an epic with UI-shaped fragments on a front that has no DESIGN.md, E1
+runs `/design-adopt --front <the epic's front>` and records the as-built
+contract and its gaps here; the plan is then made against a written design,
+not a remembered one.
+
 ### E2 - Lo-fi architecture (dispatched + inline judgment; gate: founder settles each fork)
 
 `20-architecture.md`, diagram-first, boundary-level only:
@@ -144,6 +149,9 @@ front siblings -> declared quality profile).
 - the 13-layer touch-list: which SDLC layers the epic touches, each naming its
   hook (layer 9 -> compliance profile, layer 12 -> per-fragment telemetry
   criteria, ...);
+- for an epic that adds views or patterns, `/design-new --comp` for each new
+  pattern at boundary level: the comp and its state row, so fragments
+  implement one design instead of each inventing a slice of it;
 - `## Declared outputs` - the machine-readable list E4 diffs against
   (`- <kind>: <name>` per line);
 - genuine forks presented to the founder one by one, each settled fork
@@ -278,7 +286,10 @@ remainder). Six steps, in order:
    kinds a script or grep can assert (a file present, a schema model defined,
    a route registered, a section landed), and as an explicit manual line in
    the close report for the kinds it cannot (job behaviour). Never implied.
-2. **The cross-fragment principles pass.** One review over the WHOLE epic
+2. **The cross-fragment principles pass**, joined for an epic that touched
+   UI by `/design-review --mode epic` over every view it touched: two
+   fragments styling one thing two ways is the design form of the drift this
+   pass exists for. One review over the WHOLE epic
    diff (`git diff <base>..<epic-branch>`): DRY across fragments,
    responsibility placement, contract drift between fragments - the failure
    modes per-child review is structurally blind to, because each child's

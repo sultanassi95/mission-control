@@ -6,6 +6,20 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-10-11 (later): the design standard gets its skills (MC-078, children
+  MC-079..083), a sixth group in the skills index. `/design-new` designs a
+  product from scratch and, in comp mode, one new view; `/design-adopt` derives
+  a front's DESIGN.md from its code, ratchets it at today's counts and, in
+  change mode, follows a token or component change to every view;
+  `/design-review` judges a product, a proposal, a diff or a whole epic, every
+  finding naming its source and element, with a content and localization lens;
+  `/design-artifact` makes pages, decks and reports for the audience named,
+  local by default for confidential content. mission-flow states UI-shaped in
+  Phase 0 and calls the skills in Phases 1 and 5; epic-flow calls them at E1,
+  E2 and E8. Three guards: they act only on the named front, only for
+  UI-shaped work, and the design lens on a new view or component is never
+  waived by a spend dial.
+
 - 2026-10-11: the portfolio gains a design layer (MC-071, children MC-072..077).
   `framework/design-standard.md` owns six principles, the adopted stack with one
   source per layer (the usability heuristics, WCAG 2.2 AA, Laws of UX,
