@@ -304,6 +304,32 @@ hard rule 1 in the agent's own voice, the second keeps a higher-effort agent
 from tidying what it was not asked to touch, the third is what makes a
 dispatched agent finish instead of handing back a question.
 
+### Keep an agent alive instead of re-briefing one
+
+Spawn-and-block was a guardrail for models that lost the thread; the current
+generation sustains long-lived sub-agents and does better when the
+orchestrator keeps working while they run. Four consequences for this flow,
+none of which loosens the dispatch-safety table above:
+
+- **Dispatch in the background by default** for anything independent of the
+  orchestrator's next step - the investigator, each reviewer - and integrate
+  from the record when it lands rather than waiting on the slowest agent.
+- **Continue an agent by message** for a follow-up inside its own scope: a
+  reviewer asked what would settle its conditional finding, an investigator
+  asked to extend a probe one layer down. The agent keeps its context, which a
+  fresh dispatch would pay to rebuild, and its tools stay what the table gave it.
+- **One agent across investigate and implement is allowed only when it was
+  dispatched on the implement row from the start**, in its own worktree, so
+  the table still holds; an investigate-row agent cannot grow `Edit` mid-life
+  and is not continued into Phase 4.
+- **A forked agent inherits the orchestrator's context** and is the right
+  shape when the brief would otherwise restate most of the conversation; its
+  tool access is still the table's, and the identity header still leads.
+
+Where the harness lets a custom agent compact its own window earlier, set it
+on the long-lived ones so a continued agent does not silently lose its early
+context.
+
 ### Sizing, and the tally at the end
 
 State the sizing before the first dispatch of a phase, in the orchestrator's own
