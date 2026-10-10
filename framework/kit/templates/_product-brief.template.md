@@ -55,7 +55,7 @@ Checked at every gate. Any one tripped is a stop recommendation, not a
 rationalisation.
 
 - <e.g. Discover finds a free alternative that does the job fully>
-- <e.g. unit economics at the Gate 1 price cannot cover the Phase 4 cost model>
+- <e.g. unit economics at the price set before the bet cannot cover the Phase 4 cost model>
 - <e.g. the launch bar missed by more than half at the first Learn run>
 
 ## Non-goals

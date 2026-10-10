@@ -65,7 +65,7 @@ production, before any feature is built on it.
 - Environments: local, staging, production; staging is real, so Phase 7 can
   test against it.
 - **Deploy as a separate act**: a tag or a manual workflow, never a merge to
-  main. This is what makes pre-launch merges into main safe to grant.
+  main. A merged epic then never deploys by accident.
 - Observability from the first request: logs, metrics, the alarms and where
   they route.
 - Backups with a restore that has been run once.

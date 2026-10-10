@@ -5,9 +5,9 @@ staging, stopping only on the list in the skill.
 
 ```mermaid
 flowchart LR
-  G2{{the blueprint}} --> S[skeleton epic] --> E[each epic in release order<br/>epic-flow --auto --decide minor] --> M[merge into main<br/>under the blueprint gate grant]
-  M --> E
-  M --> V[7 Verify on staging] --> G3a{{deploy}}
+  G2{{the blueprint}} --> S[skeleton epic] --> E[each epic in release order<br/>epic-flow --auto --decide minor] --> M[stacked PRs<br/>the founder merges in order]
+  E --> E
+  E --> V[7 Verify on staging] --> G3a{{deploy}}
 ```
 
 ## Phase 6 - Build
@@ -20,9 +20,17 @@ flowchart LR
    against the code the earlier epics wrote and runs without re-asking.
    Every child is a full `/mission-flow`, with its design steps for
    UI-shaped work.
-3. **Merge each epic PR into main** when its checks are green, under the
-   the blueprint gate grant, which holds until the deploy gate. Deploy stays a separate act, so a
-   merge changes no live system.
+3. **Stack, never wait.** The first epic branches from the repo's main; each
+   later epic branches from the one before it (`--base <previous epic branch>`)
+   and opens its PR against that branch. The founder merges the PRs in order,
+   whenever they choose; the next epic is already building on top.
+   - When a lower PR merges, GitHub moves the next PR's base to main. If it
+     merged as a squash, merge main into the next epic's branch - merge,
+     never rebase - and prove the merged tree equals the branch's tree before
+     continuing.
+   - Each epic's children move to done when the founder merges its PR,
+     which is epic-flow's own batch transition, unchanged.
+   - Deploy stays a separate act, so a merge to main changes no live system.
 4. Between epics: one line, `LANDED EPIC <key> · <PR> · next <key>`, the
    spend ledger updated, the kill criteria re-checked against what was
    learned while building.

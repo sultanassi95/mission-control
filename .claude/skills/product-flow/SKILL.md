@@ -90,7 +90,7 @@ lists: needed now, and **start now**, for anything with a long lead time.
 |---|---|---|---|
 | **The bet** | Define | positioning, MVP scope, the north-star metric, kill criteria; the value risk is shown as untested | Design and Architect; the proof stays local, published privately only when the founder asks |
 | **The design** | Design | the designed web and mobile app: identity, the key screens in every state of their matrix, the proof | Architect builds on the approved design; a change the founder names is made before Architect starts |
-| **The blueprint** | Release plan | identity, data model, stack, release plan with each epic's face | repo bootstrap and the skeleton commit; the cloud account and a staging spend cap; every epic run in release order, each face counting as that epic's E0 lock; merging epic PRs into the new repo's main until the deploy gate, because the skeleton makes deploy a separate act |
+| **The blueprint** | Release plan | identity, data model, stack, release plan with each epic's face | repo bootstrap and the skeleton commit; the cloud account and a staging spend cap; every epic run in release order, each face counting as that epic's E0 lock; each epic stacked on the previous one's branch with its own PR, so the build never waits on a merge; the founder merges the PRs in order |
 | **Deploy** | Verify | the production deploy, live keys, alarm routing, the runbook | the deploy itself; beta invitations |
 | **Go public** | Beta | store submission, payments live, the announcement drafts the founder will send | the launch steps; nothing is posted on the founder's behalf |
 
@@ -110,7 +110,8 @@ outside the grant), plus two of its own: a kill criterion tripped, and the
 spend ledger crossing three quarters of the envelope. Nothing else is a stop:
 not a phase ending, not an epic landing, not a summary, not the plan restated,
 not a question the folder answers. Between epics the output is one line,
-`LANDED EPIC <key> · <PR> · next <key>`.
+`LANDED EPIC <key> · <PR> · next <key>`. Epics stack: each one branches from
+the one before, so a PR waiting for the founder's merge is never a stop.
 
 ## Honesty at product scale
 

@@ -108,12 +108,12 @@ commit + push + PR creation for that one ticket, expiring when the PR
 opens. `epic-flow`'s lock, or its `--auto` invocation, carries the same
 grant for the epic branch alone: landing each child as one squashed commit,
 pushing that branch, and opening the epic PR, never merging it into the base.
-`product-flow` grants only what each of its four gates writes into its pack:
+`product-flow` grants only what each of its five gates writes into its pack:
 the blueprint gate grants creating the product's repo, committing its
-skeleton, running each epic, and merging epic PRs into that repo's main until
-the deploy gate, because the skeleton makes deploy a separate act; the deploy
-and go-public gates grant the deploy and the launch steps. Nothing is ever
-posted, sent or paid on the founder's behalf.
+skeleton, and running each epic stacked on the one before, each with its own
+PR that the founder merges; the deploy and go-public gates grant the deploy
+and the launch steps. It never merges a PR, and nothing is ever posted, sent
+or paid on the founder's behalf.
 Every other skill observes the standing default: no git writes
 unless the founder asks in the moment. Skills that write files
 (`triage`, `as-built`, `promote-learnings`, `retire-front`) carry their

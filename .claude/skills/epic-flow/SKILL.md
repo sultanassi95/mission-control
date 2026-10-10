@@ -261,6 +261,11 @@ record it in `00-face.md` as `shape: feature` or `shape: batch`:
    PR (that batch step is named in the E8 report). Capture, lesson
    candidates, and the zero-loose-ends rule run per child unchanged.
 
+**Stacked on an unmerged epic.** An epic run with `--base` set to another
+epic's branch opens its PR against that branch. When the lower PR merges as a
+squash, its commits come back under new hashes: merge main into this branch,
+prove the merged tree equals this branch's tree, and continue.
+
 **Between lanes:** if the base moved, merge base INTO the epic branch -
 merge, never rebase; published history stays honest - with conflicts handled
 by the Phase-4 classes (trivial = resolve and note, semantic = stop the
