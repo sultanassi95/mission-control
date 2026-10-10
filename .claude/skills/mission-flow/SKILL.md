@@ -405,8 +405,8 @@ so its default is the investigate row - `Bash`, no `Edit`/`Write`; the TASK
 path's reading-and-mapping default is a read-only explorer
 (`feature-dev:code-explorer` where available), escalated to the investigate
 row only when its probes genuinely need a shell. A read-only agent cannot run
-the phase's commands - naming it the universal default was a contradiction,
-found and retired. Split into two investigators only when a ticket has
+the phase's commands, so it is never the bug path's default. Split into two
+investigators only when a ticket has
 genuinely independent sub-questions.
 
 **For bugs (via systematic debugging):** reproduce, gather evidence at
@@ -419,7 +419,7 @@ etc.), an error tracker, or metrics - pull the ACTUAL server error and its
 frequency + latency signature as PRIMARY evidence before theorizing from
 source. The literal error usually names the failing layer in one query and
 refutes the plausible-but-wrong guess (a status-guard theory died this way on
-AI-1502: the guards were fine; the real cause was `raw-body: request aborted`
+a real ticket: the guards were fine; the real cause was `raw-body: request aborted`
 500s from instance saturation, visible only in the logs + metrics). Confirm
 read access up front (it may need an interactive cloud login the founder runs);
 keep any confidential payloads in the session scratch, never in `_command/`.
@@ -490,7 +490,7 @@ pure code change, name the execution mechanism in the ticket and design to it:
   will rely on. If you don't know the deployed topology, read the infra
   (`infra/`, the spoke, machine profile) BEFORE choosing the design.
 The failure this prevents: shipping a prod backfill as an unrunnable laptop
-script because the ticket never asked "how does this reach prod?" (AI-1508).
+script because the ticket never asked "how does this reach prod?"
 
 **Blast radius (mapped fronts):** if the project's front has a
 `_map.md`, read it. A change touching a surface on any INBOUND edge is a
@@ -1026,20 +1026,20 @@ mocked boundary is not "verified". Stand up the real stack locally and:
   failure/edge case the change targets. Paste the literal status + body. A
   contract proven only by a mocked unit test is not proven (hard rule 2).
 - **Full flow (browser / Playwright):** drive the real UI through the
-  user-visible path the ticket describes, INCLUDING the failure path the fix
-  targets. Inject the failure client-side (a `window.fetch` override returning
-  the exact status + body) - it reaches error states the UI itself gates
-  against reaching, and lets you assert BOTH the friendly message AND the
-  absence of any raw server detail on the page. Before asserting anything
-  role-gated, assert the acting identity first (the dev-user switcher /
-  logged-in user - a wrong-role default reads as a bug). Prefer seeding an
-  exact precondition via the API/DB over clicking the UI into it.
+  user-visible path the ticket describes, including the failure path the fix
+  targets. Reach the error state by whatever injection the stack allows (a
+  client-side fetch override returning the exact status and body is one way,
+  and it reaches states the UI gates against) and assert both the friendly
+  message and the absence of any raw server detail on the page. Before
+  asserting anything role-gated, assert the acting identity first, since a
+  wrong-role default reads as a bug. Prefer seeding an exact precondition via
+  the API or DB over clicking the UI into it.
   Paste/screenshot the outcome and any relevant server log line.
 
 If the local stack genuinely cannot be brought up, that is a STOP-and-report
 blocker (the founder decides to unblock or waive) - never a silent skip, and
 never inferred-done from unit green. This is the Phase-6 manual smoke made a
-firm gate; it was under-specified and got skipped once (AI-1502).
+firm gate; it was under-specified and got skipped once.
 
 **The local stack is shared.** It is the founder's stack too, and it is often
 running while they test. Do NOT switch branches or edit watched files while the
@@ -1136,7 +1136,7 @@ Phase-8 report. Red caused by THIS diff: one bounded re-entry into the
 Phase 4-6 loop - fix, verify, push, watch again, ONCE. Red from infra or
 flake, or a second red: a founder-gated item in the report, never silently
 left. An integration branch once sat red for five days with nothing noticing
-(AI-1814); the flow now cannot end without saying what CI said. A repo with no
+; the flow now cannot end without saying what CI said. A repo with no
 checks configured reports exactly that in one line.
 
 ## Phase 8 - Link back + capture (produces: two-way traceability, current front context)
@@ -1273,7 +1273,7 @@ because the convenient built-in is sometimes the wrong tool:
   (merge vs PR), a question this flow settles doctrinally; invoking it
   re-opens settled scope.
 
-Cautioned, decided at MC-020: the pr-review-toolkit agents carry full
+Cautioned: the pr-review-toolkit agents carry full
 toolsets, which the reviewer safety row forbids - their LENSES ride weak-tool
 dispatches with the diff file; the stock agents never touch a live tree.
 

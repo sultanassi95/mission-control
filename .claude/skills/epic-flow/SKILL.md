@@ -43,7 +43,7 @@ from the lock.
 
 Plan mode surfaces one session task per stage (`<EPIC> · E0 Face` ...
 `<EPIC> · E8 Close`), transitioned at stage gates - the same contract as
-mission-flow's per-phase list (MC-027). Execution mode additionally creates a
+mission-flow's per-phase list. Execution mode additionally creates a
 fresh per-phase list per child, per that rule.
 
 ## The epic folder

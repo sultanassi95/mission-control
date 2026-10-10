@@ -317,7 +317,7 @@ item is simply absent. A standup reports what happened, not what was considered.
 - Ticket URLs use your tracker's canonical browse base (e.g.
   `https://<your-tenant>.atlassian.net/browse/TICK-214`, or the GitHub
   issue URL). PR URLs use the repo path from the branch's remote.
-- The whole summary stays under 20 lines.
+- The whole summary reads in one screen: it says what moved, not why.
 
 **`--format slack` (default):**
 
