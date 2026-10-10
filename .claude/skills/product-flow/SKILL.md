@@ -87,7 +87,7 @@ lists: needed now, and **start now**, for anything with a long lead time.
 
 | Gate | After | The founder decides | It grants |
 |---|---|---|---|
-| **1 · The bet** | Define | positioning, MVP scope, the north-star metric, kill criteria; the value risk is shown as untested | Design and Architect; the proof may be published privately |
+| **1 · The bet** | Define | positioning, MVP scope, the north-star metric, kill criteria; the value risk is shown as untested | Design and Architect; the proof stays local, published privately only when the founder asks |
 | **2 · The blueprint** | Release plan | identity, data model, stack, release plan with each epic's face | repo bootstrap and the skeleton commit; the cloud account and a staging spend cap; every epic run in release order, each face counting as that epic's E0 lock; merging epic PRs into the new repo's main until Gate 3a, because the skeleton makes deploy a separate act |
 | **3a · Deploy** | Verify | the production deploy, live keys, alarm routing, the runbook | the deploy itself; beta invitations |
 | **3b · Go public** | Beta | store submission, payments live, the announcement drafts the founder will send | the launch steps; nothing is posted on the founder's behalf |
