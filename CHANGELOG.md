@@ -6,6 +6,19 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-10-11 (later still): `/product-flow` after its first dry run (MC-091).
+  A tabletop run of a sample idea through every instruction found eleven
+  defects, fixed here. The founder reviews the design at a new gate between
+  Design and Architect, so there are five gates, four when launch is on deploy
+  day, and gates are named rather than numbered. A product's epics stack, each
+  on the one before with its own PR the founder merges, replacing a merge
+  grant the instance's permissions deny. `/design-new` gains `--local` and
+  `--stack-neutral`. The budget is in tokens, measured from dispatched agents'
+  reports; the product id is the front's name; a resume never passes an
+  unanswered gate; every gate has a yes-with-changes path; an existing
+  product's front hands off to epic-flow; `/retro` proposes the learn run;
+  epic-flow merges main into an epic stacked on a squash-merged one.
+
 - 2026-10-11 (later): a third delivery altitude, `/product-flow` (MC-084,
   children MC-085..090). It takes an idea, a vision or a problem from framing
   through research, positioning, design, architecture, build, verification,

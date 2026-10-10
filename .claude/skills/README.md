@@ -64,7 +64,7 @@ default):
 | | `debrief` | Roll up progress, rewrite the pointer, surface founder-gated items, capture lessons | every evening |
 | | `retro` | Shipped / live / stuck per front, scoreboard, week-scale lessons, next week locked | Fridays |
 | **Delivery** | `mission-flow` | One ticket to a checks-green PR: the fixed 8-phase playbook (Jira, GitHub Issues, or the native task board) | per work item |
-| | `product-flow` | A product from an idea to launch: frame, research, define, design, architect, then each epic via epic-flow, verify, deploy, beta, launch; four founder gates at irreversibility and money; `--learn` weeks later | an idea, a vision or a problem to build for |
+| | `product-flow` | A product from an idea to launch: frame, research, define, design, architect, then each epic via epic-flow, verify, deploy, beta, launch; five founder gates, at irreversibility, money and the design; `--learn` weeks later | an idea, a vision or a problem to build for |
 | | `epic-flow` | Work too big for one ticket: gated stages E0-E6 plan it into decoupled fragments behind a founder-locked tree, then each fragment runs as a mission-flow child - one squashed commit each, one epic PR | when the shape is several tickets |
 | | `triage` | Messy inbox to per-project task boards, one table, STOP-gated | when items pile up |
 | | `log-deviation` | Canonical register row + body, logged BEFORE the fix | on any drift from plan |

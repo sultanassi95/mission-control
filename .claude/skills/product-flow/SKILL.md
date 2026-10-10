@@ -36,12 +36,19 @@ flowchart LR
 /product-flow --learn <product-id>
 ```
 
-- **`--budget`** is the spend envelope for the run, and it is the explicit go
+- **`--budget`** is the spend envelope in tokens, and it is the explicit go
   that fan-out needs (`framework/CONSTITUTION.md`, directive 5). Without it
   the run states its estimated envelope once, before Phase 1, and waits.
+- **The product id is the front's name**, chosen at Phase 0 from the working
+  name; `--resume` and `--learn` take it.
 - **`--resume`** starts any later session from the product folder: it re-reads
   every phase document's `status:` and the gate records, never memory, and
-  continues at the first phase not `complete`.
+  continues at the first phase not `complete`. A gate pack still `awaiting`
+  is presented again; a resume never passes a gate the founder has not
+  answered.
+- **`--front`** naming a front that already holds a launched or building
+  product hands off instead of running: new work there is `/epic-flow`, and
+  its design is `/design-adopt`. This skill starts new products.
 - **`--learn`** is Phase 10, run weeks after launch on the founder's word,
   because it reads production and production is read only on request.
 
@@ -97,7 +104,17 @@ lists: needed now, and **start now**, for anything with a long lead time.
 Deploy and go-public merge into one gate when launch falls on deploy day,
 which makes four.
 
+**Every gate has three answers.** Yes: the run continues. Yes with named
+changes: the run makes them, updates the affected phase documents and the
+pack's decision record, and continues without asking again, unless a change
+reopens a fork, which then goes to the next gate. No: the run stops, and the
+pack's recommendation names what would have to change.
+
 ## What stops a run, and what does not
+
+**The run opens with at most two asks:** the spend envelope when `--budget`
+was not given, and `/new-front`'s approval to register the front. Neither is
+a gate; each is answered once.
 
 **Before the blueprint gate, forks never stop.** Nothing is built yet, so each fork is
 recorded with its options, the recommended branch is taken, and the fork goes
@@ -144,7 +161,10 @@ Hard rules 1 and 6 apply to the product, not only to its code:
 
 ## Spend
 
-A ledger in the product folder records each phase's dispatches by model and
-effort, from the records `/spend` reads, against the envelope. Each phase
+A ledger in the product folder records each phase's dispatches by model,
+effort and tokens against the envelope. Token counts come from each
+dispatched agent's completion report; the orchestrating session's own usage
+is not reported to it, so the ledger says so rather than estimating it, and
+the three-quarters stop is measured on dispatched tokens. Each phase
 states its sizing before its first dispatch. Discover's research fans out
 across agents with web search; build epics follow epic-flow's sizing.
