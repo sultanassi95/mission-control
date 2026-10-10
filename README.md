@@ -91,7 +91,7 @@ context, your harness's permission gates on tool use, and your own review
 gates. Prose does not sandbox a model - which is why liftoff ends by
 demonstrating the discipline (the refusal), not just declaring it.
 
-## The 24 skills
+## The 25 skills
 
 Pre-installed rituals: they ship at `.claude/skills/` inside the repo, so
 cloning IS installing and pulling updates them. The portfolio-wide ones
@@ -102,7 +102,8 @@ it talks). The full table is in
 
 - **Cadence:** `briefing` (morning) · `debrief` (evening) · `retro`
   (weekly)
-- **Delivery:** `mission-flow` (one ticket to a checks-green PR, 8 phases) ·
+- **Delivery:** `product-flow` (an idea to a launched product, four gates) ·
+  `mission-flow` (one ticket to a checks-green PR, 8 phases) ·
   `epic-flow` (work too big for one ticket: planned into fragments, executed
   as mission-flow children) · `triage` · `log-deviation` · `standup`
 - **Learning:** `learn-from-session` · `promote-learnings`

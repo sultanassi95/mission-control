@@ -6,6 +6,20 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-10-11 (later): a third delivery altitude, `/product-flow` (MC-084,
+  children MC-085..090). It takes an idea, a vision or a problem from framing
+  through research, positioning, design, architecture, build, verification,
+  deploy, beta and launch, with a separate learn run weeks later, and stops at
+  four gates placed at irreversibility and money: the bet, the blueprint,
+  deploy and go-public. Before the blueprint, forks are recorded and taken; after
+  it, the run stops only on epic-flow's list, a tripped kill criterion or the
+  spend ledger. Four playbooks hold the sub-phases; the kit gains the product
+  brief and gate-pack templates; epic-flow takes a parent-locked face as its E0
+  lock and treats a migration implementing a parent-approved data model as
+  settled. The constitution names three altitudes, the authority note names
+  the product grants, and the continuity stack and task board register the
+  product folder.
+
 - 2026-10-11 (later): the design standard gets its skills (MC-078, children
   MC-079..083), a sixth group in the skills index. `/design-new` designs a
   product from scratch and, in comp mode, one new view; `/design-adopt` derives
