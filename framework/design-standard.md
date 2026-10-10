@@ -4,7 +4,9 @@
 > taste. This page owns the principles, the adopted sources, the DESIGN.md
 > contract every UI front carries, and the gates. The flows say WHEN design
 > happens (`.claude/skills/mission-flow/SKILL.md`, Phases 1, 5 and 6) and
-> `roles.md` says WHO; neither restates what is here.
+> `roles.md` says WHO; neither restates what is here. Four skills run it:
+> `/design-new`, `/design-adopt`, `/design-review` and `/design-artifact`
+> (`.claude/skills/`).
 
 ```mermaid
 flowchart LR
