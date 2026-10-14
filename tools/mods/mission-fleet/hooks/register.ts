@@ -3,6 +3,8 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { AuditEntry, Console } from '../types'
 
+import { commonDir, CONTROLLER_PROMPT, CONTROLLER_TYPE, DEFAULT_BUDGET, isInsideRelative, spokePath, staffingOrder } from './controller'
+
 const consoles = atom({ plugin: 'mission-fleet', key: 'consoles' } as const, [] as Console[])
 const audit = atom({ plugin: 'mission-fleet', key: 'audit' } as const, [] as AuditEntry[])
 
@@ -12,14 +14,15 @@ const FRONT = /^[a-z0-9][a-z0-9_-]{0,63}$/i
 
 const USAGE = [
   'Usage:',
-  '  /console staff <front> [--cwd <dir>] [--model haiku|sonnet|opus|fable]',
+  '  /console staff <front> [--project <p>] [--model haiku|sonnet|opus|fable] [--budget <n>] [--cwd <dir>]',
   '  /console list',
   '  /console call <call-sign> <message>',
   '  /console stand-down <call-sign>',
 ].join('\n')
 
-const callSignOf = (front: string) => front.toUpperCase().replace(/[^A-Z0-9]+/g, '-')
-const nameOf = (front: string) => `console-${front.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+const callSignOf = (scope: string) => scope.toUpperCase().replace(/[^A-Z0-9]+/g, '-')
+const nameOf = (scope: string) => `console-${scope.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+const NOT_SPOKES = new Set(['_front.md', 'progress.md', 'deviations.md', '_map.md', 'scripts.md', 'DESIGN.md'])
 
 export type Parsed = { verb: string; rest: string[]; flags: Record<string, string>; error?: string }
 
@@ -41,21 +44,6 @@ export function parseArgs(args: string): Parsed {
   return { verb: rest.shift() ?? '', rest, flags }
 }
 
-export function controllerBrief(front: string, callSign: string): string {
-  return [
-    `You are the Controller staffed on the ${callSign} console. You own the "${front}" front of this portfolio until Flight stands you down.`,
-    `Start cold from the front's own files: _command/portfolio/${front}/_front.md (hub), its spoke(s), and progress.md. Read them before acting.`,
-    'Use any skill, plugin or MCP the session has. You may dispatch your own sub-agents (your back room).',
-    'Every report you send back is a status check in exactly four lines:',
-    'state: <one line>',
-    'shipped: <one line, or nothing>',
-    'blocked on you: <one line, or nothing>',
-    'next: <one line>',
-    'Then go idle and wait for Flight to call you again. Do not merge anything, ever.',
-    'First task: read the hub and report your first status check.',
-  ].join('\n')
-}
-
 async function log($: EngineInterface, op: string, target: string, result: string) {
   await update($, audit, list => [...list, { at: new Date().toISOString(), op, target, result }].slice(-500))
 }
@@ -67,6 +55,13 @@ export const register: Register = on => {
     await $.command.register({
       name: 'console',
       description: 'Staff, list, call or stand down a front Controller (Flight\'s console fleet)',
+    })
+    await $.agent.register({
+      name: CONTROLLER_TYPE,
+      description: 'A front or project Controller. Staff it only through the mission-fleet console tool (/console staff), never with a direct Agent call.',
+      prompt: CONTROLLER_PROMPT,
+      background: true,
+      autoCompactWindow: 400000,
     })
     await $.tool.register({
       name: TOOL,
@@ -102,7 +97,7 @@ async function runConsole($: EngineInterface, args: string): Promise<string> {
       .map(c => {
         const a = agents.find(x => x.id === c.agentId)
         const state = c.status === 'staffed' ? (a?.status ?? 'unknown') : c.status
-        return `${c.callSign.padEnd(14)} ${state}  ${c.model}  ${c.front}  agent ${c.agentId}`
+        return `${c.callSign.padEnd(14)} ${state}  ${c.model}  ${a?.type ?? '-'}  ${c.project ? `${c.front}/${c.project}` : c.front}  agent ${c.agentId}`
       })
       .join('\n')
   }
@@ -136,12 +131,71 @@ async function runConsole($: EngineInterface, args: string): Promise<string> {
   return USAGE
 }
 
+async function findRoot($: EngineInterface): Promise<string | undefined> {
+  let dir = await $.session.root()
+  for (let i = 0; i < 8 && dir; i++) {
+    try {
+      await $.fs.read(`${dir}/_command/trackers/fronts.md`)
+      return dir
+    } catch {
+      const up = dir.replace(/\/[^/]+$/, '')
+      if (up === dir) break
+      dir = up
+    }
+  }
+  return undefined
+}
+
+async function spokesOf($: EngineInterface, frontDir: string, project: string | undefined): Promise<{ file: string; path: string }[]> {
+  // A spoke is <front>/<name>.md (single-project) or <front>/<project>/<project>.md (multi-project).
+  const candidates: string[] = []
+  if (project) candidates.push(`${frontDir}/${project}/${project}.md`, `${frontDir}/${project}.md`)
+  else {
+    const entries = await $.fs.list(frontDir).catch(() => [])
+    for (const e of entries) {
+      if (e.kind === 'file' && e.name.endsWith('.md') && !NOT_SPOKES.has(e.name)) candidates.push(`${frontDir}/${e.name}`)
+      if (e.kind === 'dir' && !e.name.startsWith('.') && e.name !== 'tasks') candidates.push(`${frontDir}/${e.name}/${e.name}.md`)
+    }
+  }
+  const found: { file: string; path: string }[] = []
+  for (const file of candidates) {
+    let path
+    try {
+      path = spokePath(await $.fs.read(file))
+    } catch {
+      continue
+    }
+    if (path && isInsideRelative(path)) found.push({ file, path })
+    if (project && found.length) break
+  }
+  return found
+}
+
 async function staff($: EngineInterface, front: string | undefined, flags: Record<string, string>): Promise<string> {
   if (!front) return USAGE
-  if (!FRONT.test(front)) return `"${front}" is not a front name (letters, digits, - and _ only).`
+  const project = flags.project
+  if (!FRONT.test(front) || (project !== undefined && !FRONT.test(project))) return `"${project ?? front}" is not a front or project name (letters, digits, - and _ only).`
   if (flags.model && !MODELS.has(flags.model)) return `--model must be one of haiku, sonnet, opus, fable.`
-  const callSign = callSignOf(front)
-  const name = nameOf(front)
+  const budget = flags.budget === undefined ? DEFAULT_BUDGET : /^\d{1,2}$/.test(flags.budget) ? Number(flags.budget) : NaN
+  if (!(budget >= 0 && budget <= 20)) return '--budget must be a whole number from 0 to 20.'
+
+  const root = await findRoot($)
+  if (!root) return 'No portfolio found: no _command/trackers/fronts.md above this session\'s directory.'
+  const frontDir = `${root}/_command/portfolio/${front}`
+  const hub = `${frontDir}/_front.md`
+  try {
+    await $.fs.read(hub)
+  } catch {
+    return `No front "${front}": ${hub} does not exist.`
+  }
+  const spokes = await spokesOf($, frontDir, project)
+  if (project && spokes.length === 0) return `No project "${project}" on front "${front}": no spoke with a path found.`
+  const repoDir = commonDir(spokes.map(x => x.path))
+  const cwd = flags.cwd ?? (repoDir ? `${root}/${repoDir}` : root)
+
+  const scope = project ? `${front}-${project}` : front
+  const callSign = callSignOf(scope)
+  const name = nameOf(scope)
 
   // Reserve the call sign inside the state write, so two overlapping staff calls cannot both spawn.
   let holder: Console | undefined
@@ -149,8 +203,8 @@ async function staff($: EngineInterface, front: string | undefined, flags: Recor
     holder = list.find(c => c.callSign === callSign && (c.status === 'staffed' || c.status === 'staffing'))
     if (holder) return list
     const reserved: Console = {
-      callSign, front, name, agentId: '', cwd: flags.cwd ?? '.', model: flags.model ?? 'default',
-      staffedAt: new Date().toISOString(), status: 'staffing',
+      callSign, front, ...(project ? { project } : {}), name, agentId: '', cwd, budget,
+      model: flags.model ?? 'default', staffedAt: new Date().toISOString(), status: 'staffing',
     }
     return [...list.filter(c => c.callSign !== callSign), reserved]
   })
@@ -160,12 +214,12 @@ async function staff($: EngineInterface, front: string | undefined, flags: Recor
   let spawned: Awaited<ReturnType<EngineInterface['agent']['spawn']>>
   try {
     spawned = await $.agent.spawn({
-      prompt: controllerBrief(front, callSign),
+      prompt: staffingOrder({ front, ...(project ? { project } : {}), callSign, root, hub, spokes: spokes.map(x => x.file), cwd, budget }),
       description: `${callSign} console`,
-      subagentType: 'general-purpose',
+      subagentType: `mission-fleet:${CONTROLLER_TYPE}`,
       name,
+      cwd,
       ...(flags.model ? { model: flags.model } : {}),
-      ...(flags.cwd ? { cwd: flags.cwd } : {}),
     })
   } catch (err) {
     await release()
@@ -182,6 +236,6 @@ async function staff($: EngineInterface, front: string | undefined, flags: Recor
   await update($, consoles, list =>
     list.map(c => (c.callSign === callSign && c.status === 'staffing' ? { ...c, agentId, model: spawned.model, status: 'staffed' as const } : c)),
   )
-  await log($, 'staff', callSign, `agent ${agentId} on ${spawned.model}`)
-  return `${callSign} staffed as ${name} (agent ${agentId}, ${spawned.model}). Its first status check arrives when it finishes reading the hub.`
+  await log($, 'staff', callSign, `agent ${agentId} on ${spawned.model} in ${cwd}`)
+  return `${callSign} staffed as ${name} (agent ${agentId}, ${spawned.model}) in ${cwd}. Its first status check arrives when it finishes reading the hub.`
 }
