@@ -9,6 +9,10 @@ export type Console = {
   cwd: string
   budget: number
   model: string
+  /** Set by /console retune or staff --effort; applied on each of the Controller's model requests. */
+  tune?: { model?: string; effort?: string }
+  /** What the Controller's last request actually ran on, as `model effort`. */
+  applied?: string
   staffedAt: string
   status: ConsoleStatus
 }

@@ -2,6 +2,16 @@ export const CONTROLLER_TYPE = 'controller'
 
 export const DEFAULT_BUDGET = 4
 
+/** Model aliases a console takes, and the ids a request names. */
+export const MODEL_IDS: Record<string, string> = {
+  haiku: 'claude-haiku-5-5',
+  sonnet: 'claude-sonnet-5-5',
+  opus: 'claude-opus-5-5',
+  fable: 'claude-fable-5-1',
+}
+
+export const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
+
 export const CONTROLLER_PROMPT = [
   'You are a Controller in a mission-control portfolio. Flight, the orchestrator session, staffed you on one console: one front, or one project of a front. You own that scope until Flight stands you down.',
   '',

@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { commonDir, CONTROLLER_PROMPT, isInsideRelative, spokePath, staffingOrder } from './controller'
+import { commonDir, CONTROLLER_PROMPT, isInsideRelative, MODEL_IDS, spokePath, staffingOrder } from './controller'
 
 test('the controller prompt carries the status format and the hard limits', () => {
   for (const line of ['state:', 'shipped:', 'blocked on you:', 'next:']) expect(CONTROLLER_PROMPT).toContain(line)
@@ -41,4 +41,9 @@ test('only relative spoke paths with no parent segment are trusted', () => {
   expect(isInsideRelative('/abs/repo')).toBe(false)
   expect(isInsideRelative('../../other/repo')).toBe(false)
   expect(isInsideRelative('fronts/../../x')).toBe(false)
+})
+
+test('every console model alias maps to a request id', () => {
+  expect(Object.keys(MODEL_IDS).sort()).toEqual(['fable', 'haiku', 'opus', 'sonnet'])
+  for (const id of Object.values(MODEL_IDS)) expect(id).toMatch(/^claude-[a-z]+-\d+-\d+$/)
 })

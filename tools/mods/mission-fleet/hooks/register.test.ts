@@ -124,3 +124,16 @@ test('a refused spawn releases the reservation, so the next staff tries again', 
   expect((await run($, 'staff fieldkit')).text).toContain('Could not staff FIELDKIT: over budget')
   expect(spawns).toBe(2)
 })
+
+test('retune and effort input is validated, and an unknown console is refused', async ($, on) => {
+  portfolio(on)
+  let spawns = 0
+  on('agent.spawn', () => { spawns++; return { deny: 'unexpected' } })
+  expect((await run($, 'staff fieldkit --effort huge')).text).toContain('--effort must be one of low, medium, high, xhigh, max')
+  expect(spawns).toBe(0)
+  expect((await run($, 'retune GHOST opus high')).text).toContain('No staffed console GHOST')
+})
+
+test('dismiss on an unknown console is refused like stand-down', async $ => {
+  expect((await run($, 'dismiss GHOST')).text).toContain('No staffed console GHOST')
+})

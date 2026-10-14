@@ -3,21 +3,22 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { AuditEntry, Console } from '../types'
 
-import { commonDir, CONTROLLER_PROMPT, CONTROLLER_TYPE, DEFAULT_BUDGET, isInsideRelative, spokePath, staffingOrder } from './controller'
+import { commonDir, CONTROLLER_PROMPT, CONTROLLER_TYPE, DEFAULT_BUDGET, EFFORTS, isInsideRelative, MODEL_IDS, spokePath, staffingOrder } from './controller'
 
 const consoles = atom({ plugin: 'mission-fleet', key: 'consoles' } as const, [] as Console[])
 const audit = atom({ plugin: 'mission-fleet', key: 'audit' } as const, [] as AuditEntry[])
 
 const TOOL = 'console'
-const MODELS = new Set(['haiku', 'sonnet', 'opus', 'fable'])
 const FRONT = /^[a-z0-9][a-z0-9_-]{0,63}$/i
 
 const USAGE = [
   'Usage:',
-  '  /console staff <front> [--project <p>] [--model haiku|sonnet|opus|fable] [--budget <n>] [--cwd <dir>]',
+  '  /console staff <front> [--project <p>] [--model haiku|sonnet|opus|fable] [--effort low|medium|high|xhigh|max] [--budget <n>] [--cwd <dir>]',
+  '  /console retune <call-sign> <model|-> [<effort>]',
   '  /console list',
   '  /console call <call-sign> <message>',
-  '  /console stand-down <call-sign>',
+  '  /console stand-down <call-sign>      (writes a dated handoff to the front\'s progress.md)',
+  '  /console dismiss <call-sign>         (ends it with nothing written: a test, or no work done)',
 ].join('\n')
 
 const callSignOf = (scope: string) => scope.toUpperCase().replace(/[^A-Z0-9]+/g, '-')
@@ -72,6 +73,15 @@ export const register: Register = on => {
     return next(e)
   })
 
+  // Retune: rewrite a tuned Controller's model and effort on every request it sends.
+  on('turn.step', async function* ($, e, next) {
+    const c = e.agentId ? await tunedConsole($, e.agentId) : undefined
+    if (!c?.tune) return yield* next(e)
+    const step = { ...e, ...(c.tune.model ? { model: c.tune.model } : {}), ...(c.tune.effort ? { effort: c.tune.effort as typeof e.effort } : {}) }
+    await markApplied($, c, `${step.model} ${step.effort ?? 'default'}`)
+    return yield* next(step)
+  })
+
   on('command.run', { command: 'console' }, async ($, e) => ({ text: await runConsole($, e.args) }))
     .catch(() => ({ text: FAILED }))
 
@@ -97,7 +107,8 @@ async function runConsole($: EngineInterface, args: string): Promise<string> {
       .map(c => {
         const a = agents.find(x => x.id === c.agentId)
         const state = c.status === 'staffed' ? (a?.status ?? 'unknown') : c.status
-        return `${c.callSign.padEnd(14)} ${state}  ${c.model}  ${a?.type ?? '-'}  ${c.project ? `${c.front}/${c.project}` : c.front}  agent ${c.agentId}`
+        const ran = c.applied ? `ran ${c.applied}` : c.model
+        return `${c.callSign.padEnd(14)} ${state}  ${ran}  ${a?.type ?? '-'}  ${c.project ? `${c.front}/${c.project}` : c.front}  agent ${c.agentId}`
       })
       .join('\n')
   }
@@ -112,23 +123,48 @@ async function runConsole($: EngineInterface, args: string): Promise<string> {
     return sent.isDelivered ? `Called ${c.callSign}. Its answer arrives as a status check.` : `Call to ${c.callSign} not delivered: ${sent.reason}`
   }
 
-  if (verb === 'stand-down') {
+  if (verb === 'retune') {
+    const [sign, model, effort] = rest
+    const c = fleet.find(x => x.callSign === callSignOf(sign ?? '') && x.status === 'staffed')
+    if (!c) return `No staffed console ${sign ?? ''}. /console list shows the fleet.`
+    if (!model || (model !== '-' && !(model in MODEL_IDS))) return `retune needs a model (haiku, sonnet, opus, fable, or - to keep it) and optionally an effort.\n${USAGE}`
+    if (effort !== undefined && !(EFFORTS as readonly string[]).includes(effort)) return `effort must be one of ${EFFORTS.join(', ')}.`
+    const tune = {
+      ...(model === '-' ? (c.tune?.model ? { model: c.tune.model } : {}) : { model: MODEL_IDS[model] }),
+      ...(effort ? { effort } : c.tune?.effort ? { effort: c.tune.effort } : {}),
+    }
+    await update($, consoles, list => list.map(x => (x.callSign === c.callSign ? { ...x, tune } : x)))
+    const label = `${tune.model ?? 'its model'} ${tune.effort ?? 'its effort'}`
+    await log($, 'retune', c.callSign, label)
+    return `${c.callSign} retuned to ${label}, from its next model request. /console list shows what its last request ran on.`
+  }
+
+  if (verb === 'stand-down' || verb === 'dismiss') {
     const c = fleet.find(x => x.callSign === callSignOf(rest[0] ?? '') && x.status === 'staffed')
     if (!c) return `No staffed console ${rest[0] ?? ''}.`
-    const sent = await $.session.send({
-      to: { agentId: c.agentId },
-      text: `Stand down. Append a dated handoff (state, open work, next) to the "${c.front}" front's progress.md, report it in your four lines, and end.`,
-    })
+    const text = verb === 'dismiss'
+      ? 'Dismissed by Flight: stop now. Write nothing to any file, make no git calls, and reply with one line: dismissed.'
+      : `Stand down. Append a dated handoff (state, open work, next) to the "${c.front}" front's progress.md, report it in your four lines, and end.`
+    const sent = await $.session.send({ to: { agentId: c.agentId }, text })
     if (!sent.isDelivered) {
-      await log($, 'stand-down', c.callSign, `refused: ${sent.reason}`)
-      return `Stand-down to ${c.callSign} not delivered: ${sent.reason}. It is still listed as staffed.`
+      await log($, verb, c.callSign, `refused: ${sent.reason}`)
+      return `${verb === 'dismiss' ? 'Dismissal' : 'Stand-down'} to ${c.callSign} not delivered: ${sent.reason}. It is still listed as staffed.`
     }
     await update($, consoles, list => list.map(x => (x.callSign === c.callSign ? { ...x, status: 'stood-down' as const } : x)))
-    await log($, 'stand-down', c.callSign, 'handoff requested')
-    return `${c.callSign}: handoff requested; it stands down once the handoff is written.`
+    await log($, verb, c.callSign, verb === 'dismiss' ? 'dismissed, nothing written' : 'handoff requested')
+    return verb === 'dismiss' ? `${c.callSign} dismissed; nothing is written.` : `${c.callSign}: handoff requested; it stands down once the handoff is written.`
   }
 
   return USAGE
+}
+
+async function tunedConsole($: EngineInterface, agentId: string): Promise<Console | undefined> {
+  return (await read($, consoles)).find(c => c.agentId === agentId && c.status === 'staffed')
+}
+
+async function markApplied($: EngineInterface, c: Console, applied: string) {
+  if (c.applied === applied) return
+  await update($, consoles, list => list.map(x => (x.agentId === c.agentId ? { ...x, applied } : x)))
 }
 
 async function findRoot($: EngineInterface): Promise<string | undefined> {
@@ -175,7 +211,8 @@ async function staff($: EngineInterface, front: string | undefined, flags: Recor
   if (!front) return USAGE
   const project = flags.project
   if (!FRONT.test(front) || (project !== undefined && !FRONT.test(project))) return `"${project ?? front}" is not a front or project name (letters, digits, - and _ only).`
-  if (flags.model && !MODELS.has(flags.model)) return `--model must be one of haiku, sonnet, opus, fable.`
+  if (flags.model && !(flags.model in MODEL_IDS)) return `--model must be one of haiku, sonnet, opus, fable.`
+  if (flags.effort && !(EFFORTS as readonly string[]).includes(flags.effort)) return `--effort must be one of ${EFFORTS.join(', ')}.`
   const budget = flags.budget === undefined ? DEFAULT_BUDGET : /^\d{1,2}$/.test(flags.budget) ? Number(flags.budget) : NaN
   if (!(budget >= 0 && budget <= 20)) return '--budget must be a whole number from 0 to 20.'
 
@@ -204,7 +241,7 @@ async function staff($: EngineInterface, front: string | undefined, flags: Recor
     if (holder) return list
     const reserved: Console = {
       callSign, front, ...(project ? { project } : {}), name, agentId: '', cwd, budget,
-      model: flags.model ?? 'default', staffedAt: new Date().toISOString(), status: 'staffing',
+      model: flags.model ?? 'default', ...(flags.effort ? { tune: { effort: flags.effort } } : {}), staffedAt: new Date().toISOString(), status: 'staffing',
     }
     return [...list.filter(c => c.callSign !== callSign), reserved]
   })
