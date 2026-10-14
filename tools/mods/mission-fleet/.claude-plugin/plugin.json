@@ -1,0 +1,6 @@
+{
+  "name": "mission-fleet",
+  "version": "0.1.0",
+  "description": "Flight's console fleet: staff, call, list and stand down kept-alive Controllers, one per front or project",
+  "types": "./types/index.d.ts"
+}
