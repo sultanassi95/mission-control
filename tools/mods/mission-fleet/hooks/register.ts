@@ -896,7 +896,7 @@ async function startApp($: EngineInterface): Promise<string> {
   await log($, 'app', 'server', `started on 127.0.0.1:${port} as ${current.profile ?? 'unknown'}`)
   return [
     `Mission Control App (${current.profile ?? 'this'} profile): http://127.0.0.1:${APP_PORT}/?t=${current.token}`,
-    `Every profile's app shares the front door on ${APP_PORT} and one token; switch profiles from the app header. Open the link once per browser. This profile's Flight leaves the app when this session ends, or with /console app stop.`,
+    `Every profile's app shares the front door on ${APP_PORT} and one token; switch profiles from the app header. Open the link once per browser. The app is now a standing setting for this profile: every session of it keeps the app running until /console app stop.`,
     'From the phone: `tailscale serve --bg ' + APP_PORT + '` serves it to your tailnet only (see the remote-access runbook).',
   ].join('\n')
 }
