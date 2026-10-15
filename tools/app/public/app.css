@@ -135,8 +135,10 @@ button { cursor: pointer; }
 .hint { font-size: var(--t-xs); line-height: var(--lh-xs); color: var(--ink-faint); margin: 0; }
 .btnrow { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s2); }
 .btnrow.two { grid-template-columns: 1fr 1fr; }
+.btnrow.one { grid-template-columns: 1fr; }
 .primary { border: 0; background: var(--accent); color: var(--accent-ink); border-radius: var(--r-field); min-height: calc(var(--target) + var(--s1)); font-weight: 600; padding: 0 var(--s4); }
 .ghost { border: 1px solid var(--line); background: var(--surface); border-radius: var(--r-field); min-height: var(--target); padding: 0 var(--s3); font-weight: 600; }
+.warn { border: 1px solid var(--wait); background: var(--wait-tint); color: var(--wait); border-radius: var(--r-field); min-height: var(--target); padding: 0 var(--s3); font-weight: 600; }
 .danger { border: 1px solid var(--fail); background: var(--fail-tint); color: var(--fail); border-radius: var(--r-field); min-height: var(--target); padding: 0 var(--s3); font-weight: 600; }
 .toast { position: fixed; left: var(--s4); right: var(--s4); bottom: calc(var(--toast-lift) + env(safe-area-inset-bottom, 0px)); max-width: 640px; margin-inline: auto; z-index: 8; background: var(--ink); color: var(--bg); padding: var(--s3) var(--s4); border-radius: var(--r-card); font-size: var(--t-sm); line-height: var(--lh-sm); }
 .toast.error { background: var(--fail-tint); color: var(--fail); border: 1px solid var(--fail); }

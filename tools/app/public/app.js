@@ -163,7 +163,7 @@
         <label class="visually-hidden" for="note-${esc(p.id)}">Note for ${esc(p.id)}</label>
         <input class="note" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="sentences" id="note-${esc(p.id)}" data-id="${esc(p.id)}" placeholder="Note (optional), e.g. which option" value="${esc(S.notes[p.id] ?? '')}">
         <div class="gobar"><button class="go${i ? ' secondary' : ''}" type="button" data-a="go" data-v="${esc(p.id)}">GO</button><button class="nogo" type="button" data-a="nogo" data-v="${esc(p.id)}">NO-GO</button></div>
-        <div class="btnrow"><button class="ghost" type="button" data-a="ask" data-v="${esc(p.id)}">Ask Flight first</button>${orphan ? `<button class="ghost" type="button" data-a="gatedismiss" data-v="${esc(p.id)}">Dismiss</button>` : ''}</div>
+        <div class="btnrow ${orphan ? 'two' : 'one'}"><button class="ghost" type="button" data-a="ask" data-v="${esc(p.id)}">Ask Flight first</button>${orphan ? `<button class="warn" type="button" data-a="gatedismiss" data-v="${esc(p.id)}">Dismiss</button>` : ''}</div>
       </article>`
     })
     const decided = items.filter(p => (p.state === 'go' || p.state === 'no-go' || p.state === 'dismissed') && !p.undelivered).slice(-6).reverse()
