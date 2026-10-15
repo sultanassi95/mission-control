@@ -250,6 +250,9 @@ export const register: Register = on => {
       busySince = Date.now()
       flightActivity = 'Thinking'
       if (app) void pushState($, app).catch(() => undefined)
+      // A plugin load that skips session.start (its folder changed mid-session) starts no supervisor,
+      // so every turn of Flight's makes sure one is running while the standing setting is on.
+      if (!supervising && (await $.store.get(APP_ALWAYS).catch(() => false)) === true) void superviseApp($)
     }
     return started
   })
