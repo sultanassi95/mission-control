@@ -31,6 +31,22 @@ export function isNothing(value: string | undefined): boolean {
   return value === undefined || /^(|none|nothing|n\/a|-|no blockers?)( (yet|for now|so far|to report|from (me|the founder)))?[.!]?$/i.test(value.trim())
 }
 
+/** PR numbers a report says were opened or are in flight ("PR #12", "pull/12"). */
+export function prsIn(text: string): number[] {
+  const out = new Set<number>()
+  for (const m of text.matchAll(/\b(?:PR|pull request)\s*#(\d{1,6})\b|\/pull\/(\d{1,6})\b/gi)) out.add(Number(m[1] ?? m[2]))
+  return [...out]
+}
+
+/** A one-line signature of a PR's state, to notice when anything worth waking a Controller for changed. */
+export function prSignature(view: { state?: string; reviewDecision?: string; comments?: unknown[]; reviews?: unknown[]; statusCheckRollup?: { conclusion?: string; status?: string }[] }): string | undefined {
+  const rollup = view.statusCheckRollup ?? []
+  // While any check is still running the PR is mid-flight: no signature, so a CI tick never wakes anyone.
+  if (rollup.some(c => !c.conclusion && c.status && c.status !== 'COMPLETED')) return undefined
+  const checks = rollup.map(c => c.conclusion || c.status || '?').sort().join(',')
+  return [view.state ?? '?', view.reviewDecision ?? '-', `c${(view.comments ?? []).length}`, `r${(view.reviews ?? []).length}`, checks].join('|')
+}
+
 /** A short, stable id for a poll item: two letters from the call sign and a counter. */
 export function pollId(callSign: string, n: number): string {
   return `${callSign.replace(/[^A-Z]/g, '').slice(0, 2) || 'XX'}${n}`

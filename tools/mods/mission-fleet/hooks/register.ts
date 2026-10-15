@@ -1,11 +1,11 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { AuditEntry, Console, Lineage, LoopEntry, PendingAdvisory, PollItem, Reservation } from '../types'
+import type { AuditEntry, Console, Lineage, LoopEntry, PendingAdvisory, PollItem, PrWatch, Reservation } from '../types'
 
 import { commonDir, CONTROLLER_PROMPT, CONTROLLER_TYPE, DEFAULT_BUDGET, EFFORTS, isInsideRelative, MODEL_IDS, spokeField, spokePath, staffingOrder } from './controller'
 import { protectedFromSpoke, toolRefusal } from './guards'
-import { dependentsOf, isNothing, parseStatus, pollId } from './loops'
+import { dependentsOf, isNothing, parseStatus, pollId, prSignature, prsIn } from './loops'
 import type { Role as GuardRole } from './guards'
 
 const consoles = atom({ plugin: 'mission-fleet', key: 'consoles' } as const, [] as Console[])
@@ -16,6 +16,9 @@ const loops = atom({ plugin: 'mission-fleet', key: 'loops' } as const, [] as Loo
 const poll = atom({ plugin: 'mission-fleet', key: 'poll' } as const, [] as PollItem[])
 const pending = atom({ plugin: 'mission-fleet', key: 'pending' } as const, [] as PendingAdvisory[])
 const pollSeq = atom({ plugin: 'mission-fleet', key: 'pollSeq' } as const, 0)
+const watches = atom({ plugin: 'mission-fleet', key: 'watches' } as const, [] as PrWatch[])
+const WATCH_EVERY = 10 * 60_000
+let watching = false
 
 // The app bridge: one server per session, started by /console app.
 type App = { port?: number; token: string; key: string; stop: () => Promise<unknown>; stateFile: string; httpOk?: boolean }
@@ -116,6 +119,14 @@ export const register: Register = on => {
       background: true,
       autoCompactWindow: 400000,
     })
+    // One watch loop per module environment; a reload starts a fresh one and drops the old one's timers.
+    if (!watching) {
+      watching = true
+      void watchLoop($).catch((err: unknown) => {
+        watching = false
+        return log($, 'watch', 'loop', `stopped: ${String(err).slice(0, 120)}`)
+      })
+    }
     await $.tool.register({
       name: TOOL,
       description: `Flight's console fleet. Pass the same arguments as the /console command.\n${USAGE}`,
@@ -516,6 +527,7 @@ async function recordReport($: EngineInterface, agentId: string, answer: string)
   const c = (await read($, consoles)).find(x => x.agentId === agentId)
   if (!c || !answer.trim()) return
   await addLoop($, { from: c.callSign, to: 'FLIGHT', kind: 'status', text: answer.trim() })
+  await watchFrom($, c, answer)
   const status = parseStatus(answer)
   const items: Omit<PollItem, 'id'>[] = []
   const at = new Date().toISOString()
@@ -538,14 +550,92 @@ async function recordReport($: EngineInterface, agentId: string, answer: string)
     first = (n ?? 0) + 1
     return (n ?? 0) + items.length
   })
+  let openedNew = false
   await update($, poll, list => {
+    openedNew = false
     // A console has one open gate: its latest report is its current state. Replaced gates stay listed in /console poll.
     const hasGate = items.some(i => i.kind === 'gate')
     const kept = list.map(p => (hasGate && p.state === 'open' && p.kind === 'gate' && p.from === c.callSign ? { ...p, state: 'superseded' as const } : p))
+    const before = list.find(p => p.state === 'open' && p.kind === 'gate' && p.from === c.callSign)
     const fresh = items.filter(i => !kept.some(p => p.state === 'open' && p.from === i.from && p.title === i.title))
+    openedNew = fresh.some(i => i.kind === 'gate' && i.title !== before?.title)
     return [...kept, ...fresh.map((i, k) => ({ ...i, id: pollId(i.from, first + k) }))].slice(-200)
   })
   for (const i of items) await log($, 'poll', c.callSign, `${i.kind} opened: ${i.title.slice(0, 120)}`)
+  // Alert only for a gate that is new (not one the poll already held open); the text is fixed, never the Controller's.
+  const gate = items.find(i => i.kind === 'gate')
+  if (gate && openedNew) await alert($, `${c.callSign} needs you: open the Poll in the app, or /console poll.`)
+}
+
+/** One line to the founder's phone (via Remote Control) or desktop; the tool itself skips it when the founder is at the terminal. */
+async function alert($: EngineInterface, message: string) {
+  const line = message.replace(/\s+/g, ' ').slice(0, 190)
+  const r = (await $.tool.call({ tool: 'PushNotification', message: line, status: 'proactive' } as Parameters<EngineInterface['tool']['call']>[0]).catch((err: unknown) => ({ isError: true, text: `failed: ${String(err).slice(0, 80)}` }))) as { isError?: boolean; text?: string }
+  const outcome = r.isError ? `not sent: ${r.text ?? 'refused'}` : (r.text ?? 'no result text')
+  await log($, 'alert', 'founder', `${line.slice(0, 80)} -> ${outcome.slice(0, 100)}`)
+}
+
+async function watchFrom($: EngineInterface, c: Console, answer: string) {
+  // Only the Controller's own lines name its PRs; a quoted PR elsewhere in a report is not its work.
+  const own = parseStatus(answer)
+  const prs = prsIn(`${own.state ?? ''}\n${own.shipped ?? ''}`)
+  if (!prs.length) return
+  await update($, watches, list => {
+    const next = [...list]
+    for (const pr of prs) if (!next.some(w => w.agentId === c.agentId && w.pr === pr)) next.push({ callSign: c.callSign, agentId: c.agentId, cwd: c.cwd, pr, since: new Date().toISOString() })
+    return next
+  })
+}
+
+/** Every ten minutes: a watched PR whose checks, reviews or comments changed wakes its Controller; a closed one stops being watched. */
+async function watchLoop($: EngineInterface) {
+  for (;;) {
+    await $.clock.sleep(WATCH_EVERY)
+    const fleet = await read($, consoles).catch(() => [] as Console[])
+    for (const w of await read($, watches).catch(() => [] as PrWatch[])) {
+      try {
+        await checkWatch($, w, fleet)
+      } catch (err) {
+        await log($, 'watch', w.callSign, `PR #${w.pr} check failed: ${String(err).slice(0, 120)}`).catch(() => undefined)
+      }
+    }
+  }
+}
+
+const same = (a: PrWatch, b: PrWatch) => a.agentId === b.agentId && a.pr === b.pr
+
+async function dropWatch($: EngineInterface, w: PrWatch, why: string) {
+  await update($, watches, list => list.filter(x => !same(x, w)))
+  await log($, 'watch', w.callSign, `PR #${w.pr} no longer watched: ${why}`)
+}
+
+async function checkWatch($: EngineInterface, w: PrWatch, fleet: Console[]) {
+  const c = fleet.find(x => x.agentId === w.agentId)
+  if (!c || c.status !== 'staffed') return dropWatch($, w, 'console not staffed')
+  if (Date.now() - Date.parse(w.since) > 14 * 24 * 60 * 60_000) return dropWatch($, w, 'watched for 14 days')
+  const r = await $.process.run(['gh', 'pr', 'view', String(w.pr), '--json', 'state,reviewDecision,comments,reviews,statusCheckRollup'], { cwd: w.cwd, timeoutMs: 30_000 }).catch((err: unknown) => ({ exitCode: -1, stdout: '', stderr: String(err) }))
+  let view: { state?: string } & Parameters<typeof prSignature>[0]
+  try {
+    if (r.exitCode !== 0) throw new Error(r.stderr.slice(0, 120) || `gh exited ${r.exitCode}`)
+    view = JSON.parse(r.stdout)
+  } catch (err) {
+    const fails = (w.fails ?? 0) + 1
+    await log($, 'watch', w.callSign, `PR #${w.pr} unreadable (${fails}/3): ${String(err).slice(0, 120)}`)
+    if (fails >= 3) return dropWatch($, w, 'gh could not read it three times')
+    await update($, watches, list => list.map(x => (same(x, w) ? { ...x, fails } : x)))
+    return
+  }
+  const state = String(view.state ?? '')
+  if (state === 'MERGED' || state === 'CLOSED') return dropWatch($, w, state.toLowerCase())
+  const sig = prSignature(view)
+  if (!sig) return
+  if (w.sig && sig !== w.sig) {
+    const text = `Watch: PR #${w.pr} changed (${w.sig} -> ${sig}). Look at its checks, reviews and comments, act within your scope, and report in your status lines.`
+    const sent = await $.session.send({ to: { agentId: w.agentId }, text })
+    await addLoop($, { from: 'FLIGHT', to: w.callSign, kind: 'call', text })
+    await log($, 'watch', w.callSign, `PR #${w.pr} ${sent.isDelivered ? 'changed, Controller woken' : `changed, not delivered: ${sent.reason}`}`)
+  }
+  await update($, watches, list => list.map(x => (same(x, w) ? { ...x, sig, fails: 0 } : x)))
 }
 
 async function decide($: EngineInterface, id: string, verdict: 'go' | 'no-go', note: string): Promise<string> {

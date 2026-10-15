@@ -43,12 +43,14 @@ export type PollItem = {
   targets?: string[]
 }
 
+export type PrWatch = { callSign: string; agentId: string; cwd: string; pr: number; sig?: string; since: string; fails?: number }
+
 export type PendingAdvisory = { id: string; front: string; text: string; at: string }
 
 export type AuditEntry = { at: string; op: string; target: string; result: string }
 
 declare module 'claude-code' {
   interface PluginState {
-    'mission-fleet': { consoles: Console[]; audit: AuditEntry[]; reserving: Reservation[]; lineage: Lineage[]; loops: LoopEntry[]; poll: PollItem[]; pending: PendingAdvisory[]; pollSeq: number }
+    'mission-fleet': { consoles: Console[]; audit: AuditEntry[]; reserving: Reservation[]; lineage: Lineage[]; loops: LoopEntry[]; poll: PollItem[]; pending: PendingAdvisory[]; pollSeq: number; watches: PrWatch[] }
   }
 }
