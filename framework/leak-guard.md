@@ -134,15 +134,15 @@ every invocation, so there is nothing to rebuild. After changing it, run the
 suite and scan real history rather than trusting the change:
 
 ```
-pwsh -NoProfile -File tools/tests/leak-guard.tests.ps1
+bash tools/tests/leak-guard.tests.sh                  # macOS and Linux: tests leak-guard.sh
+pwsh -NoProfile -File tools/tests/leak-guard.tests.ps1   # Windows: tests leak-guard.ps1
 ```
 
-**The test-suite gap.** The only suite is the PowerShell one,
-`tools/tests/leak-guard.tests.ps1`; there is no `leak-guard.tests.sh`. On a
-machine without `pwsh` (this one, for example) the shell guard that actually runs
-has no automated suite, so after any change to `leak-guard.sh` or the terms file,
-feed it a blocked and an allowed payload by hand and read the exit code, rather
-than assuming the PowerShell run covers it.
+Each suite tests the guard its own platform runs. The bash suite carries one case
+per active term, so deleting a line from the terms file turns that line's case red,
+and it pins the file-borne check to git's own `-F`: a lowercase `-f` or `-F:` that
+belongs to another command on the line (`rm -f`, `stat -f`, `awk -F:`) is not a
+file-borne message.
 
 The suite carries two negative controls. One proves a custom term blocks; the
 other proves the same text passes under the shipped list, so a green run cannot

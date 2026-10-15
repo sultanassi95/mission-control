@@ -41,7 +41,9 @@ if [ "$tool" = "Bash" ]; then
   cmd="$(printf '%s' "$payload" | jq -r '.tool_input.command // empty')"
   if [ -n "$cmd" ] && printf '%s' "$cmd" | grep -Eqi "$GIT_PUBLISH|$GH_PUBLISH"; then
     text="$cmd"
-    printf '%s' "$cmd" | grep -Eqi "$FILE_BORNE" && file_borne=1
+    # Case-sensitive on purpose: git's message flag is -F, and a lowercase -f on the same line
+    # (rm -f, stat -f) belongs to another command.
+    printf '%s' "$cmd" | grep -Eq "$FILE_BORNE" && file_borne=1
   fi
 elif printf '%s' "$tool" | grep -Eqi "$OUTWARD_TOOL"; then
   text="$(printf '%s' "$payload" | jq -c '.tool_input // empty')"
