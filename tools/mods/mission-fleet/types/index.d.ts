@@ -8,6 +8,8 @@ export type Console = {
   agentId: string
   cwd: string
   budget: number
+  /** Branches this console never pushes to: the spoke base branches, beyond the always-protected list. */
+  protectedBranches: string[]
   model: string
   /** Set by /console retune or staff --effort; applied on each of the Controller's model requests. */
   tune?: { model?: string; effort?: string }
@@ -17,10 +19,14 @@ export type Console = {
   status: ConsoleStatus
 }
 
+export type Lineage = { agentId: string; parentId: string }
+
+export type Reservation = { controller: string; token: string; at: number }
+
 export type AuditEntry = { at: string; op: string; target: string; result: string }
 
 declare module 'claude-code' {
   interface PluginState {
-    'mission-fleet': { consoles: Console[]; audit: AuditEntry[] }
+    'mission-fleet': { consoles: Console[]; audit: AuditEntry[]; reserving: Reservation[]; lineage: Lineage[] }
   }
 }

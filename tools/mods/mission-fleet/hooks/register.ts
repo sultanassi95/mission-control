@@ -1,12 +1,16 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { AuditEntry, Console } from '../types'
+import type { AuditEntry, Console, Lineage, Reservation } from '../types'
 
-import { commonDir, CONTROLLER_PROMPT, CONTROLLER_TYPE, DEFAULT_BUDGET, EFFORTS, isInsideRelative, MODEL_IDS, spokePath, staffingOrder } from './controller'
+import { commonDir, CONTROLLER_PROMPT, CONTROLLER_TYPE, DEFAULT_BUDGET, EFFORTS, isInsideRelative, MODEL_IDS, spokeField, spokePath, staffingOrder } from './controller'
+import { protectedFromSpoke, toolRefusal } from './guards'
+import type { Role as GuardRole } from './guards'
 
 const consoles = atom({ plugin: 'mission-fleet', key: 'consoles' } as const, [] as Console[])
 const audit = atom({ plugin: 'mission-fleet', key: 'audit' } as const, [] as AuditEntry[])
+const reserving = atom({ plugin: 'mission-fleet', key: 'reserving' } as const, [] as Reservation[])
+const lineage = atom({ plugin: 'mission-fleet', key: 'lineage' } as const, [] as Lineage[])
 
 const TOOL = 'console'
 const FRONT = /^[a-z0-9][a-z0-9_-]{0,63}$/i
@@ -72,6 +76,52 @@ export const register: Register = on => {
     })
     return next(e)
   })
+
+  // Guards: what a Controller and its back room may run. A guard that fails denies.
+  on('tool.check', async ($, e, next) => {
+    if (!e.agentId) return next(e)
+    const role = await roleOf($, e.agentId)
+    if (!role) return next(e)
+    const why = toolRefusal(role.kind, e.tool, e.input, role.console.protectedBranches)
+    if (!why) return next(e)
+    await log($, 'guard', role.console.callSign, `${role.kind} ${e.tool} denied: ${why}`)
+    return { decision: 'deny' as const, reason: why }
+  }).catch(($, e, next) => (e.agentId ? { decision: 'deny' as const, reason: 'The fleet guard could not decide, so it refused.' } : next(e)))
+
+  // The back-room budget, and Controllers staffed only through the console.
+  on('agent.spawn', async ($, e, next) => {
+    if (e.subagentType === `mission-fleet:${CONTROLLER_TYPE}` && next.origin.plugin !== 'mission-fleet') {
+      return { deny: 'Controllers are staffed only through /console staff.' }
+    }
+    if (!e.parentAgentId) return next(e)
+    const role = await roleOf($, e.parentAgentId)
+    if (!role) return next(e)
+    const c = role.console
+    const live = liveBackRoom(await $.agent.list(), c)
+    // Reserve inside the state write, so parallel spawns in one turn cannot all pass the check.
+    const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const fresh = Date.now() - 120000
+    let admitted = false
+    await update($, reserving, list => {
+      const current = list.filter(r => r.at > fresh)
+      const pending = current.filter(r => r.controller === c.callSign).length
+      admitted = live + pending < c.budget
+      return admitted ? [...current, { controller: c.callSign, token, at: Date.now() }] : current
+    })
+    if (!admitted) {
+      await log($, 'budget', c.callSign, `spawn denied: ${live} in flight of ${c.budget}`)
+      return { deny: `${c.callSign} has ${live} of its ${c.budget} back-room agents in flight. Ask Flight for more, or wait for one to finish.` }
+    }
+    try {
+      const started = await next(e)
+      const child = started.agentId
+      // Persist the parent link: the engine drops finished agents from its list, and a running back room must stay guarded.
+      if (child) await update($, lineage, list => [...list.filter(l => l.agentId !== child), { agentId: child, parentId: e.parentAgentId as string }].slice(-2000))
+      return started
+    } finally {
+      await update($, reserving, list => list.filter(r => r.token !== token))
+    }
+  }).catch(($, e, next) => (next.called || !e.parentAgentId ? next(e) : { deny: 'The fleet guard could not check the back-room budget, so it refused.' }))
 
   // Retune: rewrite a tuned Controller's model and effort on every request it sends.
   on('turn.step', async function* ($, e, next) {
@@ -158,6 +208,55 @@ async function runConsole($: EngineInterface, args: string): Promise<string> {
   return USAGE
 }
 
+type Role = { kind: GuardRole; console: Console }
+
+const ACTIVE_STATUS = new Set(['pending', 'running', 'waiting'])
+
+/**
+ * Who an agent is in the fleet, read live from the engine's own parent chain:
+ * a console's agent (by id, or by its reserved name while staffing) is a
+ * Controller; anything beneath one is its back room. Every console counts,
+ * staffed or not, so a dismissed Controller's running back room stays guarded.
+ */
+async function roleOf($: EngineInterface, agentId: string): Promise<Role | undefined> {
+  const fleet = await read($, consoles)
+  if (fleet.length === 0) return undefined
+  const agents = await $.agent.list()
+  const byId = new Map(agents.map(a => [a.id, a]))
+  const recorded = new Map((await read($, lineage)).map(l => [l.agentId, l.parentId]))
+  const consoleOf = (id: string) => {
+    const byAgent = fleet.find(c => c.agentId !== '' && c.agentId === id)
+    if (byAgent) return byAgent
+    // While staffing, before its id is written: only an agent Flight's own loop started, under the reserved name.
+    const a = byId.get(id)
+    return a && a.parentId === undefined && a.name ? fleet.find(c => c.status === 'staffing' && c.agentId === '' && c.name === a.name) : undefined
+  }
+  let cursor: string | undefined = agentId
+  for (let depth = 0; cursor !== undefined && depth < 32; depth++) {
+    const owner = consoleOf(cursor)
+    if (owner) return { kind: depth === 0 ? 'controller' : 'back room', console: owner }
+    cursor = byId.get(cursor)?.parentId ?? recorded.get(cursor)
+  }
+  return undefined
+}
+
+/** Active agents beneath a console's Controller, at any depth. */
+function liveBackRoom(agents: { id: string; parentId?: string; name?: string; status: string }[], c: Console): number {
+  const roots = new Set(agents.filter(a => (c.agentId !== '' && a.id === c.agentId) || (c.agentId === '' && a.parentId === undefined && a.name === c.name)).map(a => a.id))
+  const below = new Set<string>()
+  let grew = true
+  while (grew) {
+    grew = false
+    for (const a of agents) {
+      if (a.parentId && (roots.has(a.parentId) || below.has(a.parentId)) && !below.has(a.id) && !roots.has(a.id)) {
+        below.add(a.id)
+        grew = true
+      }
+    }
+  }
+  return agents.filter(a => below.has(a.id) && ACTIVE_STATUS.has(a.status)).length
+}
+
 async function tunedConsole($: EngineInterface, agentId: string): Promise<Console | undefined> {
   return (await read($, consoles)).find(c => c.agentId === agentId && c.status === 'staffed')
 }
@@ -182,7 +281,7 @@ async function findRoot($: EngineInterface): Promise<string | undefined> {
   return undefined
 }
 
-async function spokesOf($: EngineInterface, frontDir: string, project: string | undefined): Promise<{ file: string; path: string }[]> {
+async function spokesOf($: EngineInterface, frontDir: string, project: string | undefined): Promise<{ file: string; path: string; base?: string }[]> {
   // A spoke is <front>/<name>.md (single-project) or <front>/<project>/<project>.md (multi-project).
   const candidates: string[] = []
   if (project) candidates.push(`${frontDir}/${project}/${project}.md`, `${frontDir}/${project}.md`)
@@ -193,15 +292,17 @@ async function spokesOf($: EngineInterface, frontDir: string, project: string | 
       if (e.kind === 'dir' && !e.name.startsWith('.') && e.name !== 'tasks') candidates.push(`${frontDir}/${e.name}/${e.name}.md`)
     }
   }
-  const found: { file: string; path: string }[] = []
+  const found: { file: string; path: string; base?: string }[] = []
   for (const file of candidates) {
-    let path
+    let text
     try {
-      path = spokePath(await $.fs.read(file))
+      text = await $.fs.read(file)
     } catch {
       continue
     }
-    if (path && isInsideRelative(path)) found.push({ file, path })
+    const path = spokePath(text)
+    const base = spokeField(text, 'base_branch')
+    if (path && isInsideRelative(path)) found.push({ file, path, ...(base ? { base } : {}) })
     if (project && found.length) break
   }
   return found
@@ -241,6 +342,7 @@ async function staff($: EngineInterface, front: string | undefined, flags: Recor
     if (holder) return list
     const reserved: Console = {
       callSign, front, ...(project ? { project } : {}), name, agentId: '', cwd, budget,
+      protectedBranches: [...new Set(spokes.flatMap(x => protectedFromSpoke(x.base)))],
       model: flags.model ?? 'default', ...(flags.effort ? { tune: { effort: flags.effort } } : {}), staffedAt: new Date().toISOString(), status: 'staffing',
     }
     return [...list.filter(c => c.callSign !== callSign), reserved]

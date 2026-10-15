@@ -137,3 +137,11 @@ test('retune and effort input is validated, and an unknown console is refused', 
 test('dismiss on an unknown console is refused like stand-down', async $ => {
   expect((await run($, 'dismiss GHOST')).text).toContain('No staffed console GHOST')
 })
+
+test('a controller-type spawn that does not come from the console is refused', async ($, on) => {
+  let reached = false
+  on('agent.spawn', () => { reached = true; return { model: 'sonnet' } })
+  const r = await $.agent.spawn({ prompt: 'hi', subagentType: 'mission-fleet:controller' } as Parameters<Engine['agent']['spawn']>[0])
+  expect(r.deny).toBe('Controllers are staffed only through /console staff.')
+  expect(reached).toBe(false)
+})

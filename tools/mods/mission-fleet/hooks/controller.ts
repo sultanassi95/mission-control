@@ -56,11 +56,16 @@ export function staffingOrder(o: StaffingOrder): string {
   ].join('\n')
 }
 
+/** A frontmatter field of a spoke, as written after `<field>:`. */
+export function spokeField(text: string, field: string): string | undefined {
+  const fm = /^---\n([\s\S]*?)\n---/.exec(text)?.[1]
+  const line = fm?.split('\n').find(l => l.startsWith(`${field}:`))
+  return line?.slice(field.length + 1).trim() || undefined
+}
+
 /** The repo path a spoke records: the first token after `path:` in its frontmatter. */
 export function spokePath(text: string): string | undefined {
-  const fm = /^---\n([\s\S]*?)\n---/.exec(text)?.[1]
-  const line = fm?.split('\n').find(l => l.startsWith('path:'))
-  return line?.slice(5).trim().split(/\s+/)[0] || undefined
+  return spokeField(text, 'path')?.split(/\s+/)[0] || undefined
 }
 
 /** A spoke path the portfolio can resolve: relative, with no `..` segment. */
