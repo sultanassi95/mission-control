@@ -34,6 +34,27 @@ let app: App | undefined
 // What the app shows about Flight itself: is a turn running, is it waiting on a question at the terminal.
 let flightBusy = false
 let busySince = 0
+// What Flight is doing right now, in a few plain words, for the app's working line.
+let flightActivity = ''
+
+/** A tool call as the app's working line says it: what, not how. */
+function activityOf(e: { tool?: string } & Record<string, unknown>): string {
+  const s = (v: unknown) => (typeof v === 'string' ? v : '')
+  const base = (p: unknown) => s(p).split('/').pop() ?? ''
+  const cut = (t: string, n = 60) => (t.length > n ? `${t.slice(0, n - 1)}…` : t)
+  switch (e.tool) {
+    case 'Bash': return `Running: ${cut(s(e.description) || s(e.command).split('\n')[0] || 'a command')}`
+    case 'Read': return `Reading ${cut(base(e.file_path) || 'a file')}`
+    case 'Edit': case 'Write': case 'NotebookEdit': return `Editing ${cut(base(e.file_path ?? e.notebook_path) || 'a file')}`
+    case 'Grep': case 'Glob': return 'Searching the code'
+    case 'Agent': return `Working with an agent: ${cut(s(e.description) || 'a task')}`
+    case 'WebSearch': return 'Searching the web'
+    case 'WebFetch': return 'Reading a web page'
+    case 'Skill': return `Running /${cut(s(e.skill) || 'a skill')}`
+    case 'AskUserQuestion': return 'Waiting for your answer'
+    default: return (e.tool ?? '').startsWith('mcp__') ? `Using ${cut((e.tool ?? '').split('__')[1] ?? 'a tool')}` : `Using ${e.tool ?? 'a tool'}`
+  }
+}
 let pushChain: Promise<void> = Promise.resolve()
 let flightAsking: string | undefined
 // A question of Flight's routed to the app while it runs: the app answers it, or /console answer at the Mac.
@@ -227,10 +248,23 @@ export const register: Register = on => {
     if (!(e as { agentId?: string }).agentId) {
       flightBusy = true
       busySince = Date.now()
+      flightActivity = 'Thinking'
       if (app) void pushState($, app).catch(() => undefined)
     }
     return started
   })
+
+  // The app's working line: each of Flight's own tool calls says what it is doing, then back to thinking.
+  on('tool.call', async ($, e, next) => {
+    if (e.agentId) return next(e)
+    flightActivity = activityOf(e as never)
+    if (app) void pushState($, app).catch(() => undefined)
+    try {
+      return await next(e)
+    } finally {
+      if (flightBusy) flightActivity = 'Thinking'
+    }
+  }).catch(($, e, next) => next(e))
 
   // Flight's own questions: while the app runs they go to the app (and the phone), answered there or by
   // /console answer at the Mac; the hook waits by long-polling the app server, a $ call, so its own
@@ -282,6 +316,7 @@ export const register: Register = on => {
     } finally {
       if (!e.agentId) {
         flightBusy = false
+        flightActivity = ''
         if (app) void pushState($, app).catch(() => undefined)
       }
     }
@@ -945,6 +980,7 @@ async function snapshot($: EngineInterface) {
     flight: {
       // A turn that never reported its end (an abort) stops counting as busy after 15 minutes.
       busy: flightBusy && Date.now() - busySince < 15 * 60_000,
+      activity: flightBusy ? flightActivity || 'Thinking' : null,
       asking: flightAsking ?? null,
       ask: flightAsk ?? null,
       messages: withSpoken(messages.filter(m => m.text.trim() !== ''))

@@ -116,7 +116,8 @@
     for (const q of S.queued) parts.push(userBubble(q.text, q.preview, `You · ${q.sent ? 'waiting for Flight' : 'sending'}`))
     if (f.ask) parts.push(askCard(f.ask))
     else if (f.asking) parts.push(`<div class="notice" role="status">Flight is waiting for your answer on the Mac: ${esc(f.asking)}</div>`)
-    if (f.busy) parts.push('<div class="typing" aria-label="Flight is working"><i></i><i></i><i></i></div>')
+    // What Flight is doing right now, so a long turn never looks like nothing is happening.
+    if (f.busy) parts.push(`<div class="typing" role="status"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="doing">${esc(f.activity || 'Thinking')}…</span></div>`)
     return parts.join('')
   }
 
@@ -315,7 +316,7 @@
       main.className = `main view-${S.tab}`
       paint(main, 'main', views[S.tab]())
       const busy = fleet().flight?.busy
-      $('link-text').textContent = S.live ? (busy ? 'Live · Flight is working' : 'Live · connected to Flight') : S.state ? 'Reconnecting…' : 'Not connected: sign in to Tailscale, or open the link /console app printed'
+      $('link-text').textContent = S.live ? (busy ? `Live · ${fleet().flight?.activity || 'Flight is working'}` : 'Live · connected to Flight') : S.state ? 'Reconnecting…' : 'Not connected: sign in to Tailscale, or open the link /console app printed'
       document.querySelector('.dot').className = `dot ${S.live ? (busy ? 'busy' : 'live') : ''}`
       const others = S.flights.filter(f => f.profile !== S.profile && (f.gates || f.busy))
       $('profile').hidden = S.flights.length < 2 && !S.profile
