@@ -54,7 +54,7 @@ flowchart LR
 
 - **Route advisories.** A Controller's `contract:` line opens an advisory naming the fronts whose `_map.md` names its scope. On the founder's go it reaches the dependent consoles, or waits for them to be staffed.
 - **Single writer.** Only Flight writes `_command/trackers/fronts.md`, `_command/daily/today.md` and `_command/fleet/`; Controllers propose, Flight writes.
-- **Rituals do not read the fleet.** `/briefing`, `/debrief`, `/standup` and `/retro` read the repos and boards only; they do not ask staffed consoles for a line. To see the fleet, use `/console list`, `/console poll` and `/console call <sign> <message>`.
+- **The day's edges read the fleet.** `/briefing` and `/debrief` read each staffed console's last status (`/console list`, `/console loops <sign>`) and the open go/no-go items (`/console poll`), and put a Controller blocked on the founder first. `/standup` and `/retro` read git, the tracker and the boards only. Between them, use `/console list`, `/console poll` and `/console call <sign> <message>`.
 - **Verify before relaying.** A Controller's state is only as fresh as its front's files; check a PR's real state (`gh pr view`) before reporting it to the founder.
 - **Never answer a gate.** Go and no-go are typed by the founder or sent from the app.
 

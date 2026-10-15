@@ -46,6 +46,10 @@ changed. Not every front, every day.
   results, review feedback the founder pasted, overnight notes.
 - For any front whose state looks stale or contradictory, check its
   `progress.md` before reporting - never brief from a hunch.
+- **The fleet, when Controllers are staffed** (the mission-fleet plugin loaded): `/console list`
+  for who is staffed and their state, `/console loops <CALL-SIGN>` for each staffed console's last
+  status (state, shipped, blocked on you, next), and `/console poll` for every go/no-go waiting on
+  the founder. No consoles staffed, or no plugin: skip this, and say nothing about it.
 
 ## Step 2 - Report state per front
 
@@ -54,7 +58,11 @@ One line each, plain language, specifics over labels:
 
 Flag loudly anything that changed out from under the plan (a red CI run, a
 partner's commit, an expired credential). Surprises belong at the top of a
-briefing, not the bottom.
+briefing, not the bottom. A staffed Controller blocked on the founder, and
+every open go/no-go in the poll, is one of those surprises: it leads the
+report, with its call sign and the decision it waits on. A front with a
+staffed Controller reports the Controller's own last status beside the
+repo's state.
 
 ## Step 3 - Propose, then WAIT for the lock
 
