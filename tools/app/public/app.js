@@ -309,6 +309,8 @@
   // Flight stays pinned to the newest message unless the founder scrolled up to read; opening the
   // app, returning to it, coming back to the Flight tab or switching profile pins it again.
   let stick = true
+  const tabScroll = {}
+  let restoreScroll = true
   function render() {
     try {
       const views = { flight: viewFlight, consoles: viewConsoles, poll: viewPoll, loops: viewLoops }
@@ -340,6 +342,10 @@
         S.opener = null
       }
       if (S.tab === 'flight' && stick) main.scrollTop = main.scrollHeight
+      // The tabs share one scroll area: a tab other than Flight opens where it was left (the top at first),
+      // never at the position the previous tab had scrolled to.
+      else if (S.tab !== 'flight' && restoreScroll) main.scrollTop = tabScroll[S.tab] ?? 0
+      restoreScroll = false
     } catch (err) {
       toast('Something on this page failed to draw. Reload it; the fleet keeps running.', 'error')
       console.error(err)
@@ -402,7 +408,7 @@
         if (ok) toast('Answer sent to Flight.')
         break
       }
-      case 'tab': if (v === 'flight') stick = true; S.tab = v; S.sheet = null; try { sessionStorage.setItem('mcapp-tab', v) } catch {} break
+      case 'tab': if (v === 'flight') stick = true; if (v !== S.tab) restoreScroll = true; S.tab = v; S.sheet = null; try { sessionStorage.setItem('mcapp-tab', v) } catch {} break
       case 'close': S.sheet = null; S.tune = null; break
       case 'back': S.sheet = 'console'; break
       case 'quick': $('draft').value = `${v} `; $('draft').focus(); return
@@ -654,6 +660,7 @@
   }
   $('main').addEventListener('scroll', () => {
     const m = $('main')
+    if (S.tab !== 'flight' && !restoreScroll) tabScroll[S.tab] = m.scrollTop
     if (S.tab === 'flight') stick = m.scrollHeight - m.scrollTop - m.clientHeight < 40
   }, { passive: true })
   const repin = () => { if (document.visibilityState === 'visible') { stick = true; render() } }
