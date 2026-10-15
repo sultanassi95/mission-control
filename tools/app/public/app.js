@@ -140,7 +140,7 @@
         ${p.targets?.length ? `<p class="hint">Tells: ${esc(p.targets.join(', '))}</p>` : ''}
         <details data-id="${esc(p.id)}"${S.details.has(p.id) ? ' open' : ''}><summary>The report it came from</summary><pre>${esc(p.detail)}</pre></details>
         <label class="visually-hidden" for="note-${esc(p.id)}">Note for ${esc(p.id)}</label>
-        <input class="note" id="note-${esc(p.id)}" data-id="${esc(p.id)}" placeholder="Note (optional), e.g. which option" value="${esc(S.notes[p.id] ?? '')}">
+        <input class="note" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="sentences" id="note-${esc(p.id)}" data-id="${esc(p.id)}" placeholder="Note (optional), e.g. which option" value="${esc(S.notes[p.id] ?? '')}">
         <div class="gobar"><button class="go${i ? ' secondary' : ''}" type="button" data-a="go" data-v="${esc(p.id)}">GO</button><button class="nogo" type="button" data-a="nogo" data-v="${esc(p.id)}">NO-GO</button></div>
         <button class="ghost" type="button" data-a="ask" data-v="${esc(p.id)}">Ask Flight first</button>
       </article>`
@@ -177,7 +177,7 @@
       const q = S.query.toLowerCase()
       const cmds = (fleet().commands ?? []).filter(c => !q || c.name.toLowerCase().includes(q) || (c.description ?? '').toLowerCase().includes(q))
       const groups = { plugin: 'Skills and plugins', user: 'Your commands', mcp: 'MCP', builtin: 'Built-in' }
-      body = `<label class="visually-hidden" for="q">Search commands</label><input class="search" id="q" placeholder="Search ${(fleet().commands ?? []).length} commands" value="${esc(S.query)}" autocomplete="off">`
+      body = `<label class="visually-hidden" for="q">Search commands</label><input class="search" id="q" autocorrect="off" spellcheck="false" autocapitalize="off" placeholder="Search ${(fleet().commands ?? []).length} commands" value="${esc(S.query)}" autocomplete="off">`
       for (const [src, label] of Object.entries(groups)) {
         const hits = cmds.filter(c => c.source === src).slice(0, 60)
         if (!hits.length) continue
@@ -232,8 +232,15 @@
   // Each region is replaced only when its HTML changed, so a state push every two seconds
   // does not steal focus, collapse a report, wipe a note or replay a sheet's animation.
   const last = { main: '', tabs: '', sheet: '', quick: '' }
+  // A field being typed in is never rebuilt under the cursor: replacing it closes the phone keyboard
+  // and breaks the word it is composing. The region repaints once the field loses focus.
+  const typingIn = el => {
+    const a = document.activeElement
+    return Boolean(a && el.contains(a) && (a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && !['button', 'checkbox', 'radio', 'file'].includes(a.type))))
+  }
   function paint(el, key, html) {
     if (last[key] === html) return false
+    if (typingIn(el)) return false
     const active = document.activeElement
     const mark = active && el.contains(active) ? { a: active.dataset?.a, v: active.dataset?.v, id: active.id, start: active.selectionStart, end: active.selectionEnd } : null
     el.innerHTML = html
@@ -266,10 +273,10 @@
     const body = qs.map((q, qi) => {
       const d = draft.q[qi] ?? {}
       let input = ''
-      if (q.type === 'text') input = `<textarea class="note ask-in" rows="2" data-q="${qi}" placeholder="${esc(q.placeholder ?? 'Your answer')}">${esc(d.value ?? '')}</textarea>`
-      else if (q.type === 'number') input = `<input class="note ask-in" type="number" inputmode="decimal" data-q="${qi}" min="${esc(q.min ?? '')}" max="${esc(q.max ?? '')}" step="${esc(q.step ?? 'any')}" value="${esc(d.value ?? '')}" placeholder="${esc(q.min ?? '')}–${esc(q.max ?? '')}${q.unit ? ` ${esc(q.unit)}` : ''}">`
+      if (q.type === 'text') input = `<textarea class="note ask-in" rows="2" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="sentences" data-q="${qi}" placeholder="${esc(q.placeholder ?? 'Your answer')}">${esc(d.value ?? '')}</textarea>`
+      else if (q.type === 'number') input = `<input class="note ask-in" type="number" autocomplete="off" inputmode="decimal" data-q="${qi}" min="${esc(q.min ?? '')}" max="${esc(q.max ?? '')}" step="${esc(q.step ?? 'any')}" value="${esc(d.value ?? '')}" placeholder="${esc(q.min ?? '')}–${esc(q.max ?? '')}${q.unit ? ` ${esc(q.unit)}` : ''}">`
       else input = `<div class="ask-options" role="group" aria-label="${esc(q.question)}">${(q.options ?? []).map((o, oi) => `<button type="button" class="ask-opt" data-a="askpick" data-v="${qi}:${oi}" aria-pressed="${Boolean(d.picks?.has(oi))}"><b>${esc(o.label)}</b>${o.description ? `<span>${esc(o.description)}</span>` : ''}</button>`).join('')}</div>
-        <input class="note ask-other" data-q="${qi}" placeholder="Or type your own answer" value="${esc(d.other ?? '')}">`
+        <input class="note ask-other" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="sentences" data-q="${qi}" placeholder="Or type your own answer" value="${esc(d.other ?? '')}">`
       return `<div class="ask-q">${q.header ? `<p class="kind">${esc(q.header)}${q.multiSelect ? ' · pick any' : ''}</p>` : ''}<h3>${esc(q.question)}</h3>${input}</div>`
     }).join('')
     // A question may be left unanswered; one answer is enough to send.
@@ -469,6 +476,7 @@
       $('send').requestSubmit()
     }
   })
+  document.addEventListener('focusout', () => setTimeout(render, 0))
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && S.sheet) { S.sheet = null; render() }
   })
