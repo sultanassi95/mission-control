@@ -8,7 +8,7 @@ signal, synced when coverage returns. Mara knows the niche from four
 seasons of consulting; the bet is practitioners who pay for software that
 survives a day with no bars.
 
-**Trust:** Mara's own. **Posture:** active - gets the deep block.
+**Trust:** yours. **Posture:** active - gets the deep block.
 **Stakes:** the spearhead of replacing consulting income by 2027.
 
 ## Status (updated by /debrief - max 5 lines)
@@ -17,6 +17,7 @@ survives a day with no bars.
 - Next milestone: sync round-trip under 5 seconds on the reference device.
 - No blockers.
 
-| Project | Spoke |
-|---|---|
-| fieldkit-app (at the portfolio root, moved in at liftoff) | [fieldkit-app.md](./fieldkit-app.md) |
+## Repo map
+| Repo | Role | Spoke |
+|---|---|---|
+| fieldkit-app (at the portfolio root, moved in at liftoff) | the app: local-first storage, offline sync, the REST client | [fieldkit-app.md](./fieldkit-app.md) |

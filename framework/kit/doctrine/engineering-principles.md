@@ -66,7 +66,7 @@ Claude never marks a phase, step, or plan as ✅ Complete on its own authority. 
 
 ## Principle 6 - Log Deviations
 
-Every deviation gets logged in `deviations-register.md` BEFORE the fix is attempted. Four types:
+Every deviation gets logged in `deviations.md` BEFORE the fix is attempted. Four types:
 
 | Discovery Source | When it's used |
 |---|---|
@@ -97,7 +97,7 @@ The test plan is the spec. Code is what you write to make the test plan pass.
 
 ## Principle 8 - Deviations Propagate
 
-Every deviation logged during a phase's lifecycle must reach `Consolidated = 🔵 Yes` in `deviations-register.md` before the phase flips to ✅ Complete.
+Every deviation logged during a phase's lifecycle must reach `Consolidated = 🔵 Yes` in `deviations.md` before the phase flips to ✅ Complete.
 
 This means: when a decision changes mid-work, every plan file in the project is swept and synced. The `Consolidated` column tracks this:
 

@@ -45,7 +45,7 @@ A 🔵 can flip back to ⚪ if a later change re-introduces drift. The Hardening
 
 ## Canonical Row Format
 
-The `deviations-register.md` Master Tracker table:
+The `deviations.md` Master Tracker table:
 
 ```
 | ID | Discovered | Scope | Discovery Source | Status | Consolidated | Summary |
@@ -65,7 +65,7 @@ The `deviations-register.md` Master Tracker table:
 
 ## Canonical Body Section
 
-Every row in the Master Tracker has a corresponding body section in `deviations-register.md`:
+Every row in the Master Tracker has a corresponding body section in `deviations.md`:
 
 ```markdown
 ### P3-IMPL-2 - <one-line summary>

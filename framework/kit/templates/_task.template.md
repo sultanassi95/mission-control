@@ -86,6 +86,7 @@ An instance may bind a sharper version in `_command/CONSTITUTION.local.md`.
 All of them beside this file, in `tasks/<ID>-<slug>/`. None of them is tracked,
 because `_command/` is gitignored in full.
 
+- `records/` - one record per dispatched sub-agent (`kit/_record-schema.md`).
 - `scripts/` - repro / verify / one-off scripts. Record each one in the project's
   `scripts.md`, with why it exists.
 - `samples/` - inputs, fixtures, datasets.

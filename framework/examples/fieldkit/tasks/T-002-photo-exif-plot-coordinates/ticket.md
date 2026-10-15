@@ -32,13 +32,21 @@ status is not the artifact; the coordinates on the stored file are.
 
 - [ ] **Real path, end to end** - import a real photo with GPS EXIF, not a
   synthetic fixture only.
+- [ ] **Reachability proven** - the importer runs through the app's import
+  route in at least one test, not constructed directly; the setting that keeps
+  the GPS block has a named writer in the shipped config.
 - [ ] **Whole vertical slice** - importer preserves the block AND the gallery
   reads it back to show the plot.
+- [ ] **Production-execution reality** - N/A with a reason: a client-side
+  import with no server job, migration or secret involved.
 - [ ] **Terminal artifact verified** - the stored image's EXIF GPS block is
   present after import (read it, do not assume).
 - [ ] **Designed for scale** - bulk import of a day's photos, not one at a time.
 - [ ] **Tested at the altitude of the risk** - unit is enough here; low blast
-  radius, no data loss.
+  radius, no data loss. Prove the new assertion can fail: restore
+  the strip step, see red, then remove it again.
+- [ ] **Designed before built (UI-shaped tickets)** - the plot association in
+  the gallery has a comp and a six-state matrix row before its first commit.
 - [ ] **No guess worn as a finding** - confirm which strip step drops GPS before
   changing it.
 
@@ -47,6 +55,7 @@ status is not the artifact; the coordinates on the stored file are.
 All of them beside this file, in `tasks/<ID>-<slug>/`. None of them is tracked,
 because `_command/` is gitignored in full.
 
+- `records/` - none yet; one per dispatched sub-agent.
 - `scripts/` - none yet; record any in the project's `scripts.md`.
 - `samples/` - the three photos whose EXIF disagrees with the plot record.
 - `artifacts/` - the extracted coordinate table.
