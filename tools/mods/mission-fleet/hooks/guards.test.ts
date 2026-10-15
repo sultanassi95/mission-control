@@ -245,3 +245,24 @@ test('gh repo overrides in any form are refused', () => {
   expect(P('export GIT_DIR=/x')).toContain('GIT_')
   expect(P('export NODE_ENV=test')).toBeUndefined()
 })
+
+test('fleet agents cannot reach the app or read process environments', () => {
+  expect(C('curl -X POST -H "Origin: http://127.0.0.1:4777" http://127.0.0.1:4777/op')).toContain('founder')
+  expect(C('curl http://localhost:4781/state.json')).toContain('founder')
+  expect(C('curl http://localhost:3000/health')).toBeUndefined()
+  expect(C('ps eww 1234')).toContain('environments')
+  expect(C('ps -E -p 1234')).toContain('environments')
+  expect(C('cat /proc/1234/environ')).toContain('environments')
+  expect(C('ps -ef')).toBeUndefined()
+  expect(C('ps aux')).toBeUndefined()
+})
+
+test('the fleet folder (audit log, app state) is Flight-only', () => {
+  expect(C('echo {} > /p/_command/fleet/app-state.json')).toContain('Flight')
+  expect(toolRefusal('controller', 'Write', { file_path: '/p/_command/fleet/audit.log' }, [])).toContain('Flight')
+  expect(isFlightOnly('/p/_command/fleet/app-state.json')).toBe(true)
+  expect(C('tail -5 /p/_command/fleet/audit.log')).toContain('Flight')
+  expect(toolRefusal('controller', 'Read', { file_path: '/p/_command/fleet/app-url' }, [])).toContain('Flight')
+  expect(C('grep -r token /Users/x/.claude-tascode/projects/abc/')).toContain('transcripts')
+  expect(toolRefusal('back room', 'Grep', { pattern: 't=', path: '/Users/x/.claude/projects' }, [])).toContain('transcripts')
+})

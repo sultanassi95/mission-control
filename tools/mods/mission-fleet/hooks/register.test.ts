@@ -157,3 +157,8 @@ test('go and no-go are the founder\'s: refused through Flight\'s tool, answered 
   expect((await run($, 'go FI1')).text).toContain('founder')
   expect((await run($, 'poll')).text).toContain('Nothing is waiting on the founder')
 })
+
+test('the app is the founder\'s to start: refused through Flight\'s tool', async $ => {
+  const viaTool = await $.tool.call({ tool: 'mcp__mission-fleet__console', args: 'app' } as Parameters<Engine['tool']['call']>[0])
+  expect(JSON.stringify(viaTool)).toContain('founder')
+})

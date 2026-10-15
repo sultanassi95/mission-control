@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mission Control</title>
+<link rel="stylesheet" href="bridge.css">
+</head>
+<body>
+<main>
+  <h1>Mission Control</h1>
+  <p id="link">Connecting to Flight…</p>
+  <form id="send">
+    <label for="text">Message Flight</label>
+    <textarea id="text" rows="2" placeholder="Message Flight, or /console list"></textarea>
+    <button type="submit">Send</button>
+  </form>
+  <p id="sent" role="status"></p>
+  <h2>Fleet state</h2>
+  <pre id="state">No state yet.</pre>
+</main>
+<script src="bridge.js"></script>
+</body>
+</html>

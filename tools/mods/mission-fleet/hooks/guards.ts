@@ -13,7 +13,7 @@
 /** Branches no Controller pushes to, whatever its spoke says. */
 export const ALWAYS_PROTECTED = ['main', 'master', 'dev', 'develop', 'test', 'staging', 'stage', 'production', 'prod', 'release']
 
-/** Portfolio files only Flight writes. */
+/** Portfolio files only Flight writes (plus everything under _command/fleet/: the audit log and the app's state). */
 export const FLIGHT_ONLY_FILES = ['_command/trackers/fronts.md', '_command/daily/today.md']
 
 export type Role = 'controller' | 'back room'
@@ -344,13 +344,13 @@ export function normalisePath(p: string): string {
 
 export function mentionsFlightFile(text: string): boolean {
   const n = normalisePath(text)
-  return FLIGHT_ONLY_FILES.some(f => n.includes(f)) || /_command\/(daily|trackers)\b/.test(n)
+  return FLIGHT_ONLY_FILES.some(f => n.includes(f)) || /_command\/(daily|trackers|fleet)\b/.test(n)
 }
 
 /** True for a file path only Flight writes. */
 export function isFlightOnly(path: string): boolean {
   const n = normalisePath(path)
-  return FLIGHT_ONLY_FILES.some(f => n === f || n.endsWith(`/${f}`))
+  return FLIGHT_ONLY_FILES.some(f => n === f || n.endsWith(`/${f}`)) || /(^|\/)_command\/fleet\//.test(n)
 }
 
 /** The refusal for a shell command run by a fleet role, if any. */
@@ -401,6 +401,7 @@ export function pinnedDir(commands: Simple[], index: number): string | undefined
 }
 
 export function shellRefusal(role: Role, command: string, protectedBranches: string[], scopeDir?: string): string | undefined {
+  if (/_command\/fleet\b/.test(normalisePath(command)) || /\.claude[^/\s]*\/projects\b/.test(command)) return 'The fleet folder and Claude session transcripts are Flight\'s: fleet agents do not read them.'
   const parsed = tokenize(command)
   if (parsed.opaque) return 'Commands run plainly here: no $(...), backticks, <(...) or unquoted heredocs that expand (a commit message may use $(cat <<\'EOF\' ... EOF)).'
   const rawMentionsGit = /\b(git|gh)\b/.test(command)
@@ -437,6 +438,8 @@ export function shellRefusal(role: Role, command: string, protectedBranches: str
     }
     // Fail closed: on a line that names git or gh, no interpreter runs at all (a pipe, heredoc, -c, /dev/stdin or option can feed it a program).
     if (['export', 'declare', 'typeset', 'set', 'setenv'].includes(name) && rest.some(w => /^(GH_|GIT_|GITHUB_)/.test(w.text))) return 'Setting GH_*, GIT_* or GITHUB_* variables is not allowed here: they can redirect git and gh in later commands.'
+    if (/(127\.0\.0\.1|localhost|0\.0\.0\.0|\[::1\]):47(7[7-9]|8\d|9[0-7])\b/.test(command)) return 'The Mission Control App is the founder\'s: fleet agents never reach it.'
+    if ((name === 'ps' && rest.some(w => /^[a-zA-Z]*e[a-zA-Z]*$/.test(w.text) || /^-[A-Za-z]*E/.test(w.text))) || /\/proc\/[^/\s]+\/environ/.test(command)) return 'Reading other processes\' environments is not allowed here.'
     if (name === 'claude') return 'A fleet agent never starts another Claude session: it would run without the fleet guards or budget. Use your back room (the Agent tool) instead.'
     if (rawMentionsGit && READS_STDIN.test(name)) return `git and gh run only as plain commands; ${name} on the same line is not allowed. Run it as a separate command.`
     if ((name === 'git' || name === 'gh') && s.words.slice(0, s.words.indexOf(head)).some(w => /^[A-Za-z_][A-Za-z0-9_]*=/.test(w.text) || w.text === 'env')) {
@@ -474,7 +477,9 @@ export function toolRefusal(role: Role, tool: string, input: unknown, protectedB
     const why = shellRefusal(role, args.command, protectedBranches, scopeDir)
     if (why) return why
   }
-  if (!['Read', 'Grep', 'Glob', 'Bash'].includes(tool) && mentionsFlightFile(JSON.stringify(input ?? {}))) return 'fronts.md and today.md are Flight\'s to write.'
+  const flat = JSON.stringify(input ?? {})
+  if (tool !== 'Bash' && (/_command\/fleet\b/.test(normalisePath(flat)) || /\.claude[^/\\"]*\/projects\b/.test(flat))) return 'The fleet folder and Claude session transcripts are Flight\'s: fleet agents do not read them.'
+  if (!['Read', 'Grep', 'Glob', 'Bash'].includes(tool) && mentionsFlightFile(flat)) return 'fronts.md and today.md are Flight\'s to write.'
   return undefined
 }
 

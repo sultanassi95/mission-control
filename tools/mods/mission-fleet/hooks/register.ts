@@ -17,6 +17,12 @@ const poll = atom({ plugin: 'mission-fleet', key: 'poll' } as const, [] as PollI
 const pending = atom({ plugin: 'mission-fleet', key: 'pending' } as const, [] as PendingAdvisory[])
 const pollSeq = atom({ plugin: 'mission-fleet', key: 'pollSeq' } as const, 0)
 
+// The app bridge: one server per session, started by /console app.
+type App = { port?: number; token: string; key: string; stop: () => Promise<unknown>; stateFile: string; httpOk?: boolean }
+let app: App | undefined
+
+const hex = (bytes: number) => Array.from(crypto.getRandomValues(new Uint8Array(bytes)), b => b.toString(16).padStart(2, '0')).join('')
+
 // Audit-file writes run one at a time, so two hooks logging at once cannot drop a line.
 let auditChain: Promise<void> = Promise.resolve()
 
@@ -31,6 +37,7 @@ const USAGE = [
   '  /console retune <call-sign> <model|-> [<effort>]',
   '  /console list',
   '  /console call <call-sign> <message>',
+  '  /console app [stop]                 (start or stop the local Mission Control App on 127.0.0.1)',
   '  /console stand-down <call-sign>      (writes a dated handoff to the front\'s progress.md)',
   '  /console dismiss <call-sign>         (ends it with nothing written: a test, or no work done)',
 ].join('\n')
@@ -233,6 +240,11 @@ async function runConsole($: EngineInterface, args: string, fromPerson: boolean)
     const label = `${tune.model ?? 'its model'} ${tune.effort ?? 'its effort'}`
     await log($, 'retune', c.callSign, label)
     return `${c.callSign} retuned to ${label}, from its next model request. /console list shows what its last request ran on.`
+  }
+
+  if (verb === 'app') {
+    if (!fromPerson) return 'The app is started by the founder: type /console app.'
+    return rest[0] === 'stop' ? stopApp($) : startApp($)
   }
 
   if (verb === 'poll') {
@@ -538,3 +550,120 @@ async function decide($: EngineInterface, id: string, verdict: 'go' | 'no-go', n
   if (undelivered) return `${item.id}: ${verdict.toUpperCase()} recorded, but NOT delivered to ${item.from} (${undelivered}). Call the console again when it is staffed.`
   return `${item.id}: ${verdict.toUpperCase()} recorded${told.length ? `, told ${told.join(', ')}` : ''}${item.kind === 'advisory' && (item.targets ?? []).length > told.length ? '; unstaffed or unreachable fronts get it when staffed' : ''}.`
 }
+
+async function startApp($: EngineInterface): Promise<string> {
+  if (app?.port) return `The app is already running on 127.0.0.1:${app.port}. Its link was printed once when it started (and is kept in _command/fleet/app-url); /console app stop, then /console app, issues a new one.`
+  const root = await findRoot($)
+  if (!root) return 'No portfolio found, so there is nowhere to keep the app state.'
+  const real = (await $.process.run(['realpath', $.plugin.root])).stdout.trim() || $.plugin.root
+  const server = `${real.replace(/\/mods\/mission-fleet$/, '')}/app/server.mjs`
+  const token = hex(24)
+  const key = hex(24)
+  const stateFile = `${root}/_command/fleet/app-state.json`
+  const stream = $.process.spawn({ argv: ['node', server], env: { MCAPP_PORT: '4777', MCAPP_STATE_FILE: stateFile }, input: `${JSON.stringify({ token, key })}\n` })
+  const current: App = { token, key, stateFile, stop: () => stream.return(undefined as never) }
+  app = current
+  let ready: (port: number | undefined) => void = () => undefined
+  const started = new Promise<number | undefined>(r => (ready = r))
+  void (async () => {
+    let buffer = ''
+    for await (const piece of stream) {
+      if (piece.stream !== 'stdout') continue
+      buffer += piece.text
+      let nl = buffer.indexOf('\n')
+      while (nl >= 0) {
+        const line = buffer.slice(0, nl)
+        buffer = buffer.slice(nl + 1)
+        nl = buffer.indexOf('\n')
+        let msg: { type?: string; port?: number; op?: string; text?: string }
+        try {
+          msg = JSON.parse(line)
+        } catch {
+          continue
+        }
+        if (msg.type === 'ready') {
+          current.port = msg.port
+          ready(msg.port)
+        } else if (msg.type === 'op' && msg.op && typeof msg.text === 'string') await runAppOp($, msg.op, msg.text)
+      }
+    }
+    if (app === current) app = undefined
+    ready(undefined)
+    await log($, 'app', 'server', 'stopped')
+  })().catch((err: unknown) => log($, 'app', 'server', `failed: ${String(err).slice(0, 160)}`))
+  const port = await Promise.race([started, $.clock.sleep(8000).then(() => undefined)])
+  if (!port) {
+    await current.stop()
+    return 'The app server did not start within 8 seconds. Is node on the PATH?'
+  }
+  void pushLoop($, current)
+  const urlFile = `${root}/_command/fleet/app-url`
+  await $.fs.write(urlFile, `http://127.0.0.1:${port}/?t=${token}\n`).catch(() => undefined)
+  await $.process.run(['chmod', '600', urlFile]).catch(() => undefined)
+  await log($, 'app', 'server', `started on 127.0.0.1:${port}`)
+  return [
+    `Mission Control App: http://127.0.0.1:${port}/?t=${token}`,
+    'Open it once with the token; the browser keeps it as a cookie. It stops with this session, or with /console app stop.',
+    'From the phone: `tailscale serve --bg ' + port + '` serves it to your tailnet only (see the remote-access runbook).',
+  ].join('\n')
+}
+
+async function stopApp($: EngineInterface): Promise<string> {
+  if (!app) return 'The app is not running.'
+  const stopping = app
+  app = undefined
+  await stopping.stop()
+  await log($, 'app', 'server', 'stopped by the founder')
+  return 'The app server is stopped.'
+}
+
+/** What the app shows: the fleet, the poll, the loops and the commands the session can run. */
+async function snapshot($: EngineInterface) {
+  const [fleet, items, traffic, trail, agents, commands] = await Promise.all([
+    read($, consoles), read($, poll), read($, loops), read($, audit), $.agent.list(), $.command.list().catch(() => []),
+  ])
+  return {
+    consoles: fleet.map(c => ({ ...c, live: agents.find(a => a.id === c.agentId)?.status ?? null })),
+    poll: items.slice(-50),
+    loops: traffic.slice(-80),
+    audit: trail.slice(-30),
+    commands: commands.map(c => ({ name: c.name, description: c.description, source: c.source })),
+  }
+}
+
+async function pushState($: EngineInterface, current: App) {
+  const body = JSON.stringify(await snapshot($))
+  if (current.port && current.httpOk !== false) {
+    try {
+      const r = await $.http.fetch(`http://127.0.0.1:${current.port}/bridge/state`, { method: 'POST', headers: { 'x-bridge-key': current.key, 'Content-Type': 'application/json' }, body })
+      if (current.httpOk === undefined) await log($, 'app', 'bridge', `loopback http ${r.ok ? 'works' : `refused ${r.status}`}`)
+      current.httpOk = r.ok
+      if (r.ok) return
+    } catch (err) {
+      if (current.httpOk === undefined) await log($, 'app', 'bridge', `loopback http unavailable (${String(err).slice(0, 80)}); using the state file`)
+      current.httpOk = false
+    }
+  }
+  await $.fs.write(current.stateFile, body)
+}
+
+async function pushLoop($: EngineInterface, current: App) {
+  while (app === current) {
+    await pushState($, current).catch(() => undefined)
+    await $.clock.sleep(2000)
+  }
+}
+
+/** An action from the app: the founder's, since only the token-holder reaches /op. */
+async function runAppOp($: EngineInterface, op: string, text: string) {
+  await log($, 'app-op', op, text.slice(0, 160))
+  if (op === 'prompt') await $.prompt.submit({ text })
+  else if (op === 'console') await runConsole($, text, true)
+  else if (op === 'command') {
+    const [command = '', ...words] = text.trim().split(/\s+/)
+    if (command === 'console') await runConsole($, words.join(' '), true)
+    else await $.command.run({ command, args: words.join(' ') })
+  }
+  if (app) await pushState($, app).catch(() => undefined)
+}
+
