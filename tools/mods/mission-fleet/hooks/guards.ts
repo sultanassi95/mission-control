@@ -15,6 +15,14 @@ export const ALWAYS_PROTECTED = ['main', 'master', 'dev', 'develop', 'test', 'st
 
 /** Portfolio files only Flight writes (plus everything under _command/fleet/: the audit log and the app's state). */
 export const FLIGHT_ONLY_FILES = ['_command/trackers/fronts.md', '_command/daily/today.md']
+// The app's home (~/.mission-control): its token drives Flight through the app, and its registry
+// names every profile's server. Matched in any case (the disk is case-insensitive), after any
+// non-name character (a brace, a ; or <), and by the token's own file name; checked on the raw
+// text and again on the shell's resolved words, so quoting inside the name does not hide it. The
+// leading dot keeps the workspace folder named mission-control readable. The cost, accepted: a
+// Controller on the mission-control front cannot edit the few lines that name this path.
+const APP_HOME = /(?<![A-Za-z0-9_-])\.mission-control(\/|\b|$)|(?<![A-Za-z0-9_-])app-token\b/i
+const APP_HOME_REFUSAL = 'The app\'s token and profile registry (~/.mission-control) are the founder\'s: fleet agents do not read them.'
 
 export type Role = 'controller' | 'back room'
 
@@ -401,8 +409,10 @@ export function pinnedDir(commands: Simple[], index: number): string | undefined
 
 /** The refusal for a shell command run by a fleet role, if any. */
 export function shellRefusal(role: Role, command: string, protectedBranches: string[], scopeDir?: string): string | undefined {
+  if (APP_HOME.test(command)) return APP_HOME_REFUSAL
   if (/_command\/fleet\b/.test(normalisePath(command)) || /\.claude[^/\s]*\/projects\b/.test(command)) return 'The fleet folder and Claude session transcripts are Flight\'s: fleet agents do not read them.'
   const parsed = tokenize(command)
+  if (parsed.commands.some(s => [...s.words, ...s.redirects].some(w => APP_HOME.test(w.text)))) return APP_HOME_REFUSAL
   if (parsed.opaque) return 'Commands run plainly here: no $(...), backticks, <(...) or unquoted heredocs that expand (a commit message may use $(cat <<\'EOF\' ... EOF)).'
   const rawMentionsGit = /\b(git|gh)\b/.test(command)
   const scanned: string[] = []
@@ -478,6 +488,7 @@ export function toolRefusal(role: Role, tool: string, input: unknown, protectedB
     if (why) return why
   }
   const flat = JSON.stringify(input ?? {})
+  if (APP_HOME.test(flat)) return APP_HOME_REFUSAL
   if (tool !== 'Bash' && (/_command\/fleet\b/.test(normalisePath(flat)) || /\.claude[^/\\"]*\/projects\b/.test(flat))) return 'The fleet folder and Claude session transcripts are Flight\'s: fleet agents do not read them.'
   if (!['Read', 'Grep', 'Glob', 'Bash'].includes(tool) && mentionsFlightFile(flat)) return 'fronts.md and today.md are Flight\'s to write.'
   return undefined

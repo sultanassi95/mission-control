@@ -266,3 +266,33 @@ test('the fleet folder (audit log, app state) is Flight-only', () => {
   expect(C('grep -r token /Users/x/.claude-tascode/projects/abc/')).toContain('transcripts')
   expect(toolRefusal('back room', 'Grep', { pattern: 't=', path: '/Users/x/.claude/projects' }, [])).toContain('transcripts')
 })
+
+test('fleet agents cannot read the app token or the profile registry', () => {
+  expect(C('cat ~/.mission-control/app-token')).toContain('app')
+  expect(C('cat $HOME/.mission-control/app-token')).toContain('app')
+  expect(B('ls /Users/x/.mission-control/flights')).toContain('app')
+  expect(C('cd ~/.mission-control && cat app-token')).toContain('app')
+  expect(toolRefusal('controller', 'Read', { file_path: '/Users/x/.mission-control/app-token' }, [])).toContain('app')
+  expect(toolRefusal('back room', 'Grep', { pattern: 'x', path: '~/.mission-control' }, [])).toContain('app')
+  expect(toolRefusal('controller', 'Glob', { pattern: '**/*', path: '/Users/x/.mission-control/flights' }, [])).toContain('app')
+  // The workspace folder named mission-control (no leading dot) stays readable.
+  expect(C('cat /Users/x/Desktop/mission-control/README.md')).toBeUndefined()
+  expect(toolRefusal('controller', 'Read', { file_path: '/Users/x/Desktop/mission-control/README.md' }, [])).toBeUndefined()
+})
+
+test('the app-home guard sees case, quoting, braces, separators and the token by name', () => {
+  const R = 'profile registry'
+  expect(C('cat ~/.Mission-Control/app-token')).toContain(R)
+  expect(toolRefusal('controller', 'Read', { file_path: '/Users/x/.MISSION-CONTROL/app-token' }, [])).toContain(R)
+  expect(C("cat ~/.mission''-control/app-token")).toContain(R)
+  expect(C('cat ~/."mission-control"/app-token')).toContain(R)
+  expect(C('cat ~/.mission\\-control/app-token')).toContain(R)
+  expect(C('cat ~/{.mission-control,x}/app-token')).toContain(R)
+  expect(C('cd ~;cat<.mission-control/app-token')).toContain(R)
+  expect(toolRefusal('controller', 'Glob', { pattern: '{.mission-control,x}/**', path: '/Users/x' }, [])).toContain(R)
+  expect(C('find ~ -name app-token -exec cat {} +')).toContain(R)
+  expect(toolRefusal('controller', 'Glob', { pattern: '**/app-token', path: '/Users/x' }, [])).toContain(R)
+  // Still readable: the app's own localStorage key, and a domain that merely contains the name.
+  expect(C('grep -n mcapp-token tools/app/public/app.js')).toBeUndefined()
+  expect(C('curl -s https://docs.mission-control.dev/')).toBeUndefined()
+})
