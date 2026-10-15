@@ -14,11 +14,14 @@
    `framework/task-board.md` (the work queues, and the epic folder shape) ·
    `framework/continuity-stack.md` · `.claude/skills/README.md` (the rituals).
 
-**Delivery has two altitudes.** `/mission-flow` runs one ticket to a
+**Delivery has three altitudes.** `/mission-flow` runs one ticket to a
 checks-green PR; `/epic-flow` plans work bigger than one ticket into a
 founder-locked fragment tree and executes each fragment as a mission-flow
-child. Where a front declares standards via `/compliance-ref`, the review,
-verify and PR steps read that profile; fronts declaring nothing pay nothing.
+child; `/product-flow` takes a product from an idea to launch, running each
+epic as an epic-flow run. `/console` staffs a kept-alive Controller per front
+when several fronts run at once. Where a front declares standards via
+`/compliance-ref`, the review, verify and PR steps read that profile; fronts
+declaring nothing pay nothing.
 
 ## The fronts
 <PLACEHOLDER-FRONTS: one bullet per front - name, posture, one line;

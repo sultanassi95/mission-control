@@ -1,11 +1,40 @@
-# tools/leak-sweep
+# tools
+
+Everything under `tools/` is a gate, a hook or a local app. Gates and hooks are
+shell or PowerShell scripts, opt-in per instance, never calling a model.
 
 ```mermaid
 flowchart LR
-  A[edit] --> B[sweep]
-  B --> C[exit 0]
-  C --> D[publish]
+  subgraph PUB[publish gates]
+    LS[leak-sweep] --- CR[check-refs] --- CI[check-ignores]
+  end
+  subgraph HK[settings hooks]
+    LG[leak-guard] --- SP[status-after-pipe-guard] --- FC[front-context]
+  end
+  subgraph PLAN[plan and design gates]
+    EC[epic-coverage] --- TL[token-lint]
+  end
+  subgraph FLEET[console fleet]
+    MF[mods/mission-fleet] --> APP[app]
+  end
 ```
+
+| Tool | What it does | Platforms |
+|---|---|---|
+| `leak-sweep` | scans text for anything that identifies the operator, before it ships | `.sh`, `.ps1` |
+| `leak-guard` | hook: blocks process vocabulary in commits, PRs and tracker writes | `.sh`, `.ps1` |
+| `check-refs` | every repo path and link a doc names must exist | `.sh` (with `.py`), `.ps1` |
+| `check-ignores` | the paths that must be gitignored are, and the ones that ship still can | `.ps1` only |
+| `epic-coverage` | the E4 gate of epic-flow | `.sh`, `.py` |
+| `status-after-pipe-guard`, `front-context` | settings hooks | `.sh` |
+| `token-lint` | the design-token ratchet | `.sh`, `.py` |
+| `mods/mission-fleet` | the console fleet, a Claude Code plugin | TypeScript |
+| `app/` | the Mission Control App | Node |
+
+On macOS and Linux use the `.sh` entry points; the `.ps1` twins exist for
+Windows, and a tool listed with only one form has no twin yet.
+
+## leak-sweep
 
 The personalization firewall. It scans text for anything that identifies the
 operator (names, emails, paths, secrets, old brand names) before it ships.
@@ -56,14 +85,28 @@ A line intentionally naming the operator can be exempted with a trailing
 `tools/leak-sweep.private.txt` is the operator's own deny-list, one term per
 line, gitignored so it never ships. Cloners of this repo create their own.
 
-`tools/check-refs.ps1` is the second gate: every `framework/`,
-`.claude/skills/`, or `kit/` path named in a shipped doc must exist on
-disk (exit 0 clean / 1 with the broken references). It exists because
-removing a subsystem once left prose references to deleted files that a
-filename grep could not catch. Windows-native; run it with the sweep
-before any publish.
+## check-refs
 
-`tools/check-ignores.ps1` is the third gate: the paths that must be
+The second gate: every repo path a doc names must exist on disk, and every
+relative Markdown link must resolve. It exists because removing a subsystem
+once left prose references to deleted files that a filename grep could not
+catch.
+
+- `bash tools/check-refs.sh [path ...]` (with `tools/check-refs.py`, Python 3
+  only) is the shell twin and the one to use on macOS and Linux. It checks
+  paths under `framework/`, `.claude/skills/`, `kit/` and `tools/`, and
+  relative links; links written inside code, links in the instance
+  templates and gitignored paths are not counted as broken. It takes files or
+  folders (default: every tracked `.md`).
+- `tools/check-refs.ps1` is the original PowerShell form for Windows. It
+  checks the `framework/`, `.claude/skills/` and `kit/` paths only.
+
+Exit 0 is clean, 1 prints `file:line` for each broken reference, and 2 means a
+named path does not exist. Run it with the sweep before any publish.
+
+## check-ignores
+
+`tools/check-ignores.ps1` (PowerShell only, no shell twin yet) is the third gate: the paths that must be
 gitignored are, and the paths that must ship still can be (exit 0 clean /
 1 listing each problem). Where the sweep reads file contents, this one
 reads the rules, because a doc claiming a path is ignored proves nothing
@@ -77,9 +120,19 @@ over-claim; undeclared claims warn. Tests: `tests/epic-coverage.tests.sh`
 (both negative controls executable). A `.ps1` twin is deferred until a
 Windows operator exists.
 
-# tools/status-after-pipe-guard and tools/front-context
+## leak-guard
 
-Two settings hooks beside the leak guard, same contract: a shell script the
+The mechanical tier for outward artifacts: a `PreToolUse` hook that blocks
+process vocabulary (a decision attributed to a person, orchestration terms,
+deliberation labels, authorship tells) before it reaches a commit, a PR or a
+tracker write. The deny-list is `leak-guard.terms.txt`. What it scans, what it
+refuses and how to tune the list: `framework/leak-guard.md`. Scripts:
+`tools/leak-guard.sh` (needs `jq`) and `tools/leak-guard.ps1`. Wire it with the
+`settings.local.json` block below; nothing is enabled by default.
+
+## status-after-pipe-guard and front-context
+
+Two more settings hooks beside the leak guard, same contract: a shell script the
 harness runs regardless of the session's state, opt-in per instance, never
 calling a model.
 
@@ -120,8 +173,7 @@ Wiring, in the instance's `.claude/settings.local.json` (gitignored):
 Hooks load at session start, so a freshly wired hook is proven in the next
 session, not the one that wired it. Both scripts need `jq`, like the guard.
 
-
-# tools/token-lint
+## token-lint
 
 The design-token ratchet from `framework/design-standard.md`, "The gates". It
 counts raw colour literals and raw spacing and type values (padding, margin,
@@ -146,3 +198,38 @@ A front adopting the standard late wires it at today's count: drift stops on
 that day, and each conversion lowers the number for good. A front whose own
 tests already hold a value class keeps that idiom. Tests:
 `tools/tests/token-lint.tests.sh`, 14 cases with negative controls both ways.
+
+## mods/mission-fleet
+
+The console fleet: a Claude Code mod, packaged as a plugin, that adds
+`/console` and a console tool for Flight (the orchestrator session). It staffs
+a kept-alive Controller per front or project, retunes and calls it, keeps the
+go/no-go poll and the loops, and guards what Controllers and their back rooms
+may run. The verbs, the guard's limits and the founder-only commands are in
+`.claude/skills/console/SKILL.md`; the remote runbook is
+`framework/remote-access.md`.
+
+Loading it. A mod is not on by default. Either set `CLAUDE_CODE_PLUGIN_DIRS`
+in the `env` block of the profile's `settings.json` to the absolute path of
+`tools/mods/mission-fleet`, or start a session with
+`claude --plugin-dir tools/mods/mission-fleet`. It needs a Claude Code build
+that supports mods.
+
+Tests: `claude plugin test tools/mods/mission-fleet` (47 tests across
+`controller`, `guards`, `loops` and `register` at the time of writing; the run
+prints the count).
+
+## app
+
+The Mission Control App, a local web app for the fleet: Flight, Consoles,
+Poll and Loops. `app/server.mjs` is Node standard library only, with no build
+step. You do not run it by hand: `/console app` starts it from the mod, and
+`/console app stop` ends it.
+
+- One server runs per Claude profile. The one holding port 4777 is the front
+  door: it serves the app and routes `/p/<profile>/` to the other profiles'
+  servers, so one URL covers every profile.
+- It listens on 127.0.0.1 only. Reaching it from a phone is through
+  `tailscale serve`, never a public tunnel: `framework/remote-access.md`.
+- The design, tokens and states: `app/DESIGN.md`. The token ratchet is held at
+  zero: `tools/token-lint.sh tools/app`.

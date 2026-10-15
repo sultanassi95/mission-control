@@ -205,7 +205,7 @@ Confirm in one line; no stop gate.
    name, the front list (one line each, registered-in-place notes
    included), everything else verbatim from the template (it carries the
    orient order, the precedence pointer, the session-edge nudges, and
-   the five imports). Then tell the founder the one-time git setting
+   the six imports). Then tell the founder the one-time git setting
    (theirs to run): `git config merge.ours.driver true` - with the
    shipped `.gitattributes`, upstream pulls then always keep THEIR
    CLAUDE.md over the bootstrap. The rule either way: on any CLAUDE.md
@@ -221,9 +221,10 @@ Confirm in one line; no stop gate.
    OS-mismatched). Show it at the gate - the Preferences lines are the
    founder-confirmable part.
 5. **Run the instance leak-check** and paste its literal output:
-   `powershell -Command ".\tools\leak-sweep.ps1 instance"`
-   (or `tools/leak-sweep.sh instance`; instance mode reads `_command/` and the
-   operating `CLAUDE.md` in both, so the two are equivalent here). Exit 0
+   `tools/leak-sweep.sh instance` on macOS and Linux, or
+   `powershell -Command ".\tools\leak-sweep.ps1 instance"` on Windows
+   (instance mode reads `_command/` and the operating `CLAUDE.md` in both,
+   so the two are equivalent here). Exit 0
    required - zero leftover
    placeholders. A non-zero exit means a template blank survived: fix the
    instance file, not the check.
@@ -268,7 +269,11 @@ is done only when the probe passes.**
   checks-green PR. When the work's correct shape is several tickets,
   `/epic-flow` plans it into decoupled fragments behind a tree you lock, then
   runs each fragment as a mission-flow child - Phase 0 of the single-ticket
-  flow exits to it the moment it classifies something as epic-sized.
+  flow exits to it the moment it classifies something as epic-sized. For a
+  whole product, `/product-flow` takes an idea from framing through research,
+  design, architecture, build, deploy, beta and launch, runs each epic as an
+  epic-flow run, and stops only at its five gates (the bet, the design, the
+  blueprint, deploy and go-public).
 - **Declare your standards once:** `/compliance-ref` binds a front's profile -
   which standards apply, which collector samples the evidence - and the review,
   verify and PR steps read it. Fronts declaring nothing pay nothing.
@@ -281,5 +286,14 @@ is done only when the probe passes.**
 - **Map the big fronts:** a multi-project front deserves
   `/map-front --front <name>` (depth 1 by default) - so a change to one
   project never blindsides its dependents.
-- **Update doctrine:** `git pull upstream main` - it touches `framework/`
-  only; your `_command/` never collides.
+- **Run several fronts at once:** `/console staff <front>` puts a kept-alive
+  Controller on a front or project, and `/console list`, `call`, `retune`,
+  `poll` and `stand-down` run the fleet (`.claude/skills/console/SKILL.md`).
+  It needs the mission-fleet mod, `tools/mods/mission-fleet`, loaded as a
+  Claude Code plugin (`tools/README.md` says how).
+- **The Mission Control App:** `/console app` starts a local control surface
+  (Flight, Consoles, Poll, Loops) on 127.0.0.1, port 4777. To reach it from
+  your phone, follow `framework/remote-access.md`: Tailscale only, never a
+  public URL.
+- **Update doctrine:** `git pull upstream main` - it touches `framework/`,
+  `.claude/skills/` and `tools/` only; your `_command/` never collides.
