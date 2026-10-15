@@ -12,6 +12,9 @@ $ErrorActionPreference = "Stop"
 # happens to exist on disk. That is how the defect this gate exists for stayed
 # invisible, so keep new entries as file paths.
 
+# tools/check-ignores.py (the bash twin) parses the two lists below: keep each entry a double-quoted
+# path on its own line.
+#
 # Must be ignored. If any of these becomes trackable, private material can be
 # committed from a clone of a public repo.
 $mustIgnore = @(
@@ -64,6 +67,7 @@ $mustTrack = @(
   "framework/examples/fieldkit/tasks/T-001-offline-sync-conflict-merge/scripts/repro-sync-conflict.sh",
   "tools/leak-sweep.ps1",
   "tools/check-ignores.ps1",
+  "tools/check-ignores.sh",
   ".claude/skills/mission-flow/SKILL.md",
   "CLAUDE.md",
   "README.md",

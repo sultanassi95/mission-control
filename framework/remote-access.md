@@ -21,7 +21,7 @@ flowchart LR
 | Tailscale `serve` | anyone not signed into the founder's tailnet | a device the founder added to the tailnet |
 | Tailnet sign-in | a request that does not come through `tailscale serve` on this Mac's own tailnet name, or that carries another Tailscale login | a same-user process that sets both headers itself |
 | App token | other local web pages, other browsers, a stale link | a same-user process that reads the token file or the session transcript where the link was printed |
-| Fleet guard | Controllers and their back rooms reaching the app's ports (4777 to 4797) from a shell command | reading the token file (a same-user process, a Controller included, can), and a script file an agent writes and runs later (see the guard's header) |
+| Fleet guard | Controllers and their back rooms reaching the app's ports (4777 to 4797) or naming the app's home (`~/.mission-control`: the token and the profile registry) in a command or a tool call | a path spelled so the guard cannot see it (a glob, a value assembled by a pipeline or an interpreter, a copy of the home folder read later), and a script file an agent writes and runs later (see the guard's header); closing these takes an OS-level boundary; a same-user process outside the fleet can read the token file |
 
 ## How a request is let in
 

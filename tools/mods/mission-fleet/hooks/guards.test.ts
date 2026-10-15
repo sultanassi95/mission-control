@@ -50,7 +50,8 @@ test('quote splitting, variables and substitutions cannot hide a push or a branc
   expect(C('git push origin $(git rev-parse --abbrev-ref HEAD)')).toContain('run plainly')
   expect(C('git push origin `echo main`')).toContain('run plainly')
   expect(C('g=git; $g push origin main')).toContain('variable')
-  expect(C("git push origin $'\\x6dain'")).toContain('literal')
+  // ANSI-C escapes are refused outright by the tokenizer (MC-116), before the literal-push rule.
+  expect(C("git push origin $'\\x6dain'")).toContain('plainly')
   expect(C('git push origin ma{i,}n')).toContain('literal')
   expect(C("git $'\\x70ush' origin main")).toBeDefined()
   expect(C('git pu{s,}h origin main')).toBeDefined()
@@ -265,4 +266,59 @@ test('the fleet folder (audit log, app state) is Flight-only', () => {
   expect(toolRefusal('controller', 'Read', { file_path: '/p/_command/fleet/app-url' }, [])).toContain('Flight')
   expect(C('grep -r token /Users/x/.claude-tascode/projects/abc/')).toContain('transcripts')
   expect(toolRefusal('back room', 'Grep', { pattern: 't=', path: '/Users/x/.claude/projects' }, [])).toContain('transcripts')
+})
+
+test('fleet agents cannot read the app token or the profile registry', () => {
+  expect(C('cat ~/.mission-control/app-token')).toContain('app')
+  expect(C('cat $HOME/.mission-control/app-token')).toContain('app')
+  expect(B('ls /Users/x/.mission-control/flights')).toContain('app')
+  expect(C('cd ~/.mission-control && cat app-token')).toContain('app')
+  expect(toolRefusal('controller', 'Read', { file_path: '/Users/x/.mission-control/app-token' }, [])).toContain('app')
+  expect(toolRefusal('back room', 'Grep', { pattern: 'x', path: '~/.mission-control' }, [])).toContain('app')
+  expect(toolRefusal('controller', 'Glob', { pattern: '**/*', path: '/Users/x/.mission-control/flights' }, [])).toContain('app')
+  // The workspace folder named mission-control (no leading dot) stays readable.
+  expect(C('cat /Users/x/Desktop/mission-control/README.md')).toBeUndefined()
+  expect(toolRefusal('controller', 'Read', { file_path: '/Users/x/Desktop/mission-control/README.md' }, [])).toBeUndefined()
+})
+
+test('the app-home guard sees case, quoting, braces, separators and the token by name', () => {
+  const R = 'profile registry'
+  expect(C('cat ~/.Mission-Control/app-token')).toContain(R)
+  expect(toolRefusal('controller', 'Read', { file_path: '/Users/x/.MISSION-CONTROL/app-token' }, [])).toContain(R)
+  expect(C("cat ~/.mission''-control/app-token")).toContain(R)
+  expect(C('cat ~/."mission-control"/app-token')).toContain(R)
+  expect(C('cat ~/.mission\\-control/app-token')).toContain(R)
+  expect(C('cat ~/{.mission-control,x}/app-token')).toContain(R)
+  expect(C('cd ~;cat<.mission-control/app-token')).toContain(R)
+  expect(toolRefusal('controller', 'Glob', { pattern: '{.mission-control,x}/**', path: '/Users/x' }, [])).toContain(R)
+  expect(C('find ~ -name app-token -exec cat {} +')).toContain(R)
+  expect(toolRefusal('controller', 'Glob', { pattern: '**/app-token', path: '/Users/x' }, [])).toContain(R)
+  // Still readable: the app's own localStorage key, and a domain that merely contains the name.
+  expect(C('grep -n mcapp-token tools/app/public/app.js')).toBeUndefined()
+  expect(C('curl -s https://docs.mission-control.dev/')).toBeUndefined()
+})
+
+test('the tokenizer cannot be blinded by heredoc tails, arithmetic shifts, ANSI-C escapes or interpreter heredocs', () => {
+  const R = 'profile registry'
+  // A1: text after a commit-heredoc's opening delimiter runs as a command.
+  expect(C("echo \"$(cat <<'EOF' ; cat ~/.mission''-control/app-tok''en\nx\nEOF\n)\"")).toBeDefined()
+  expect(C("git commit -m \"$(cat <<'EOF'; git push origin main\nm\nEOF\n)\"", ['main'])).toBeDefined()
+  // A2: an arithmetic shift is not a heredoc; the lines after it still run.
+  expect(C("((1<<2))\ncat ~/.mission''-control/app-tok''en")).toBeDefined()
+  expect(C('echo $[1<<2]\ngit push origin main', ['main'])).toBeDefined()
+  // A3: ANSI-C quoting spells the name in escapes.
+  expect(C("cat ~/$'\\x2emission-control'/*")).toBeDefined()
+  // A4: a heredoc fed to an interpreter is a program, not data.
+  expect(C("bash <<'EOF'\ncat ~/.mission''-control/app-tok''en\nEOF")).toContain(R)
+  // Still allowed: an ordinary commit message heredoc, and a python script that names nothing private.
+  expect(C("git commit -F - <<'EOF'\nfix(x): tidy\nEOF")).toBeUndefined()
+  expect(C("python3 - <<'EOF'\nprint(1 + 1)\nEOF")).toBeUndefined()
+})
+
+test('command names are matched in any case, as a case-insensitive disk runs them', () => {
+  expect(C('GIT push origin main', ['main'])).toBeDefined()
+  expect(C('Git push --force origin feat/x')).toBeDefined()
+  expect(C('Gh pr merge 12')).toBeDefined()
+  expect(B('GIT push origin feat/x')).toBeDefined()
+  expect(C("BASH <<'EOF'\ncat ~/.mission''-control/app-tok''en\nEOF")).toBeDefined()
 })

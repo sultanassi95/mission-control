@@ -8,6 +8,12 @@
  * protection is best effort. This is not a sandbox: a script file written and
  * then executed is outside what a text guard can see, which is why base
  * branches also need server-side branch protection.
+ *
+ * It also keeps fleet agents away from the app's home (~/.mission-control:
+ * the app token and the profile registry, names fixed in tools/app/server.mjs)
+ * and from the app's ports. A path spelled so the tokenizer cannot see it (a
+ * glob, a value assembled by a pipeline or an interpreter, a copy of the home
+ * folder read later) is outside it; only an OS-level boundary closes that.
  */
 
 /** Branches no Controller pushes to, whatever its spoke says. */
@@ -15,6 +21,14 @@ export const ALWAYS_PROTECTED = ['main', 'master', 'dev', 'develop', 'test', 'st
 
 /** Portfolio files only Flight writes (plus everything under _command/fleet/: the audit log and the app's state). */
 export const FLIGHT_ONLY_FILES = ['_command/trackers/fronts.md', '_command/daily/today.md']
+// The app's home (~/.mission-control): its token drives Flight through the app, and its registry
+// names every profile's server. Matched in any case (the disk is case-insensitive), after any
+// non-name character (a brace, a ; or <), and by the token's own file name; checked on the raw
+// text and again on the shell's resolved words, so quoting inside the name does not hide it. The
+// leading dot keeps the workspace folder named mission-control readable. The cost, accepted: a
+// Controller on the mission-control front cannot edit the few lines that name this path.
+const APP_HOME = /(?<![A-Za-z0-9_-])\.mission-control(\/|\b|$)|(?<![A-Za-z0-9_-])app-token\b/i
+const APP_HOME_REFUSAL = 'The app\'s token and profile registry (~/.mission-control) are the founder\'s: fleet agents do not read them.'
 
 export type Role = 'controller' | 'back room'
 
@@ -47,14 +61,15 @@ const READS_STDIN = /^(sh|bash|zsh|dash|ksh|fish|csh|tcsh|python[0-9.]*|perl|rub
 
 export type Word = { text: string; dynamic: boolean; glob: boolean }
 export type Simple = { words: Word[]; redirects: Word[]; sep: string }
-export type Parsed = { commands: Simple[]; opaque: boolean }
+export type Parsed = { commands: Simple[]; opaque: boolean; bodies: string[] }
 
 /**
  * Replaces each `$(cat <<'EOF' ... EOF)` (quoted delimiter only) with a literal
  * word, ending at the FIRST terminator line and only when `)` follows it.
  */
 function literalCommitHeredocs(input: string): string {
-  const open = /\$\(\s*cat\s+<<-?\s*(['"])(\w+)\1[^\n]*\n/g
+  // Nothing may follow the delimiter on its line: text there runs as a command (MC-116).
+  const open = /\$\(\s*cat\s+<<-?\s*(['"])(\w+)\1[ \t]*\n/g
   let out = ''
   let from = 0
   for (let m = open.exec(input); m; m = open.exec(input)) {
@@ -85,6 +100,7 @@ export function tokenize(input: string): Parsed {
   let cur: Word | undefined
   let redirecting = false
   const heredocs: { delim: string; quoted: boolean }[] = []
+  const bodies: string[] = []
   const end = () => {
     if (cur) (redirecting ? redirects : words).push(cur)
     if (cur) redirecting = false
@@ -107,6 +123,7 @@ export function tokenize(input: string): Parsed {
         const rest = text.slice(i + 1)
         const m = new RegExp(`^[ \\t]*${h.delim}[ \\t]*$`, 'm').exec(rest)
         const body = m ? rest.slice(0, m.index) : rest
+        bodies.push(body)
         // An unquoted heredoc expands $(...), backticks and variables inside its body.
         if (!h.quoted && /\$|`/.test(body)) opaque = true
         if (!m) {
@@ -122,6 +139,9 @@ export function tokenize(input: string): Parsed {
       end()
       continue
     }
+    // Arithmetic ((...)) and $[...] read << as a shift, not a heredoc: the guard cannot follow it.
+    if (c === '(' && ch(i + 1) === '(') opaque = true
+    if (c === '$' && ch(i + 1) === '[') opaque = true
     if (c === ';' || c === '|' || c === '&' || c === '(' || c === ')') {
       const two = (c === '|' || c === '&') && ch(i + 1) === c
       flush(two ? c + c : c)
@@ -134,6 +154,8 @@ export function tokenize(input: string): Parsed {
       continue
     }
     if (c === '<' && ch(i + 1) === '<') {
+      // Inside ${...} a << is pattern text, not a heredoc.
+      if (cur && cur.text.lastIndexOf('${') > cur.text.lastIndexOf('}')) opaque = true
       end()
       let j = i + 2
       if (ch(j) === '<') {
@@ -199,6 +221,11 @@ export function tokenize(input: string): Parsed {
     }
     if (c === '$') {
       if (ch(i + 1) === "'" || ch(i + 1) === '"') cur.dynamic = true
+      // $'...' decodes escapes (\x2e is a dot): with any backslash inside, the word is unreadable here.
+      if (ch(i + 1) === "'") {
+        const close = text.indexOf("'", i + 2)
+        if (text.slice(i + 2, close < 0 ? text.length : close).includes('\\')) opaque = true
+      }
       if (ch(i + 1) === '(') {
         opaque = true
         cur.dynamic = true
@@ -211,7 +238,7 @@ export function tokenize(input: string): Parsed {
     cur.text += c
   }
   flush()
-  return { commands, opaque }
+  return { commands, opaque, bodies }
 }
 
 /** The command a simple command runs: keywords, assignments and wrappers skipped. */
@@ -229,7 +256,8 @@ export function headOf(s: Simple): { head?: Word; rest: Word[] } {
   return { head: w[i], rest: w.slice(i + 1) }
 }
 
-const baseName = (t: string) => t.slice(t.lastIndexOf('/') + 1)
+// Lowercased: the disk is case-insensitive, so GIT and Gh run git and gh (MC-116).
+const baseName = (t: string) => t.slice(t.lastIndexOf('/') + 1).toLowerCase()
 
 /** A push destination as compared: refs/heads/ or heads/ stripped, lower case. */
 export function pushDestination(spec: string): string {
@@ -401,14 +429,22 @@ export function pinnedDir(commands: Simple[], index: number): string | undefined
 
 /** The refusal for a shell command run by a fleet role, if any. */
 export function shellRefusal(role: Role, command: string, protectedBranches: string[], scopeDir?: string): string | undefined {
+  if (APP_HOME.test(command)) return APP_HOME_REFUSAL
   if (/_command\/fleet\b/.test(normalisePath(command)) || /\.claude[^/\s]*\/projects\b/.test(command)) return 'The fleet folder and Claude session transcripts are Flight\'s: fleet agents do not read them.'
   const parsed = tokenize(command)
+  if (parsed.commands.some(s => [...s.words, ...s.redirects].some(w => APP_HOME.test(w.text)))) return APP_HOME_REFUSAL
+  // A heredoc read by an interpreter is a program: its words are checked like the command line's.
+  if (parsed.bodies.length && parsed.commands.some(s => INTERPRETER.test(baseName(headOf(s).head?.text ?? '')))) {
+    for (const body of parsed.bodies) {
+      if (APP_HOME.test(body) || tokenize(body).commands.some(s => [...s.words, ...s.redirects].some(w => APP_HOME.test(w.text)))) return APP_HOME_REFUSAL
+    }
+  }
   if (parsed.opaque) return 'Commands run plainly here: no $(...), backticks, <(...) or unquoted heredocs that expand (a commit message may use $(cat <<\'EOF\' ... EOF)).'
-  const rawMentionsGit = /\b(git|gh)\b/.test(command)
+  const rawMentionsGit = /\b(git|gh)\b/i.test(command)
   const scanned: string[] = []
   for (const s of parsed.commands) {
     const { head, rest } = headOf(s)
-    const isCommit = head?.text === 'git' && rest.some(w => w.text === 'commit')
+    const isCommit = baseName(head?.text ?? '') === 'git' && rest.some(w => w.text === 'commit')
     if (!isCommit) scanned.push(...s.words.map(w => w.text), ...s.redirects.map(w => w.text))
     else scanned.push(...s.redirects.map(w => w.text))
   }
@@ -431,9 +467,9 @@ export function shellRefusal(role: Role, command: string, protectedBranches: str
     if (head.dynamic || head.glob) return 'Commands run plainly here: never a command name built from a variable, glob or brace.'
     if (/\s/.test(head.text)) return 'A command name with spaces in it (env -S and the like) is not allowed here.'
     const name = baseName(head.text)
-    const argsNameGit = rest.some(w => /\b(git|gh)\b/.test(w.text))
+    const argsNameGit = rest.some(w => /\b(git|gh)\b/i.test(w.text))
     if (argsNameGit && !['git', 'gh'].includes(name) && !TEXT_ONLY.has(name)) return `git and gh run only at the head of a command, not through ${name}.`
-    if (rawMentionsGit && (name === 'xargs' || name === 'eval' || name === 'source' || name === '.' || name === 'exec') && rest.some(w => INTERPRETER.test(baseName(w.text)) || /\b(git|gh)\b/.test(w.text))) {
+    if (rawMentionsGit && (name === 'xargs' || name === 'eval' || name === 'source' || name === '.' || name === 'exec') && rest.some(w => INTERPRETER.test(baseName(w.text)) || /\b(git|gh)\b/i.test(w.text))) {
       return `git and gh run only as plain commands, never through ${name}.`
     }
     // Fail closed: on a line that names git or gh, no interpreter runs at all (a pipe, heredoc, -c, /dev/stdin or option can feed it a program).
@@ -478,6 +514,7 @@ export function toolRefusal(role: Role, tool: string, input: unknown, protectedB
     if (why) return why
   }
   const flat = JSON.stringify(input ?? {})
+  if (APP_HOME.test(flat)) return APP_HOME_REFUSAL
   if (tool !== 'Bash' && (/_command\/fleet\b/.test(normalisePath(flat)) || /\.claude[^/\\"]*\/projects\b/.test(flat))) return 'The fleet folder and Claude session transcripts are Flight\'s: fleet agents do not read them.'
   if (!['Read', 'Grep', 'Glob', 'Bash'].includes(tool) && mentionsFlightFile(flat)) return 'fronts.md and today.md are Flight\'s to write.'
   return undefined

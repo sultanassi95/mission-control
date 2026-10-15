@@ -28,7 +28,8 @@ $gitPublish = '(?i)\bgit\b[^;&|]*?\b(commit|tag)\b'
 $ghPublish  = '(?i)\bgh\b[^;&|]*?\b(pr|issue|release)\b[^;&|]*?\b(create|edit|comment|review)\b'
 # The message lives in a file the hook cannot see. `-F -` is fine: that body
 # arrives inline in the command.
-$fileBorne  = '(?i)(--file=|--body-file|--notes-file|--fill\b|--fill-first\b)|(-F|--file)\s+(?!-\s|-$)\S+'
+# -F / --file count only inside the git or gh command itself, case-sensitive: rm -f or grep -F elsewhere on the line is not a message file.
+$fileBorne  = '(?i:--file=|--body-file|--notes-file|--fill\b|--fill-first\b)|(?-i:(^|[^A-Za-z])(?i:git|gh)[^;&|]*\s(-F|--file)\s+(?!-\s|-$)\S+)'
 # Tracker and wiki WRITES. A read or a search is not scanned, so a JQL query
 # mentioning a deny-list word is not blocked.
 $outwardTool = '(?i)^mcp__.*(add|create|edit|update|post|append).*(comment|issue|page|worklog|description|ticket)'

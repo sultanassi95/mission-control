@@ -33,7 +33,9 @@ fi
 # misses both.
 GIT_PUBLISH='(^|[^A-Za-z])git([^;&|]*)(^|[^A-Za-z])(commit|tag)([^A-Za-z]|$)'
 GH_PUBLISH='(^|[^A-Za-z])gh([^;&|]*)(pr|issue|release)([^;&|]*)(create|edit|comment|review)'
-FILE_BORNE='(--file=|--body-file|--notes-file|--fill)|(-F|--file)[[:space:]]+[^-][^[:space:]]*'
+# -F / --file count only inside the git or gh command itself: grep -F or awk -F elsewhere on the line is not a message file.
+# git and gh in any case (the disk is case-insensitive, so GIT runs git); the -F flag itself is case-sensitive.
+FILE_BORNE='(--file=|--body-file|--notes-file|--fill)|(^|[^A-Za-z])([Gg][Ii][Tt]|[Gg][Hh])[^;&|]*[[:space:]](-F|--file)[[:space:]]+[^-][^[:space:]]*'
 OUTWARD_TOOL='(add|create|edit|update|post|append).*(comment|issue|page|worklog|description|ticket)'
 
 text=""; file_borne=0
@@ -41,7 +43,9 @@ if [ "$tool" = "Bash" ]; then
   cmd="$(printf '%s' "$payload" | jq -r '.tool_input.command // empty')"
   if [ -n "$cmd" ] && printf '%s' "$cmd" | grep -Eqi "$GIT_PUBLISH|$GH_PUBLISH"; then
     text="$cmd"
-    printf '%s' "$cmd" | grep -Eqi "$FILE_BORNE" && file_borne=1
+    # Case-sensitive on purpose: git's message flag is -F, and a lowercase -f on the same line
+    # (rm -f, stat -f) belongs to another command.
+    printf '%s' "$cmd" | grep -Eq "$FILE_BORNE" && file_borne=1
   fi
 elif printf '%s' "$tool" | grep -Eqi "$OUTWARD_TOOL"; then
   text="$(printf '%s' "$payload" | jq -c '.tool_input // empty')"

@@ -23,8 +23,9 @@
   --rail: 220px; --read: 760px; --wide: 1200px; --card-min: 320px; --sheet-w: 640px;
   color-scheme: light;
 }
+/* Dark: the device setting unless the founder chose Light, or always when they chose Dark (theme.js sets data-theme). */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #111819; --surface: #182123; --raised: #1D2729; --line: #2B3A3D;
     --ink: #E4EDEE; --ink-soft: #B3C3C6; --ink-faint: #94A8AC;
     --accent: #5CC4CB; --accent-ink: #0B1415; --accent-tint: #173538;
@@ -36,5 +37,17 @@
     --scrim: rgba(0, 0, 0, 0.6);
     color-scheme: dark;
   }
+}
+:root[data-theme="dark"] {
+  --bg: #111819; --surface: #182123; --raised: #1D2729; --line: #2B3A3D;
+  --ink: #E4EDEE; --ink-soft: #B3C3C6; --ink-faint: #94A8AC;
+  --accent: #5CC4CB; --accent-ink: #0B1415; --accent-tint: #173538;
+  --run: #5CC4CB; --run-tint: #173538;
+  --wait: #F0C26A; --wait-tint: #3A2E14;
+  --fail: #F29A9C; --fail-tint: #3D1E1F;
+  --done: #8FD48F; --done-tint: #1E3520;
+  --idle: #94A8AC; --idle-tint: #222D2F;
+  --scrim: rgba(0, 0, 0, 0.6);
+  color-scheme: dark;
 }
 @media (prefers-reduced-motion: reduce) { :root { --rise: 0ms; } }
