@@ -14,9 +14,12 @@
   --lh-xs: 16px; --lh-sm: 18px; --lh-md: 22px; --lh-lg: 24px;
   --r-chip: 999px; --r-card: 16px; --r-sheet: 22px; --r-field: 12px;
   --target: 44px;
+  --ls-1: .03em; --ls-2: .04em; --ls-3: .06em; --ls-4: .08em;
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --rise: 220ms;
+  --pulse: 1.2s; --pulse-step: .2s; --dim: .25; --bubble: 88%;
+  --toast-lift: 96px;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {

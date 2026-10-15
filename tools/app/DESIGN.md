@@ -54,6 +54,8 @@ lowest text pair is idle on its tint, 4.93:1, above 4.5:1. `GO` text uses
 only (`--sans`: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 `--mono`: ui-monospace, "SF Mono", Menlo, monospace), because the app is served
 from the founder's machine and must load nothing remote.
+**Layout and motion tokens:** `--target` 44 px (the minimum target) · `--r-field` 12 px (fields, buttons) · `--lh-*` line heights paired with each `--t-*` · `--scrim` (sheet backdrop) · `--rise` 220 ms (sheet entry) · `--pulse` 1.2 s and `--pulse-step` .2 s (the working dots) · `--dim` .25 (their low point) · `--bubble` 88% (message width) · `--toast-lift` 96 px (toast above the bars).
+**Letter spacing:** `--ls-1` .03em (button labels) · `--ls-2` .04em (call signs) · `--ls-3` .06em (small caps tags) · `--ls-4` .08em (section labels).
 **Radius · elevation · motion:** `--r-chip` 999px · `--r-card` 16px · `--r-sheet` 22px;
 one shadow, on the phone frame only; sheets rise 220 ms ease-out, and nothing
 moves under `prefers-reduced-motion: reduce`.

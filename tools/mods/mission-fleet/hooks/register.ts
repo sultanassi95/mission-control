@@ -20,6 +20,11 @@ const pollSeq = atom({ plugin: 'mission-fleet', key: 'pollSeq' } as const, 0)
 // The app bridge: one server per session, started by /console app.
 type App = { port?: number; token: string; key: string; stop: () => Promise<unknown>; stateFile: string; httpOk?: boolean }
 let app: App | undefined
+// What the app shows about Flight itself: is a turn running, is it waiting on a question at the terminal.
+let flightBusy = false
+let busySince = 0
+let pushChain: Promise<void> = Promise.resolve()
+let flightAsking: string | undefined
 
 const hex = (bytes: number) => Array.from(crypto.getRandomValues(new Uint8Array(bytes)), b => b.toString(16).padStart(2, '0')).join('')
 
@@ -176,8 +181,40 @@ export const register: Register = on => {
   })
 
   // Loops and poll: every Controller turn's report is recorded; a gate or a contract change opens a poll item.
+  on('turn.start', async ($, e, next) => {
+    const started = await next(e)
+    if (!(e as { agentId?: string }).agentId) {
+      flightBusy = true
+      busySince = Date.now()
+      if (app) void pushState($, app).catch(() => undefined)
+    }
+    return started
+  })
+
+  // Flight's own questions are answered at the terminal; the app says one is waiting.
+  on('tool.call', { tool: 'AskUserQuestion' }, async ($, e, next) => {
+    if (e.agentId) return next(e)
+    const qs = ((e as { questions?: { question?: string }[] }).questions ?? []).map(q => q.question ?? '').filter(Boolean)
+    flightAsking = qs.join(' / ') || 'a question'
+    if (app) void pushState($, app).catch(() => undefined)
+    try {
+      return await next(e)
+    } finally {
+      flightAsking = undefined
+      if (app) void pushState($, app).catch(() => undefined)
+    }
+  }).catch(($, e, next) => next(e))
+
   on('turn.complete', async ($, e, next) => {
-    const done = await next(e)
+    let done
+    try {
+      done = await next(e)
+    } finally {
+      if (!e.agentId) {
+        flightBusy = false
+        if (app) void pushState($, app).catch(() => undefined)
+      }
+    }
     const agentId = e.agentId
     // Recorded without holding up the turn; a failure is audited, never silent.
     if (agentId) void recordReport($, agentId, e.answer).catch((err: unknown) => log($, 'poll', agentId, `report not recorded: ${String(err).slice(0, 160)}`))
@@ -552,7 +589,7 @@ async function decide($: EngineInterface, id: string, verdict: 'go' | 'no-go', n
 }
 
 async function startApp($: EngineInterface): Promise<string> {
-  if (app?.port) return `The app is already running on 127.0.0.1:${app.port}. Its link was printed once when it started (and is kept in _command/fleet/app-url); /console app stop, then /console app, issues a new one.`
+  if (app?.port) return `The app is already running on 127.0.0.1:${app.port}. Its link was printed once when it started and is stored nowhere; /console app stop, then /console app, issues a new one.`
   const root = await findRoot($)
   if (!root) return 'No portfolio found, so there is nowhere to keep the app state.'
   const real = (await $.process.run(['realpath', $.plugin.root])).stdout.trim() || $.plugin.root
@@ -597,9 +634,6 @@ async function startApp($: EngineInterface): Promise<string> {
     return 'The app server did not start within 8 seconds. Is node on the PATH?'
   }
   void pushLoop($, current)
-  const urlFile = `${root}/_command/fleet/app-url`
-  await $.fs.write(urlFile, `http://127.0.0.1:${port}/?t=${token}\n`).catch(() => undefined)
-  await $.process.run(['chmod', '600', urlFile]).catch(() => undefined)
   await log($, 'app', 'server', `started on 127.0.0.1:${port}`)
   return [
     `Mission Control App: http://127.0.0.1:${port}/?t=${token}`,
@@ -619,10 +653,29 @@ async function stopApp($: EngineInterface): Promise<string> {
 
 /** What the app shows: the fleet, the poll, the loops and the commands the session can run. */
 async function snapshot($: EngineInterface) {
-  const [fleet, items, traffic, trail, agents, commands] = await Promise.all([
-    read($, consoles), read($, poll), read($, loops), read($, audit), $.agent.list(), $.command.list().catch(() => []),
+  const [fleet, items, traffic, trail, agents, commands, messages] = await Promise.all([
+    read($, consoles), read($, poll), read($, loops), read($, audit), $.agent.list(), $.command.list().catch(() => []), $.session.messages().catch(() => []),
   ])
+  // The app link carries its token: never send it back into the page or the state file.
+  const secret = app?.token
+  const redact = (t: string) => {
+    let out = secret ? t.split(secret).join('<token>') : t
+    out = out.replace(/([?&]t=)[0-9a-f]{16,}/gi, '$1<token>').replace(/\b[0-9a-f]{48}\b/gi, '<token>')
+    return out
+  }
   return {
+    flight: {
+      // A turn that never reported its end (an abort) stops counting as busy after 15 minutes.
+      busy: flightBusy && Date.now() - busySince < 15 * 60_000,
+      asking: flightAsking ?? null,
+      messages: messages
+        .filter(m => m.text.trim() !== '')
+        .slice(-40)
+        .map(m => {
+          const clean = redact(m.text)
+          return { role: m.role, text: clean.length > 6000 ? `${clean.slice(0, 6000)}\n…` : clean }
+        }),
+    },
     consoles: fleet.map(c => ({ ...c, live: agents.find(a => a.id === c.agentId)?.status ?? null })),
     poll: items.slice(-50),
     loops: traffic.slice(-80),
@@ -632,6 +685,12 @@ async function snapshot($: EngineInterface) {
 }
 
 async function pushState($: EngineInterface, current: App) {
+  // Pushes run one at a time, so a slow older snapshot never lands after a newer one.
+  pushChain = pushChain.then(() => pushStateNow($, current)).catch(() => undefined)
+  await pushChain
+}
+
+async function pushStateNow($: EngineInterface, current: App) {
   const body = JSON.stringify(await snapshot($))
   if (current.port && current.httpOk !== false) {
     try {

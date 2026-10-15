@@ -1,8 +1,0 @@
-:root { --bg: #FFFFFF; --ink: #1B2A2E; --soft: #44575C; --line: #D3DDDE; --accent: #0A6A70; --surface: #F1F5F5; }
-@media (prefers-color-scheme: dark) { :root { --bg: #111819; --ink: #E4EDEE; --soft: #B3C3C6; --line: #2B3A3D; --accent: #5CC4CB; --surface: #182123; color-scheme: dark; } }
-body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-main { max-width: 640px; margin: 0 auto; padding: 16px; display: grid; gap: 12px; }
-textarea { width: 100%; box-sizing: border-box; font: inherit; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); }
-button { min-height: 44px; border: 0; border-radius: 12px; background: var(--accent); color: var(--bg); font: inherit; font-weight: 600; padding: 0 16px; }
-pre { background: var(--surface); border-radius: 12px; padding: 12px; overflow-x: auto; font-size: 12px; }
-label, #link, #sent { color: var(--soft); }

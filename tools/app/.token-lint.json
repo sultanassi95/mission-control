@@ -1,0 +1,13 @@
+{
+  "tokens": [
+    "public/tokens.css"
+  ],
+  "scan": [
+    "public/*.css",
+    "public/*.js"
+  ],
+  "baseline": {
+    "hex": 0,
+    "spacing": 0
+  }
+}
