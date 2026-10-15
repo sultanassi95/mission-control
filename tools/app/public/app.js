@@ -12,7 +12,7 @@
   const $ = id => document.getElementById(id)
   const str = v => (v === undefined || v === null ? '' : String(v))
   // Claude Code records a prompt the app submits between a plugin preamble and a trailing note; the founder typed only what follows it.
-  const typed = v => str(v).replace(/^The [\w-]+ plugin sent a message:\n/, '').replace(/\n+This is how Claude Code surfaces a prompt a plugin submits[\s\S]*$/, '').trim()
+  const typed = v => stripReminders(v).replace(/^The [\w-]+ plugin sent a message:\n/, '').replace(/\n+This is how Claude Code surfaces a prompt a plugin submits[\s\S]*$/, '').trim()
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
   const ICONS = {
     flight: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg>',
@@ -35,6 +35,18 @@
   const authHeaders = () => (token ? { 'x-mcapp-token': token } : {})
   const NAMES = { tascode: 'TasCode' }
   const label = p => NAMES[p] ?? str(p).charAt(0).toUpperCase() + str(p).slice(1)
+  // Claude Code records its own notices (a background task finishing, a system reminder) as user
+  // messages; they show as a quiet line, never as the founder's words. null: not a notice.
+  const stripReminders = t => str(t).replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, '').trim()
+  const harnessNotice = text => {
+    const t = str(text).trim()
+    if (/^<task-notification>/.test(t) || /^\[SYSTEM NOTIFICATION/.test(t)) {
+      const summary = /<summary>([\s\S]*?)<\/summary>/.exec(t)?.[1]?.trim()
+      return summary || "Background task update"
+    }
+    if (/^<system-reminder>/.test(t) && !stripReminders(t)) return ''
+    return null
+  }
   // A photo travels as a line naming its stored path; Flight opens the path with Read.
   const PHOTO_LINE = /\n*\[Photo from the app: (.+?\/uploads\/([a-f0-9]{24}\.(?:jpg|png|webp))) - open it with Read\]\s*$/
   // Photos are fetched with the token in a header and shown from a blob: URL, so the token never sits in the page.
@@ -92,6 +104,11 @@
     else if (!f.messages?.length) parts.push('<p class="empty">No messages yet. Ask Flight anything, or tap / for a command.</p>')
     // Flight's replies are markdown, rendered by md.js (which escapes first); the founder's own messages stay plain text.
     for (const m of f.messages ?? []) {
+      const notice = m.role === 'user' ? harnessNotice(m.text) : null
+      if (notice !== null) {
+        if (notice) parts.push(`<p class="sys">${esc(notice)}</p>`)
+        continue
+      }
       parts.push(m.role === 'user'
         ? userBubble(typed(m.text))
         : `<div class="msg assistant md"><div class="who">FLIGHT</div>${window.mcMarkdown ? window.mcMarkdown(str(m.text)) : esc(str(m.text))}</div>`)
