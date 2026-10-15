@@ -46,10 +46,10 @@ anything."* Confirming beats answering.
 
 Offer, with the exact command shown:
 
-> I'd bring it into the portfolio root so every session sees it:
-> `mv <current-path> ./<front-name>` - it stays its own git repo,
-> untouched; the portfolio repo cannot even see its files (the allowlist
-> .gitignore). Move it, or register it where it is?
+> I'd bring it into the portfolio's `fronts/` container so every session
+> sees it: `mv <current-path> ./fronts/<front-name>` - it stays its own git
+> repo, untouched; the portfolio repo cannot even see its files (the
+> allowlist .gitignore). Move it, or register it where it is?
 
 - **Move-in (recommended):** run the move only after an explicit yes.
 - **Register-in-place:** the spoke records the external absolute path,

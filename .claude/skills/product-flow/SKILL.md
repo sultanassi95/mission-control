@@ -14,9 +14,9 @@ description: >-
 # Product flow
 
 `/mission-flow` owns a ticket, `/epic-flow` owns an epic, and this skill owns
-a product: the decisions above any epic, the order of the epics, and the four
-moments where a human has to say yes because something becomes irreversible,
-costs money, or reaches people.
+a product: the decisions above any epic, the order of the epics, and the five
+moments where a human has to say yes: four because something becomes
+irreversible, costs money, or reaches people, and one to judge the design.
 
 ```mermaid
 flowchart LR

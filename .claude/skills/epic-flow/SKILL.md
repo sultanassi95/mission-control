@@ -10,7 +10,7 @@ description: >-
   founder types /epic-flow with an epic description or key, when /mission-flow
   Phase 0 returns an epic-sized verdict, or when work is being planned that
   will clearly become several tickets. Sibling of mission-flow, never a
-  replacement: children run the full 8-phase flow. With --auto the
+  replacement: children run the full flow, Phase 0 to 8. With --auto the
   invocation locks an existing plan and approves landing every child, so the
   run goes end to end without pausing between children.
 ---
@@ -24,8 +24,8 @@ the child flow enforces is inherited per fragment, and this skill adds only
 what per-ticket machinery structurally cannot see: decomposition discipline,
 cross-fragment coverage, and the cross-fragment review.
 
-Full design + rationale: the MC-017 ticket folder (`design.md` there is the
-authority where this text summarizes).
+Full design + rationale: `framework/epic-flow-as-built.md` (the authority
+where this text summarizes).
 
 ## Invocation
 
