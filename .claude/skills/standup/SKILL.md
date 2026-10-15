@@ -8,8 +8,9 @@ description: >-
   article. Bullets with ticket URLs, grouped by state. Use whenever the
   founder types /standup, asks what was done since a given time, or wants a
   handoff for a window spanning a night, a weekend or several sessions.
-  Writes a local HTML report - a timeline by day, grouped by repo - and
-  echoes only its path; the Slack / Jira / WhatsApp blocks ride inside the
+  Writes a local HTML report - a two-minute talk track grouped by kind of
+  work on top, then a timeline by day, grouped by repo - and echoes only its
+  path; the Slack / Jira / WhatsApp blocks ride inside the
   page as copy buttons. Nothing is uploaded. Flags: --from / --to / --front /
   --project / --all / --format slack|jira|whatsapp (default: slack).
 ---
@@ -235,6 +236,64 @@ The summary reads AS the founder, not as an assistant summarising them - no
 process leakage, no AI tells. Prefer the founder's own words for an outcome
 line where they have already stated it.
 
+## The talk track: what the founder says out loud
+
+The timeline is what the founder reads; the talk track is what the founder
+SAYS. It sits first on the page, under the header, and it is written to be
+spoken in about two minutes: roughly 250 to 300 words. Fifteen items read in
+timeline order are fifteen unrelated sentences. Grouped by what kind of work
+they were, the same fifteen are four things a listener can hold.
+
+**Group by kind of work, never by repo or by day.** The timeline already groups
+by repo; the talk track exists because a listener does not think in repos. Ask
+what each item DID: closed a compliance finding, made a pipeline faster, made a
+service survive a slow dependency, made a dashboard tell the truth. Items that
+answer the same way are one group, wherever their code lives, and the group
+names the repos it spans ("across Smart Data, Monitor and UI Kit") so the
+spread is said once instead of item by item.
+
+**Shape:**
+
+- **A headline**: the item count, how many shipped and how many are still in
+  review or in progress, and the one or two themes that dominated. One
+  sentence.
+- **Two to five groups**, largest first. Each opens with a bold label that
+  carries its count and its spread, then one short line per item, or per tight
+  cluster of items, in plain speech with the ticket keys at the end of the
+  line. Say the result, and the problem it solved where that makes the result
+  land, the way a person would say it ("the ingest consumer was running at a
+  quarter speed whenever nobody had the web app open; it now has its own
+  worker"). Keys are for the listener who wants to look later, not the
+  sentence's subject.
+- **Asks, last, and only when the records show one**: a blocker found in the
+  window, an action waiting on somebody. Each ask NAMES WHO ACTS. If the
+  founder can do it, it is the founder's next step, not a request: an ask
+  addressed to "someone with access" when the founder holds that access reads
+  as passing work off. When ownership is unknown from the records, say what is
+  blocked and leave the who out, rather than guessing at a role.
+
+**A count in the talk track is a claim, so it is exact.** Count a group by the
+evidence that puts an item in it, and say the categories separately when they
+differ. Five tickets titled as a compliance tool's findings plus three more
+the tool would flag next is "5 findings, and 3 it would have flagged next",
+never "8 findings" and never a rounder number the founder half remembers. When
+the founder's own framing of a group disagrees with the records, the records
+win and the difference is pointed out to them, once, in plain words.
+
+**Same items, same window.** The talk track is a re-grouping of exactly the
+items on the timeline below it. It adds nothing the window does not contain
+and drops nothing the timeline shows, except items folded into a sibling
+(a superseded ticket closed by another's merge). Its counts must equal the
+counts strip.
+
+**Same voice rules as everywhere else on the page**: no em or en dashes, no
+ellipsis character, no emoji, no process vocabulary, confidential fronts to
+the level of detail their IP rules permit. It reads as the founder speaking,
+not as a summary of the founder.
+
+It carries its own copy button, as plain text with the bold kept as
+`**...**`, so it can be pasted into notes or read straight off a phone.
+
 ## What to include
 
 For each item covered, name:
@@ -439,15 +498,18 @@ does.
    ("continuing the last smileshape report, 29 Sep 14:12" / "hub convention" /
    "default 16:00 previous day"). A window whose origin is stated can be
    checked; one that just appears cannot.
-2. **Counts strip** - `7 items · 3 merged · 2 open PR · 1 new · 1 ci`. This is
+2. **Talk track** - the two-minute spoken summary, grouped by kind of work, with
+   its own copy button (`## The talk track` above). First, because it is what
+   the founder needs in the room; everything below it is the evidence.
+3. **Counts strip** - `7 items · 3 merged · 2 open PR · 1 new · 1 ci`. This is
    what replaces grouping by state; without it the reader has to count.
-3. **Timeline** - day, then repo (or front when unscoped), then items. Each item:
+4. **Timeline** - day, then repo (or front when unscoped), then items. Each item:
    time, ticket key where there is one, state chip, the outcome in verb form,
    and its links.
-4. **Exclusions footer**, only when the scope was inferred - the count left out
+5. **Exclusions footer**, only when the scope was inferred - the count left out
    and the command that shows it.
-5. **Copy blocks** - one per chat format.
-6. **Sources line** - which records were read, and any that could not be. An
+6. **Copy blocks** - one per chat format.
+7. **Sources line** - which records were read, and any that could not be. An
    unread source is a hole in the window, and the page says so where the reader
    will see it rather than in a terminal they have already closed.
 
