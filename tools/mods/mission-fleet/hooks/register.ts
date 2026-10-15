@@ -33,6 +33,10 @@ let pushChain: Promise<void> = Promise.resolve()
 let flightAsking: string | undefined
 // The result of the last action the app sent, so the page can say what actually happened.
 let lastOp: { id: number; text: string; at: string } | undefined
+// Flight's visible text per model response, as produced. The saved transcript sometimes keeps a
+// response's tool call but not its text (seen 2026-10-15 around hook-refused calls); each entry
+// remembers the message it followed so the app can put a lost one back in its place.
+let spoken: { text: string; after: string }[] = []
 
 const hex = (bytes: number) => Array.from(crypto.getRandomValues(new Uint8Array(bytes)), b => b.toString(16).padStart(2, '0')).join('')
 
@@ -190,7 +194,17 @@ export const register: Register = on => {
   // Retune: rewrite a tuned Controller's model and effort on every request it sends.
   on('turn.step', async function* ($, e, next) {
     const c = e.agentId ? await tunedConsole($, e.agentId) : undefined
-    if (!c?.tune) return yield* next(e)
+    if (!c?.tune) {
+      if (e.agentId) return yield* next(e)
+      const before = await $.session.messages().catch(() => [])
+      const response = yield* next(e)
+      const text = response.answer.trim()
+      if (text) {
+        const prev = [...before].reverse().find(m => m.text.trim() !== '')
+        spoken = [...spoken, { text, after: prev?.text.trim() ?? '' }].slice(-60)
+      }
+      return response
+    }
     const step = { ...e, ...(c.tune.model ? { model: c.tune.model } : {}), ...(c.tune.effort ? { effort: c.tune.effort as typeof e.effort } : {}) }
     await markApplied($, c, `${step.model} ${step.effort ?? 'default'}`)
     return yield* next(step)
@@ -758,6 +772,21 @@ async function stopApp($: EngineInterface): Promise<string> {
   return 'The app server is stopped.'
 }
 
+/** The transcript with any of Flight's responses it lost put back after the message each followed. */
+function withSpoken(messages: { role: string; text: string }[]) {
+  const out = [...messages]
+  const have = new Set(out.filter(m => m.role === 'assistant').map(m => m.text.trim()))
+  for (const s of spoken) {
+    if (have.has(s.text)) continue
+    let at = -1
+    for (let i = out.length - 1; i >= 0; i--) if (out[i]!.text.trim() === s.after) { at = i; break }
+    if (at < 0) continue
+    out.splice(at + 1, 0, { role: 'assistant', text: s.text })
+    have.add(s.text)
+  }
+  return out
+}
+
 /** What the app shows: the fleet, the poll, the loops and the commands the session can run. */
 async function snapshot($: EngineInterface) {
   const [fleet, items, traffic, agents, commands, messages] = await Promise.all([
@@ -775,8 +804,7 @@ async function snapshot($: EngineInterface) {
       // A turn that never reported its end (an abort) stops counting as busy after 15 minutes.
       busy: flightBusy && Date.now() - busySince < 15 * 60_000,
       asking: flightAsking ?? null,
-      messages: messages
-        .filter(m => m.text.trim() !== '')
+      messages: withSpoken(messages.filter(m => m.text.trim() !== ''))
         .slice(-40)
         .map(m => {
           const clean = redact(m.text)
