@@ -24,6 +24,8 @@
     {{SCOPE}} {{SCOPE_ORIGIN}} {{WINDOW}} {{WINDOW_SHORT}} {{GENERATED}}
     {{WINDOW_ORIGIN}}  which rule set the window, e.g.
                        "continuing the last smileshape report, 29 Sep 14:12"
+    {{TALK_TRACK}}  the two-minute spoken summary, grouped by kind of work
+                    (SKILL.md, "The talk track"); markup sketch at the bottom
     {{COUNTS}}      one <span class="count"> per state
     {{TIMELINE}}    day > group > item, see the markup sketch at the bottom
     {{EXCLUSIONS}}  the inferred-scope footer, or empty
@@ -88,6 +90,34 @@
     font-size: .72rem; text-transform: uppercase; letter-spacing: .06em;
     border: 1px solid var(--line); border-radius: 3px; color: var(--ink-faint);
   }
+
+  /* ---- talk track: what the founder says, first on the page --------- */
+  /* Reading size, not report size: this is read aloud off a screen, often a
+     phone, so it gets the body measure and generous line height. Same surface
+     tint and hairline as the exclusions note, no side accent. */
+  .talk {
+    margin: 1.5rem 0 0; padding: var(--s4) var(--s5) var(--s5);
+    background: var(--surface); border: 1px solid var(--line); border-radius: 6px;
+  }
+  .talk-head { display: flex; align-items: baseline; gap: .6rem; margin-bottom: var(--s3); }
+  .talk-head h2 {
+    margin: 0; font-size: var(--t-sm); font-weight: 600; text-transform: uppercase;
+    letter-spacing: .08em; color: var(--ink-faint);
+  }
+  .talk-head .est { color: var(--ink-faint); font-size: var(--t-xs); }
+  .talk-head button { margin-left: auto; }
+  .talk p { margin: 0 0 var(--s3); line-height: 1.65; }
+  .talk .headline { font-size: 1.02rem; }
+  .talk h3 { margin: var(--s4) 0 var(--s1); font-size: var(--t-md); font-weight: 600; }
+  .talk h3 .spread { font-weight: 400; color: var(--ink-soft); }
+  .talk ul { margin: 0; padding-left: 1.1rem; }
+  .talk li { margin: 0 0 var(--s1); line-height: 1.6; }
+  .talk .keys {
+    color: var(--ink-faint); font-size: var(--t-sm); white-space: nowrap;
+    font-family: var(--mono);
+  }
+  .talk .asks { margin-top: var(--s4); }
+  #talk-text { display: none; }
 
   /* ---- counts strip: carries what state-grouping used to ------------ */
   .counts {
@@ -253,6 +283,8 @@
     <div class="provenance">{{WINDOW_ORIGIN}}</div>
   </header>
 
+  {{TALK_TRACK}}
+
   <ul class="counts">{{COUNTS}}</ul>
 
   <div class="filter">
@@ -345,6 +377,23 @@
         sketch renders as a second, fake copy-for-chat section in every report.
       </div>
     </details>
+
+  {{TALK_TRACK}}
+    <section class="talk" aria-labelledby="talk-h">
+      <div class="talk-head"><h2 id="talk-h">Talk track</h2><span class="est">about 2 minutes</span>
+        <button data-copy="talk-text">copy</button></div>
+      <p class="headline">15 tickets since yesterday. 14 shipped, 1 in review. Mostly security
+        and compliance, plus a Smart Data throughput fix.</p>
+      <h3>Security and compliance, 8 <span class="spread">across Smart Data, Monitor and UI Kit</span></h3>
+      <ul>
+        <li>5 Vanta findings closed: three load balancer alarms ...
+          <span class="keys">WB-1003 to WB-1005</span></li>
+      </ul>
+      <p class="asks"><strong>Next</strong>: set the release secret on UI Kit ourselves.</p>
+      <pre id="talk-text">the same talk track as plain text, bold kept as **...**</pre>
+    </section>
+    The pre is hidden; it is what the copy button copies, so the clipboard gets
+    clean text instead of the rendered list's bullets and spacing.
 
   {{EXCLUSIONS}}  (omit entirely when the scope was given)
     <p class="exclusions">Scope inferred from this session: smileshape.
