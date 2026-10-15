@@ -26,11 +26,11 @@ argue its way around, and a control room you can run from your phone.
 <p align="center">
   <img src="docs/assets/app-phone-flight.png" alt="Flight: the morning summary across three fronts" width="240">
   &nbsp;
-  <img src="docs/assets/app-phone-poll.png" alt="The Poll: one decision waiting, go or no-go" width="240">
+  <img src="docs/assets/app-phone-poll.png" alt="The Poll: the decisions waiting on you, go or no-go" width="240">
   &nbsp;
   <img src="docs/assets/app-phone-consoles.png" alt="Consoles: one Controller per front, with its state" width="240">
 </p>
-<p align="center"><sub>The Mission Control App on a phone: Flight's morning summary, the one decision waiting on you, and the Controller running each front.</sub></p>
+<p align="center"><sub>The Mission Control App on a phone: Flight's morning summary, the decisions waiting on you, and the Controller running each front.</sub></p>
 
 ## What it does for you
 
