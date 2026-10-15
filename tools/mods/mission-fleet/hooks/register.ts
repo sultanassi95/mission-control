@@ -24,7 +24,7 @@ const WATCH_EVERY = 10 * 60_000
 let watching = false
 
 // The app bridge: one server per session, started by /console app.
-type App = { port?: number; token: string; key: string; stop: () => Promise<unknown>; stateFile: string; httpOk?: boolean }
+type App = { port?: number; token: string; key: string; stop: () => Promise<unknown>; stateFile: string; httpOk?: boolean; profile?: string; tokenFile?: string }
 let app: App | undefined
 // What the app shows about Flight itself: is a turn running, is it waiting on a question at the terminal.
 let flightBusy = false
@@ -686,7 +686,7 @@ async function decide($: EngineInterface, id: string, verdict: 'go' | 'no-go', n
 }
 
 async function startApp($: EngineInterface): Promise<string> {
-  if (app?.port) return `The app is already running on 127.0.0.1:${app.port}. Its link was printed once when it started and is stored nowhere; /console app stop, then /console app, issues a new one.`
+  if (app?.port) return `The app is already running for this profile (its server on 127.0.0.1:${app.port}, the front door on ${APP_PORT}). The link was printed when it started; the token is kept in ${app.tokenFile ?? 'the app token file'}, and deleting that file then restarting every profile's app issues a new one.`
   const root = await findRoot($)
   if (!root) return 'No portfolio found, so there is nowhere to keep the app state.'
   const real = (await $.process.run(['realpath', $.plugin.root])).stdout.trim() || $.plugin.root
@@ -699,6 +699,7 @@ async function startApp($: EngineInterface): Promise<string> {
   app = current
   let ready: (port: number | undefined) => void = () => undefined
   const started = new Promise<number | undefined>(r => (ready = r))
+  let refused = ''
   void (async () => {
     let buffer = ''
     for await (const piece of stream) {
@@ -709,15 +710,23 @@ async function startApp($: EngineInterface): Promise<string> {
         const line = buffer.slice(0, nl)
         buffer = buffer.slice(nl + 1)
         nl = buffer.indexOf('\n')
-        let msg: { type?: string; port?: number; op?: string; text?: string }
+        let msg: { type?: string; port?: number; op?: string; text?: string; token?: string; profile?: string; stateFile?: string; tokenFile?: string; reason?: string }
         try {
           msg = JSON.parse(line)
         } catch {
           continue
         }
         if (msg.type === 'ready') {
+          // The server answers with the shared token every profile's server uses, and its own profile and state file.
+          if (typeof msg.token === 'string' && msg.token.length >= 32) current.token = msg.token
+          if (typeof msg.stateFile === 'string' && msg.stateFile) current.stateFile = msg.stateFile
+          current.profile = msg.profile
+          current.tokenFile = msg.tokenFile
           current.port = msg.port
           ready(msg.port)
+        } else if (msg.type === 'refused') {
+          refused = String(msg.reason ?? 'refused')
+          ready(undefined)
         } else if (msg.type === 'op' && msg.op && typeof msg.text === 'string') await runAppOp($, msg.op, msg.text, Number((msg as { id?: number }).id ?? 0))
       }
     }
@@ -728,14 +737,15 @@ async function startApp($: EngineInterface): Promise<string> {
   const port = await Promise.race([started, $.clock.sleep(8000).then(() => undefined)])
   if (!port) {
     await current.stop()
-    return 'The app server did not start within 8 seconds. Is node on the PATH?'
+    if (app === current) app = undefined
+    return refused ? `The app did not start: ${refused}.` : 'The app server did not start within 8 seconds. Is node on the PATH?'
   }
   void pushLoop($, current)
-  await log($, 'app', 'server', `started on 127.0.0.1:${port}`)
+  await log($, 'app', 'server', `started on 127.0.0.1:${port} as ${current.profile ?? 'unknown'}`)
   return [
-    `Mission Control App: http://127.0.0.1:${port}/?t=${token}`,
-    'Open it once; the page keeps the token in its own storage and drops it from the address bar. It stops with this session, or with /console app stop.',
-    'From the phone: `tailscale serve --bg ' + port + '` serves it to your tailnet only (see the remote-access runbook).',
+    `Mission Control App (${current.profile ?? 'this'} profile): http://127.0.0.1:${APP_PORT}/?t=${current.token}`,
+    `Every profile's app shares the front door on ${APP_PORT} and one token; switch profiles from the app header. Open the link once per browser. This profile's Flight leaves the app when this session ends, or with /console app stop.`,
+    'From the phone: `tailscale serve --bg ' + APP_PORT + '` serves it to your tailnet only (see the remote-access runbook).',
   ].join('\n')
 }
 

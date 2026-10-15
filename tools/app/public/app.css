@@ -16,6 +16,12 @@ button { cursor: pointer; }
 .dot.live { background: var(--done); }
 .dot.busy { background: var(--wait); }
 .grow { flex: 1; min-width: 0; }
+.profbtn { display: inline-flex; align-items: center; gap: var(--s1); min-height: var(--target); padding: 0 var(--s2) 0 var(--s3); border-radius: var(--r-field); border: 1px solid var(--line); background: var(--surface); font-weight: 600; flex: none; }
+.profbtn svg { width: var(--t-md); height: var(--t-md); stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.profiles { display: grid; gap: var(--s2); }
+.prof { display: flex; align-items: center; gap: var(--s3); min-height: var(--target); padding: var(--s2) var(--s3); border-radius: var(--r-field); border: 1px solid var(--line); background: var(--surface); text-align: left; }
+.prof[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-tint); }
+.prof .prof-name { flex: 1; font-weight: 600; }
 .iconbtn { width: var(--target); height: var(--target); border-radius: var(--r-field); border: 1px solid var(--line); background: var(--surface); display: grid; place-items: center; flex: none; }
 .iconbtn svg, .send svg, .tab svg { width: var(--t-lg); height: var(--t-lg); stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 

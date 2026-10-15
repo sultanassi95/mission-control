@@ -3,16 +3,22 @@
 // streams the fleet state to the browser, and hands the browser's actions to
 // the mod as one JSON line each on stdout. Node standard library only.
 //
-// Security: every data request (/op, /events, /state.json) needs either the per-start token (read
-// from stdin, sent from the page's localStorage) or, through `tailscale serve`, the signed-in
-// Tailscale identity of this Mac's owner (serve sets that header itself); the Host header must be loopback
-// or a Tailscale name (DNS rebinding); a POST must come from this page's own
-// origin (cross-site requests); the bridge endpoint takes the mod's own key.
+// One server runs per Claude profile (work, personal, tascode). Each registers in
+// ~/.mission-control/flights and also tries to hold the shared front-door port;
+// whichever holds it serves the app and routes /p/<profile>/* to that profile's
+// server, so the front door survives any one session closing.
+//
+// Security: every data request (/op, /events, /state.json, /flights.json, /p/*) needs either the
+// shared app token (kept 0600 beside the registry, sent from the page's localStorage) or, through
+// `tailscale serve`, the signed-in Tailscale identity of this Mac's owner (serve sets that header
+// itself); the Host header must be loopback or a Tailscale name (DNS rebinding); a POST must come
+// from this page's own origin (cross-site requests); the bridge endpoint takes the mod's own key.
 
-import { createServer } from 'node:http'
+import { createServer, request as httpRequest } from 'node:http'
 import { readFile, watch } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
-import { join, dirname, normalize, extname } from 'node:path'
+import { existsSync, mkdirSync, chmodSync, readFileSync, writeFileSync, readdirSync, unlinkSync, linkSync, renameSync } from 'node:fs'
+import { join, dirname, normalize, extname, basename } from 'node:path'
+import { homedir } from 'node:os'
 import { timingSafeEqual } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { execFile } from 'node:child_process'
@@ -32,17 +38,93 @@ const secrets = await new Promise(resolve => {
     }
   })
 })
-const TOKEN = typeof secrets.token === 'string' ? secrets.token : ''
 const BRIDGE_KEY = typeof secrets.key === 'string' ? secrets.key : ''
-const STATE_FILE = process.env.MCAPP_STATE_FILE ?? ''
-const START_PORT = Number(process.env.MCAPP_PORT ?? 4777)
+const FRONT_PORT = Number(process.env.MCAPP_PORT ?? 4777)
 const OPS = new Set(['prompt', 'command', 'console'])
+const FORWARDED = new Set(['/op', '/events', '/state.json'])
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.png': 'image/png' }
 
-if (TOKEN.length < 32 || BRIDGE_KEY.length < 32) {
+if (typeof secrets.token !== 'string' || secrets.token.length < 32 || BRIDGE_KEY.length < 32) {
   process.stderr.write('mcapp: a token and a bridge key (32+ chars each) are required as JSON on stdin\n')
   process.exit(2)
 }
+
+// The profile is the Claude config this session runs under: CLAUDE_PROFILE when the shell set it,
+// else the config dir's name (~/.claude-personal -> personal), else the default config, work.
+const PROFILE = (process.env.MCAPP_PROFILE || process.env.CLAUDE_PROFILE || basename(process.env.CLAUDE_CONFIG_DIR ?? '').replace(/^\.?claude-?/, '') || 'work').toLowerCase().replace(/[^a-z0-9-]/g, '') || 'work'
+const HOME = process.env.MCAPP_HOME || join(homedir(), '.mission-control')
+const FLIGHTS = join(HOME, 'flights')
+mkdirSync(FLIGHTS, { recursive: true, mode: 0o700 })
+chmodSync(HOME, 0o700)
+chmodSync(FLIGHTS, 0o700)
+
+// One token for every profile's server, so the Mac's link survives the front door changing hands.
+// The first server writes it; the rest read it. Deleting the file revokes it at the next start.
+const TOKEN = (() => {
+  const file = join(HOME, 'app-token')
+  const read = () => (existsSync(file) ? readFileSync(file, 'utf8').trim() : '')
+  // Written whole to a temp file and linked into place, so no server ever reads a half-written token.
+  if (read().length < 32) {
+    const tmp = `${file}.${process.pid}`
+    writeFileSync(tmp, secrets.token, { mode: 0o600 })
+    try {
+      // Only a short (corrupt) file is replaced; one another server just wrote stays.
+      if (existsSync(file) && read().length < 32) unlinkSync(file)
+      linkSync(tmp, file)
+    } catch (err) {
+      if (err.code !== 'EEXIST') throw err
+    } finally {
+      unlinkSync(tmp)
+    }
+  }
+  chmodSync(file, 0o600)
+  return read()
+})()
+
+// Each profile keeps its own fallback state file; one shared path let two profiles overwrite each other.
+const STATE_FILE = process.env.MCAPP_STATE_FILE ? join(dirname(process.env.MCAPP_STATE_FILE), `app-state-${PROFILE}.json`) : ''
+
+const alive = pid => {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (err) {
+    return err.code === 'EPERM'
+  }
+}
+function flights() {
+  const out = []
+  for (const f of readdirSync(FLIGHTS)) {
+    if (!f.endsWith('.json')) continue
+    try {
+      const e = JSON.parse(readFileSync(join(FLIGHTS, f), 'utf8'))
+      if (typeof e.profile !== 'string' || !Number.isInteger(e.port) || !Number.isInteger(e.pid)) continue
+      // A dead server's entry is removed as soon as it is seen, before its pid can be reused.
+      if (alive(e.pid)) out.push(e)
+      else dropStale(e)
+    } catch {
+      /* a file mid-write or malformed is skipped this round */
+    }
+  }
+  return out.sort((a, b) => a.profile.localeCompare(b.profile))
+}
+
+// One Flight per profile: two would fight over the same login's state.
+const holder = flights().find(e => e.profile === PROFILE && e.pid !== process.pid)
+if (holder) {
+  process.stdout.write(`${JSON.stringify({ type: 'refused', reason: `the ${PROFILE} profile already has an app server (pid ${holder.pid}); /console app stop in that session first` })}\n`)
+  process.exit(3)
+}
+const REGISTRY_FILE = join(FLIGHTS, `${PROFILE}.json`)
+function unregister() {
+  try {
+    if (JSON.parse(readFileSync(REGISTRY_FILE, 'utf8')).pid === process.pid) unlinkSync(REGISTRY_FILE)
+  } catch {
+    /* already gone */
+  }
+}
+process.on('exit', unregister)
+for (const sig of ['SIGTERM', 'SIGINT', 'SIGHUP']) process.on(sig, () => process.exit(0))
 
 // The tailnet owner's login and this Mac's own tailnet name, read once from the local Tailscale client.
 // Either empty (Tailscale absent) leaves the token as the only way in.
@@ -163,7 +245,7 @@ function handler(port) {
     }
 
     // The page and its scripts carry no secrets and are public; every data endpoint needs the token.
-    const isData = url.pathname === '/op' || url.pathname === '/events' || url.pathname === '/state.json'
+    const isData = url.pathname === '/op' || url.pathname === '/events' || url.pathname === '/state.json' || url.pathname === '/flights.json' || url.pathname.startsWith('/p/')
     if (req.method === 'GET' && !isData) return serveStatic(res, url.pathname).then(() => undefined, () => send(res, 500, 'error'))
     if (!authorised(req, url)) return send(res, 401, 'token required: open the URL /console app printed')
 
@@ -172,7 +254,31 @@ function handler(port) {
       const expected = [`http://127.0.0.1:${port}`, `http://localhost:${port}`]
       const tailnet = origin && /^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)*\.ts\.net$/.test(origin) && new URL(origin).host === req.headers.host
       if (!origin || (!expected.includes(origin) && !tailnet)) return send(res, 403, 'foreign origin')
-      if (url.pathname !== '/op') return send(res, 404, 'not found')
+    }
+
+    if (url.pathname === '/flights.json') {
+      if (req.method !== 'GET') return send(res, 405, 'method not allowed')
+      return send(res, 200, JSON.stringify(await flightsSummary()), { 'Content-Type': 'application/json' })
+    }
+
+    // /p/<profile>/<path>: this server's own profile is answered here, any other is forwarded to its server.
+    let path = url.pathname
+    const routed = /^\/p\/([a-z0-9-]+)(\/.*)$/.exec(path)
+    if (routed) {
+      const [, profile, rest] = routed
+      if (profile !== PROFILE) {
+        // Only the three data routes cross to another profile, and only by GET or POST.
+        if (!FORWARDED.has(rest)) return send(res, 404, 'not found')
+        if (req.method !== 'GET' && req.method !== 'POST') return send(res, 405, 'method not allowed')
+        const target = flights().find(e => e.profile === profile)
+        if (!target) return send(res, 404, `no ${profile} Flight is running`)
+        return forward(req, res, target.port, rest, target)
+      }
+      path = rest
+    }
+
+    if (req.method === 'POST') {
+      if (path !== '/op') return send(res, 404, 'not found')
       let op
       try {
         op = JSON.parse(await readBody(req))
@@ -186,7 +292,7 @@ function handler(port) {
     }
 
     if (req.method !== 'GET') return send(res, 405, 'method not allowed')
-    if (url.pathname === '/events') {
+    if (path === '/events') {
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' })
       res.write(`data: ${JSON.stringify(state)}\n\n`)
       clients.add(res)
@@ -197,12 +303,63 @@ function handler(port) {
       })
       return
     }
-    if (url.pathname === '/state.json') return send(res, 200, JSON.stringify(state), { 'Content-Type': 'application/json' })
+    if (path === '/state.json') return send(res, 200, JSON.stringify(state), { 'Content-Type': 'application/json' })
     return send(res, 404, 'not found')
   }
 }
 
-function listen(port, tries = 20) {
+// Forwards an already-authorised request to another profile's server on loopback, carrying the
+// shared token and that server's own origin; the response (an event stream included) is piped back.
+function forward(req, res, port, path, entry) {
+  const headers = { host: `127.0.0.1:${port}`, 'x-mcapp-token': TOKEN, accept: req.headers.accept ?? '*/*' }
+  if (req.method === 'POST') {
+    headers.origin = `http://127.0.0.1:${port}`
+    if (req.headers['content-type']) headers['content-type'] = req.headers['content-type']
+  }
+  const upstream = httpRequest({ host: '127.0.0.1', port, method: req.method, path, headers }, up => {
+    res.writeHead(up.statusCode ?? 502, { ...up.headers, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' })
+    up.pipe(res)
+    // A server that dies mid-stream never ends its response; end ours so the browser reconnects.
+    up.on('close', () => res.writableEnded || res.end())
+  })
+  upstream.on('error', err => {
+    if (err.code === 'ECONNREFUSED') dropStale(entry)
+    return res.headersSent ? res.end() : send(res, 502, 'that Flight did not answer')
+  })
+  res.on('close', () => upstream.destroy())
+  req.pipe(upstream)
+}
+
+// A registered port that refuses connections belongs to a server that died without cleaning up
+// (a crash or SIGKILL); its entry goes, so its pid or port being reused later cannot inherit it.
+function dropStale(entry) {
+  const file = join(FLIGHTS, `${entry.profile}.json`)
+  try {
+    const now = JSON.parse(readFileSync(file, 'utf8'))
+    if (now.pid === entry.pid && now.port === entry.port) unlinkSync(file)
+  } catch {
+    /* already gone or replaced */
+  }
+}
+
+// Every live profile with what the switcher shows: open gates and whether Flight is working.
+async function flightsSummary() {
+  const summarise = s => ({ busy: Boolean(s?.fleet?.flight?.busy), gates: (s?.fleet?.poll ?? []).filter(p => p.state === 'open').length })
+  return Promise.all(
+    flights().map(async e => {
+      if (e.profile === PROFILE) return { profile: e.profile, self: true, ...summarise(state) }
+      try {
+        const r = await fetch(`http://127.0.0.1:${e.port}/state.json`, { headers: { 'x-mcapp-token': TOKEN }, signal: AbortSignal.timeout(1500) })
+        return { profile: e.profile, self: false, ...summarise(r.ok ? await r.json() : null), ...(r.ok ? {} : { unreachable: true }) }
+      } catch (err) {
+        if (err?.cause?.code === 'ECONNREFUSED') dropStale(e)
+        return { profile: e.profile, self: false, busy: false, gates: 0, unreachable: true }
+      }
+    }),
+  )
+}
+
+function serve(port, onReady, onError) {
   const server = createServer()
   const handle = handler(port)
   server.on('request', (req, res) => {
@@ -211,14 +368,39 @@ function listen(port, tries = 20) {
       else res.end()
     })
   })
-  server.once('error', err => {
-    if (err.code === 'EADDRINUSE' && tries > 0) listen(port + 1, tries - 1)
-    else {
-      process.stderr.write(`mcapp: ${err.message}\n`)
-      process.exit(1)
-    }
-  })
-  server.listen(port, '127.0.0.1', () => emit({ type: 'ready', port }))
+  server.once('error', onError)
+  server.listen(port, '127.0.0.1', () => onReady(server))
+}
+
+// This profile's own server: the first free port above the front door's.
+function listen(port, tries = 20) {
+  serve(
+    port,
+    () => {
+      const tmp = `${REGISTRY_FILE}.${process.pid}`
+      writeFileSync(tmp, JSON.stringify({ profile: PROFILE, port, pid: process.pid, at: new Date().toISOString() }), { mode: 0o600 })
+      renameSync(tmp, REGISTRY_FILE)
+      emit({ type: 'ready', port, profile: PROFILE, token: TOKEN, tokenFile: join(HOME, 'app-token'), stateFile: STATE_FILE })
+      holdFrontDoor()
+    },
+    err => {
+      if (err.code === 'EADDRINUSE' && tries > 0) listen(port + 1, tries - 1)
+      else {
+        process.stderr.write(`mcapp: ${err.message}\n`)
+        process.exit(1)
+      }
+    },
+  )
+}
+
+// Whoever holds the front door serves every profile; the others keep trying, so when its session
+// ends one of them takes over within a few seconds.
+function holdFrontDoor() {
+  serve(
+    FRONT_PORT,
+    () => emit({ type: 'front', port: FRONT_PORT }),
+    () => setTimeout(holdFrontDoor, 3000),
+  )
 }
 
 // The file fallback: if the mod cannot reach loopback over http, it writes the state to a file.
@@ -245,5 +427,5 @@ async function watchStateFile() {
 process.on('unhandledRejection', err => process.stderr.write(`mcapp: unhandled ${String(err).slice(0, 200)}\n`))
 process.on('uncaughtException', err => process.stderr.write(`mcapp: uncaught ${String(err).slice(0, 200)}\n`))
 
-listen(START_PORT)
+listen(FRONT_PORT + 1)
 void watchStateFile()

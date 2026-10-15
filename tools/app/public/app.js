@@ -28,7 +28,13 @@
   let seenOp = 0
   const TABS = [['flight', 'Flight'], ['consoles', 'Consoles'], ['poll', 'Poll'], ['loops', 'Loops']]
 
-  const S = { tab: 'flight', state: null, live: false, sheet: null, sel: null, filter: 'ALL', query: '', open: new Set(), queued: [], tune: null, notes: {}, details: new Set(), sending: false, opener: null }
+  const S = { tab: 'flight', state: null, live: false, sheet: null, sel: null, filter: 'ALL', query: '', open: new Set(), queued: [], tune: null, notes: {}, details: new Set(), sending: false, opener: null, flights: [], profile: '' }
+  try { S.profile = localStorage.getItem('mcapp-profile') ?? '' } catch {}
+  // Every request goes to the chosen profile's Flight through the front door.
+  const base = () => (S.profile ? `/p/${encodeURIComponent(S.profile)}` : '')
+  const authHeaders = () => (token ? { 'x-mcapp-token': token } : {})
+  const NAMES = { tascode: 'TasCode' }
+  const label = p => NAMES[p] ?? str(p).charAt(0).toUpperCase() + str(p).slice(1)
   let queueSeq = 0
   try { S.tab = sessionStorage.getItem('mcapp-tab') || 'flight' } catch {}
 
@@ -171,6 +177,12 @@
       head = `Stand down <span class="call">${esc(S.sel)}</span>?`
       body = `<p>The console writes a dated handoff to its front's progress.md, then ends. <b>Dismiss</b> ends it with nothing written.</p>
         <div class="btnrow"><button class="ghost" type="button" data-a="back">Keep</button><button class="ghost" type="button" data-a="dismiss">Dismiss</button><button class="danger" type="button" data-a="sdyes">Stand down</button></div>`
+    } else if (S.sheet === 'profiles') {
+      head = 'Profiles'
+      body = S.flights.length
+        ? `<div class="profiles">${S.flights.map(f => `<button class="prof" type="button" data-a="profile" data-v="${esc(f.profile)}" aria-pressed="${f.profile === S.profile}"><span class="prof-name">${esc(label(f.profile))}</span>${f.unreachable ? pill(['failed', 'Not answering']) : f.gates ? pill(['waiting', `${f.gates} waiting`]) : f.busy ? pill(['running', 'Working']) : pill(['idle', 'Idle'])}</button>`).join('')}</div>
+          <p class="hint">A profile appears here while its session runs /console app.</p>`
+        : '<p class="empty">No Flight is running. Type /console app in a Claude session.</p>'
     } else if (S.sheet === 'menu') {
       const live = consoles().filter(c => c.status !== 'stood-down')
       head = 'Fleet'
@@ -208,17 +220,25 @@
     return true
   }
 
+  // Flight stays pinned to the newest message unless the founder scrolled up to read; opening the
+  // app, returning to it, coming back to the Flight tab or switching profile pins it again.
+  let stick = true
   function render() {
     try {
       const views = { flight: viewFlight, consoles: viewConsoles, poll: viewPoll, loops: viewLoops }
       const main = $('main')
-      const atBottom = main.scrollHeight - main.scrollTop - main.clientHeight < 40
       $('title').textContent = TABS.find(t => t[0] === S.tab)?.[1] ?? 'Flight'
       main.className = `main view-${S.tab}`
-      const changed = paint(main, 'main', views[S.tab]())
+      paint(main, 'main', views[S.tab]())
       const busy = fleet().flight?.busy
       $('link-text').textContent = S.live ? (busy ? 'Live · Flight is working' : 'Live · connected to Flight') : S.state ? 'Reconnecting…' : 'Not connected: sign in to Tailscale, or open the link /console app printed'
       document.querySelector('.dot').className = `dot ${S.live ? (busy ? 'busy' : 'live') : ''}`
+      const others = S.flights.filter(f => f.profile !== S.profile && (f.gates || f.busy))
+      $('profile').hidden = S.flights.length < 2 && !S.profile
+      $('profile-name').textContent = S.profile ? label(S.profile) : 'Profile'
+      $('profile').setAttribute('aria-label', `Profile: ${S.profile ? label(S.profile) : 'none'}${others.length ? `, ${others.length} other ${others.length === 1 ? 'profile needs' : 'profiles need'} a look` : ''}. Switch profile`)
+      $('profile-dot').className = `dot ${others.some(f => f.gates) ? 'busy' : 'live'}`
+      $('profile-dot').hidden = !others.length
       $('composer').hidden = S.tab !== 'flight'
       paint($('quick'), 'quick', ['/console list', '/briefing', '/standup', '/debrief'].map(q => `<button type="button" data-a="quick" data-v="${esc(q)}">${esc(q)}</button>`).join(''))
       const n = openGates().length
@@ -233,7 +253,7 @@
         S.opener?.focus?.()
         S.opener = null
       }
-      if (S.tab === 'flight' && changed && atBottom) main.scrollTop = main.scrollHeight
+      if (S.tab === 'flight' && stick) main.scrollTop = main.scrollHeight
     } catch (err) {
       toast('Something on this page failed to draw. Reload it; the fleet keeps running.', 'error')
       console.error(err)
@@ -252,9 +272,8 @@
 
   async function send(op, text) {
     try {
-      const headers = { 'Content-Type': 'application/json' }
-      if (token) headers['x-mcapp-token'] = token
-      const r = await fetch('/op', { method: 'POST', headers, body: JSON.stringify({ op, text }) })
+      const headers = { 'Content-Type': 'application/json', ...authHeaders() }
+      const r = await fetch(`${base()}/op`, { method: 'POST', headers, body: JSON.stringify({ op, text }) })
       if (!r.ok) {
         toast(r.status === 401 ? "Couldn't send: this link has expired. Open the new link from your Mac." : "Couldn't send that. Try again in a moment.", 'error')
         return false
@@ -274,7 +293,8 @@
     const v = b.dataset.v
     if (['open', 'stopask', 'appstopask'].includes(a) && !S.sheet) S.opener = b
     switch (a) {
-      case 'tab': S.tab = v; S.sheet = null; try { sessionStorage.setItem('mcapp-tab', v) } catch {} break
+      case 'profile': S.sheet = null; switchProfile(v); return
+      case 'tab': if (v === 'flight') stick = true; S.tab = v; S.sheet = null; try { sessionStorage.setItem('mcapp-tab', v) } catch {} break
       case 'close': S.sheet = null; S.tune = null; break
       case 'back': S.sheet = 'console'; break
       case 'quick': $('draft').value = `${v} `; $('draft').focus(); return
@@ -314,6 +334,7 @@
   document.addEventListener('toggle', e => {
     if (e.target.tagName === 'DETAILS' && e.target.dataset.id) e.target.open ? S.details.add(e.target.dataset.id) : S.details.delete(e.target.dataset.id)
   }, true)
+  $('profile').addEventListener('click', () => { S.opener = $('profile'); S.sheet = 'profiles'; render(); void loadFlights() })
   $('menu').addEventListener('click', () => { S.opener = $('menu'); S.sheet = 'menu'; render() })
   $('slash').addEventListener('click', () => { S.opener = $('slash'); S.sheet = 'slash'; S.query = ''; render() })
   $('send').addEventListener('submit', async e => {
@@ -350,11 +371,14 @@
   })
 
   // ---------- live state ----------
+  let es = null
   function connect() {
+    if (es) es.close()
     // Over the tailnet the signed-in Tailscale identity is enough; a token is needed only on the Mac's own address.
-    const es = new EventSource(token ? `/events?t=${encodeURIComponent(token)}` : '/events')
+    es = new EventSource(token ? `${base()}/events?t=${encodeURIComponent(token)}` : `${base()}/events`)
     es.onopen = () => { S.live = true; render() }
-    es.onerror = () => { S.live = false; render() }
+    // A non-200 (the profile's server restarting) closes an EventSource for good; open a new one.
+    es.onerror = () => { S.live = false; render(); if (es.readyState === EventSource.CLOSED) setTimeout(() => es.readyState === EventSource.CLOSED && connect(), 3000) }
     es.onmessage = m => {
       const first = S.state === null
       try { S.state = JSON.parse(m.data) } catch { return }
@@ -370,6 +394,57 @@
       render()
     }
   }
+  // The live profiles, refreshed every few seconds; a remembered profile that is gone falls back to the front door's own.
+  let misses = 0
+  async function loadFlights() {
+    try {
+      const r = await fetch('/flights.json', { headers: authHeaders() })
+      if (!r.ok) return
+      S.flights = await r.json()
+    } catch {
+      return
+    }
+    let chosen = ''
+    try { chosen = localStorage.getItem('mcapp-profile') ?? '' } catch {}
+    if (chosen && chosen !== S.profile && S.flights.some(f => f.profile === chosen)) return switchProfile(chosen, false)
+    // A profile missing from one listing is often only restarting; fall back after two misses in a row.
+    misses = S.flights.some(f => f.profile === S.profile) ? 0 : misses + 1
+    if (misses >= 2 || (!S.profile && S.flights.length)) {
+      const fallback = S.flights.find(f => f.self)?.profile ?? S.flights[0]?.profile ?? ''
+      if (fallback && fallback !== S.profile) {
+        if (S.profile) toast(`${label(S.profile)} is not running; showing ${label(fallback)}.`)
+        // The first profile resolved is remembered, so a later message cannot land in a different profile unseen.
+        return switchProfile(fallback, !chosen)
+      }
+    }
+    render()
+  }
+  function switchProfile(p, remember = true) {
+    if (remember) try { localStorage.setItem('mcapp-profile', p) } catch {}
+    if (p === S.profile) return render()
+    S.profile = p
+    stick = true
+    S.state = null
+    S.live = false
+    S.queued = []
+    S.sel = null
+    S.tune = null
+    S.notes = {}
+    S.details = new Set()
+    S.sheet = null
+    seenOp = 0
+    connect()
+    render()
+  }
+  $('main').addEventListener('scroll', () => {
+    const m = $('main')
+    if (S.tab === 'flight') stick = m.scrollHeight - m.scrollTop - m.clientHeight < 40
+  }, { passive: true })
+  const repin = () => { if (document.visibilityState === 'visible') { stick = true; render() } }
+  document.addEventListener('visibilitychange', repin)
+  window.addEventListener('pageshow', repin)
   render()
   connect()
+  void loadFlights()
+  setInterval(loadFlights, 5000)
 })()
