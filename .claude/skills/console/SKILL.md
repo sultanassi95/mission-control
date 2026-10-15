@@ -15,7 +15,7 @@ The orchestrator session is **Flight**. Each **Controller** owns one front or
 one project of a front, staffed on a **console** with a call sign. A
 Controller's own sub-agents are its **back room**; messages between them are
 the **loops**; whatever needs the founder lands in the **go/no-go poll**; the
-**Front Room** is the Mission Control App.
+The **Mission Control App** is the Front Room (the console's own name for it).
 
 ```mermaid
 flowchart LR

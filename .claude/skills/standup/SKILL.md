@@ -458,7 +458,7 @@ write it to the session scratchpad as
 item count and the resolved window - and nothing else:
 
     wrote standup-smileshape-2026-09-30.html
-    (7 items, 29 Sep 16:00 -> 30 Sep 14:00)
+    (6 items, 29 Sep 16:00 -> 30 Sep 14:00)
 
 No commentary above or below it unless the founder asks. The report is the
 deliverable; the terminal is a pointer to it.

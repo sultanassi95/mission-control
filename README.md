@@ -38,7 +38,7 @@ argue its way around, and a control room you can run from your phone.
 
 Your main Claude Code session becomes **Flight**, and it staffs a **Controller** for each
 venture: a long-lived agent that works that one front, keeps its own back room of helpers
-within a budget you set, and reports in four lines (state, shipped, blocked on you, next).
+within a budget you set, and reports in four lines (state, shipped, blocked on you, next), plus a fifth when something other fronts depend on has changed.
 Change a Controller's model mid-job, call it, or stand it down with a written handoff.
 PR watches wake a Controller when its checks or reviews change, so nobody polls GitHub.
 
@@ -178,8 +178,9 @@ own if you want its history.
   (`tools/mods/mission-fleet`).
 - **Node.js** for the Mission Control App and the docs viewer.
 - **Tailscale** (optional) to reach the app from your phone.
-- **macOS or Linux** is the primary platform: every gate has a bash form. On Windows the leak
-  gates and the reference check also ship as PowerShell; a few newer tools are bash only.
+- **macOS or Linux** is the primary platform: every gate has a bash form except `check-ignores`, which is
+  PowerShell only for now. On Windows the leak gates and the reference check also ship as
+  PowerShell; a few newer tools are bash only.
 - **The superpowers plugin** (recommended): the doctrine uses its brainstorming, test-driven
   development and systematic debugging disciplines, and falls back to the written versions in
   `framework/` without it.

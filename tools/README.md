@@ -124,7 +124,7 @@ Windows operator exists.
 
 The mechanical tier for outward artifacts: a `PreToolUse` hook that blocks
 process vocabulary (a decision attributed to a person, orchestration terms,
-deliberation labels, authorship tells) before it reaches a commit, a PR or a
+authorship tells; the deliberation-label family is deliberately empty) before it reaches a commit, a PR or a
 tracker write. The deny-list is `leak-guard.terms.txt`. What it scans, what it
 refuses and how to tune the list: `framework/leak-guard.md`. Scripts:
 `tools/leak-guard.sh` (needs `jq`) and `tools/leak-guard.ps1`. Wire it with the
