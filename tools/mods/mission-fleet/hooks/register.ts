@@ -31,6 +31,9 @@ let flightBusy = false
 let busySince = 0
 let pushChain: Promise<void> = Promise.resolve()
 let flightAsking: string | undefined
+// A question of Flight's routed to the app while it runs: the app answers it, or /console answer at the Mac.
+type AskQuestion = { question?: string; header?: string; options?: { label?: string; description?: string }[]; multiSelect?: boolean; type?: string; min?: number; max?: number; step?: number; unit?: string; placeholder?: string }
+let flightAsk: { id: string; questions: AskQuestion[] } | undefined
 // The result of the last action the app sent, so the page can say what actually happened.
 let lastOp: { id: number; text: string; at: string } | undefined
 // Flight's visible text per model response, as produced. The saved transcript sometimes keeps a
@@ -57,6 +60,7 @@ const USAGE = [
   '  /console app [stop]                 (start or stop the local Mission Control App on 127.0.0.1)',
   '  /console stand-down <call-sign>      (writes a dated handoff to the front\'s progress.md)',
   '  /console dismiss <call-sign>         (ends it with nothing written: a test, or no work done)',
+  '  /console answer <n|text>[ | <n|text>] (answers the question Flight sent to the app, from the Mac)',
 ].join('\n')
 
 const callSignOf = (scope: string) => scope.toUpperCase().replace(/[^A-Z0-9]+/g, '-')
@@ -221,10 +225,39 @@ export const register: Register = on => {
     return started
   })
 
-  // Flight's own questions are answered at the terminal; the app says one is waiting.
+  // Flight's own questions: while the app runs they go to the app (and the phone), answered there or by
+  // /console answer at the Mac; the hook waits by long-polling the app server, a $ call, so its own
+  // budget does not run while the founder thinks. Without the app, the terminal dialog as before.
   on('tool.call', { tool: 'AskUserQuestion' }, async ($, e, next) => {
     if (e.agentId) return next(e)
-    const qs = ((e as { questions?: { question?: string }[] }).questions ?? []).map(q => q.question ?? '').filter(Boolean)
+    const questions = ((e as { questions?: AskQuestion[] }).questions ?? []).filter(q => q.question)
+    if (app?.port && app.httpOk && questions.length) {
+      const id = hex(8)
+      flightAsk = { id, questions }
+      void pushState($, app).catch(() => undefined)
+      void alert($, `Flight asks: ${questions[0]!.question}`)
+      $.ui.log(askText(questions))
+      try {
+        while (!next.signal.aborted) {
+          const current = app
+          if (!current?.port) break
+          const r = await $.http.fetch(`http://127.0.0.1:${current.port}/bridge/answer?id=${id}`, { method: 'POST', headers: { 'x-bridge-key': current.key } })
+          if (r.status === 200) {
+            const got = JSON.parse(r.text) as { answers: Record<string, string>; annotations?: Record<string, unknown> }
+            await log($, 'ask', id, `answered: ${JSON.stringify(got.answers).slice(0, 160)}`)
+            return { result: { questions: (e as { questions: unknown }).questions, answers: got.answers, ...(got.annotations ? { annotations: got.annotations } : {}) } } as never
+          }
+          if (r.status !== 204) break
+        }
+      } catch {
+        /* the app server went away: ask at the terminal instead */
+      } finally {
+        flightAsk = undefined
+        if (app) void pushState($, app).catch(() => undefined)
+      }
+      if (next.signal.aborted) return { deny: 'The question was withdrawn.' }
+    }
+    const qs = questions.map(q => q.question ?? '')
     flightAsking = qs.join(' / ') || 'a question'
     if (app) void pushState($, app).catch(() => undefined)
     try {
@@ -262,6 +295,11 @@ export const register: Register = on => {
 }
 
 async function runConsole($: EngineInterface, args: string, fromPerson: boolean): Promise<string> {
+  // An answer is free text, so it is taken whole, before flag parsing could read words of it as flags.
+  if (/^\s*answer\b/i.test(args)) {
+    if (!fromPerson) return "Flight's questions are the founder's to answer: type /console answer yourself, or use the app."
+    return answerAsk($, args.replace(/^\s*answer\s*/i, ''))
+  }
   const { verb, rest, flags, error } = parseArgs(args)
   if (error) return `${error}\n${USAGE}`
 
@@ -699,6 +737,34 @@ async function decide($: EngineInterface, id: string, verdict: 'go' | 'no-go', n
   return `${item.id}: ${verdict.toUpperCase()} recorded${told.length ? `, told ${told.join(', ')}` : ''}${item.kind === 'advisory' && (item.targets ?? []).length > told.length ? '; unstaffed or unreachable fronts get it when staffed' : ''}.`
 }
 
+/** The question as the terminal shows it while the app holds the answer. */
+function askText(questions: AskQuestion[]) {
+  const lines = ['Flight is asking (answer in the Mission Control App, or here with /console answer):']
+  questions.forEach((q, i) => {
+    lines.push(`${questions.length > 1 ? `${i + 1}. ` : ''}${q.question}`)
+    ;(q.options ?? []).forEach((o, k) => lines.push(`   ${k + 1}) ${o.label}${o.description ? ` - ${o.description}` : ''}`))
+  })
+  lines.push(questions.length > 1 ? 'Answer each, separated by " | ": /console answer 2 | yes' : 'Answer with an option number or your own words: /console answer 2')
+  return lines.join('\n')
+}
+
+/** /console answer: an option number or free text per question, " | " between questions. */
+async function answerAsk($: EngineInterface, raw: string): Promise<string> {
+  const ask = flightAsk
+  if (!ask || !app?.port) return 'Flight is not waiting on a question.'
+  const parts = ask.questions.length > 1 ? raw.split('|').map(p => p.trim()) : [raw.trim()]
+  if (parts.length !== ask.questions.length || parts.some(p => !p)) return `Give ${ask.questions.length} answers separated by " | ".`
+  const answers: Record<string, string> = {}
+  ask.questions.forEach((q, i) => {
+    const part = parts[i]!
+    const labels = (q.options ?? []).map(o => o.label ?? '')
+    const picks = q.multiSelect ? part.split(',').map(x => x.trim()) : [part]
+    answers[q.question!] = picks.map(p => (/^\d+$/.test(p) && labels[Number(p) - 1] ? labels[Number(p) - 1]! : p)).join(', ')
+  })
+  const r = await $.http.fetch(`http://127.0.0.1:${app.port}/bridge/answer`, { method: 'POST', headers: { 'x-bridge-key': app.key, 'Content-Type': 'application/json' }, body: JSON.stringify({ id: ask.id, answers }) })
+  return r.ok ? `Answered: ${Object.values(answers).join(' | ')}` : 'That answer did not reach Flight; try again or answer in the app.'
+}
+
 async function startApp($: EngineInterface): Promise<string> {
   if (app?.port) return `The app is already running for this profile (its server on 127.0.0.1:${app.port}, the front door on ${APP_PORT}). The link was printed when it started; the token is kept in ${app.tokenFile ?? 'the app token file'}, and deleting that file then restarting every profile's app issues a new one.`
   const root = await findRoot($)
@@ -804,6 +870,7 @@ async function snapshot($: EngineInterface) {
       // A turn that never reported its end (an abort) stops counting as busy after 15 minutes.
       busy: flightBusy && Date.now() - busySince < 15 * 60_000,
       asking: flightAsking ?? null,
+      ask: flightAsk ?? null,
       messages: withSpoken(messages.filter(m => m.text.trim() !== ''))
         .slice(-40)
         .map(m => {

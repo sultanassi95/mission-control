@@ -40,7 +40,7 @@ const secrets = await new Promise(resolve => {
 })
 const BRIDGE_KEY = typeof secrets.key === 'string' ? secrets.key : ''
 const FRONT_PORT = Number(process.env.MCAPP_PORT ?? 4777)
-const OPS = new Set(['prompt', 'command', 'console'])
+const OPS = new Set(['prompt', 'command', 'console', 'answer'])
 const FORWARDED = new Set(['/op', '/events', '/state.json', '/upload'])
 const PHOTO = /^\/upload\/([a-f0-9]{24})\.(jpg|png|webp)$/
 const PHOTO_TYPES = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp' }
@@ -180,6 +180,20 @@ const TAILNET = await new Promise(resolve => {
 })
 
 let state = { at: null, fleet: null }
+// Answers to Flight's questions, held until the plugin's long-poll collects them.
+const answers = new Map()
+const answerWaiters = new Map()
+function putAnswer(id, value) {
+  answers.set(id, value)
+  for (const wake of answerWaiters.get(id) ?? []) wake()
+  answerWaiters.delete(id)
+}
+const cleanAnswer = v => {
+  if (!v || typeof v.id !== 'string' || !/^[a-f0-9]{8,32}$/.test(v.id) || !v.answers || typeof v.answers !== 'object') return null
+  const out = {}
+  for (const [q, a] of Object.entries(v.answers)) if (typeof a === 'string' && q.length <= 2000 && a.length <= 4000) out[q] = a
+  return Object.keys(out).length ? { id: v.id, answers: out } : null
+}
 const clients = new Set()
 let opSeq = 0
 
@@ -267,6 +281,35 @@ function handler(port) {
       return send(res, 400, 'bad request')
     }
 
+    // The plugin waits here for the answer to Flight's question (15 s rounds), or posts one typed at the Mac.
+    if (url.pathname === '/bridge/answer') {
+      if (req.method !== 'POST' || !same(req.headers['x-bridge-key'], BRIDGE_KEY)) return send(res, 403, 'forbidden')
+      const id = url.searchParams.get('id')
+      if (!id) {
+        const got = cleanAnswer(JSON.parse((await readBody(req)) || 'null'))
+        if (!got) return send(res, 400, 'bad answer')
+        putAnswer(got.id, { answers: got.answers })
+        return send(res, 204, '')
+      }
+      const take = () => {
+        const got = answers.get(id)
+        answers.delete(id)
+        return send(res, 200, JSON.stringify(got), { 'Content-Type': 'application/json' })
+      }
+      if (answers.has(id)) return take()
+      await new Promise(resolve => {
+        const timer = setTimeout(resolve, 15_000)
+        const wake = () => {
+          clearTimeout(timer)
+          resolve()
+        }
+        answerWaiters.set(id, [...(answerWaiters.get(id) ?? []), wake])
+        res.on('close', wake)
+      })
+      if (res.writableEnded || res.destroyed) return
+      return answers.has(id) ? take() : send(res, 204, '')
+    }
+
     // The mod pushes state here with its own key; the browser never can.
     if (url.pathname === '/bridge/state') {
       if (req.method !== 'POST' || !same(req.headers['x-bridge-key'], BRIDGE_KEY)) return send(res, 403, 'forbidden')
@@ -321,7 +364,18 @@ function handler(port) {
       } catch {
         return send(res, 400, 'bad json')
       }
-      if (!op || !OPS.has(op.op) || typeof op.text !== 'string' || op.text.length === 0 || op.text.length > 8000) return send(res, 400, 'op must be {op: prompt|command|console, text}')
+      if (!op || !OPS.has(op.op) || typeof op.text !== 'string' || op.text.length === 0 || op.text.length > 8000) return send(res, 400, 'op must be {op: prompt|command|console|answer, text}')
+      if (op.op === 'answer') {
+        let got = null
+        try {
+          got = cleanAnswer(JSON.parse(op.text))
+        } catch {
+          /* not JSON */
+        }
+        if (!got) return send(res, 400, 'an answer is {id, answers}')
+        putAnswer(got.id, { answers: got.answers })
+        return send(res, 202, JSON.stringify({ answered: got.id }), { 'Content-Type': 'application/json' })
+      }
       const id = ++opSeq
       emit({ type: 'op', id, op: op.op, text: op.text, at: new Date().toISOString() })
       return send(res, 202, JSON.stringify({ id }), { 'Content-Type': 'application/json' })

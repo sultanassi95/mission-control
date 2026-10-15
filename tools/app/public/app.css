@@ -187,3 +187,15 @@ button { cursor: pointer; }
 .preview { display: flex; align-items: center; gap: var(--s3); padding: var(--s2) 0; }
 .preview img { width: var(--target); height: var(--target); object-fit: cover; border-radius: var(--r-field); border: 1px solid var(--line); }
 .msg .photo { display: block; max-width: 100%; max-height: 40vh; border-radius: var(--r-field); margin-bottom: var(--s2); }
+
+/* Flight's questions (MC-108) */
+.ask { border-color: var(--wait); }
+.ask-q { display: grid; gap: var(--s2); }
+.ask-q + .ask-q { border-top: 1px solid var(--line); padding-top: var(--s3); }
+.ask .kind { margin: 0; }
+.ask-options { display: grid; gap: var(--s2); }
+.ask-opt { display: grid; gap: var(--s1); text-align: left; min-height: var(--target); padding: var(--s2) var(--s3); border-radius: var(--r-field); border: 1px solid var(--line); background: var(--surface); }
+.ask-opt span { font-size: var(--t-sm); line-height: var(--lh-sm); color: var(--ink-soft); }
+.ask-opt[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-tint); }
+.ask .note { width: 100%; border: 1px solid var(--line); background: var(--surface); border-radius: var(--r-field); padding: var(--s2) var(--s3); min-height: var(--target); }
+.ask .go[disabled] { opacity: 0.5; }

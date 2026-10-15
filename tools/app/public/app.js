@@ -97,7 +97,8 @@
         : `<div class="msg assistant md"><div class="who">FLIGHT</div>${window.mcMarkdown ? window.mcMarkdown(str(m.text)) : esc(str(m.text))}</div>`)
     }
     for (const q of S.queued) parts.push(userBubble(q.text, q.preview, `You · ${q.sent ? 'waiting for Flight' : 'sending'}`))
-    if (f.asking) parts.push(`<div class="notice" role="status">Flight is waiting for your answer on the Mac: ${esc(f.asking)}</div>`)
+    if (f.ask) parts.push(askCard(f.ask))
+    else if (f.asking) parts.push(`<div class="notice" role="status">Flight is waiting for your answer on the Mac: ${esc(f.asking)}</div>`)
     if (f.busy) parts.push('<div class="typing" aria-label="Flight is working"><i></i><i></i><i></i></div>')
     return parts.join('')
   }
@@ -247,6 +248,35 @@
     return true
   }
 
+  // ---------- Flight's questions ----------
+  // One draft per question id: picked option indexes, the Other text, or the typed value.
+  const askDraft = id => {
+    if (S.ask?.id !== id) S.ask = { id, q: {} }
+    return S.ask
+  }
+  const askAnswer = (q, d) => {
+    if (!d) return ''
+    if (q.type === 'text' || q.type === 'number') return str(d.value).trim()
+    const picks = [...(d.picks ?? [])].sort((a, b) => a - b).map(i => q.options?.[i]?.label ?? '').filter(Boolean)
+    return [...picks, str(d.other).trim()].filter(Boolean).join(', ')
+  }
+  function askCard(ask) {
+    const draft = askDraft(ask.id)
+    const qs = ask.questions ?? []
+    const body = qs.map((q, qi) => {
+      const d = draft.q[qi] ?? {}
+      let input = ''
+      if (q.type === 'text') input = `<textarea class="note ask-in" rows="2" data-q="${qi}" placeholder="${esc(q.placeholder ?? 'Your answer')}">${esc(d.value ?? '')}</textarea>`
+      else if (q.type === 'number') input = `<input class="note ask-in" type="number" inputmode="decimal" data-q="${qi}" min="${esc(q.min ?? '')}" max="${esc(q.max ?? '')}" step="${esc(q.step ?? 'any')}" value="${esc(d.value ?? '')}" placeholder="${esc(q.min ?? '')}–${esc(q.max ?? '')}${q.unit ? ` ${esc(q.unit)}` : ''}">`
+      else input = `<div class="ask-options" role="group" aria-label="${esc(q.question)}">${(q.options ?? []).map((o, oi) => `<button type="button" class="ask-opt" data-a="askpick" data-v="${qi}:${oi}" aria-pressed="${Boolean(d.picks?.has(oi))}"><b>${esc(o.label)}</b>${o.description ? `<span>${esc(o.description)}</span>` : ''}</button>`).join('')}</div>
+        <input class="note ask-other" data-q="${qi}" placeholder="Or type your own answer" value="${esc(d.other ?? '')}">`
+      return `<div class="ask-q">${q.header ? `<p class="kind">${esc(q.header)}${q.multiSelect ? ' · pick any' : ''}</p>` : ''}<h3>${esc(q.question)}</h3>${input}</div>`
+    }).join('')
+    // A question may be left unanswered; one answer is enough to send.
+    const ready = qs.some((q, qi) => askAnswer(q, draft.q[qi]))
+    return `<section class="gate ask" aria-label="Flight is asking">${body}<button class="go" type="button" data-a="asksend" ${ready ? '' : 'disabled'}>Send answer</button></section>`
+  }
+
   // Flight stays pinned to the newest message unless the founder scrolled up to read; opening the
   // app, returning to it, coming back to the Flight tab or switching profile pins it again.
   let stick = true
@@ -321,6 +351,27 @@
     if (['open', 'stopask', 'appstopask'].includes(a) && !S.sheet) S.opener = b
     switch (a) {
       case 'profile': S.sheet = null; switchProfile(v); return
+      case 'askpick': {
+        const ask = fleet().flight?.ask
+        if (!ask) return
+        const [qi, oi] = v.split(':').map(Number)
+        const q = ask.questions[qi]
+        const d = (askDraft(ask.id).q[qi] ??= { picks: new Set(), other: '' })
+        if (q.multiSelect) d.picks.has(oi) ? d.picks.delete(oi) : d.picks.add(oi)
+        else d.picks = d.picks.has(oi) ? new Set() : new Set([oi])
+        break
+      }
+      case 'asksend': {
+        const ask = fleet().flight?.ask
+        if (!ask || S.sending) return
+        const answers = {}
+        ask.questions.forEach((q, qi) => { const a = askAnswer(q, S.ask?.q[qi]); if (a) answers[q.question] = a })
+        S.sending = true
+        const ok = await send('answer', JSON.stringify({ id: ask.id, answers }))
+        S.sending = false
+        if (ok) toast('Answer sent to Flight.')
+        break
+      }
       case 'tab': if (v === 'flight') stick = true; S.tab = v; S.sheet = null; try { sessionStorage.setItem('mcapp-tab', v) } catch {} break
       case 'close': S.sheet = null; S.tune = null; break
       case 'back': S.sheet = 'console'; break
@@ -352,6 +403,15 @@
     render()
   })
   document.addEventListener('input', e => {
+    const ask = fleet().flight?.ask
+    if (ask && e.target.dataset?.q !== undefined && (e.target.classList.contains('ask-in') || e.target.classList.contains('ask-other'))) {
+      const d = (askDraft(ask.id).q[e.target.dataset.q] ??= { picks: new Set(), other: '', value: '' })
+      if (e.target.classList.contains('ask-other')) d.other = e.target.value
+      else d.value = e.target.value
+      const btn = document.querySelector('[data-a="asksend"]')
+      if (btn) btn.disabled = !ask.questions.some((q, qi) => askAnswer(q, S.ask?.q[qi]))
+      return
+    }
     if (e.target.classList?.contains('note')) S.notes[e.target.dataset.id] = e.target.value
     if (e.target.id === 'q' && !e.isComposing) {
       S.query = e.target.value
