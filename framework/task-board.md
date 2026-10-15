@@ -136,10 +136,9 @@ ticket folder sits in a tracked tree, which means the worked examples under
 `framework/examples/` and a private instance repo, never `_command/`. It excludes a
 ticket folder's contents and re-includes only `ticket.md` and `scripts/`, so a
 payload directory nobody anticipated is ignored by default rather than committed.
-`tools/check-ignores.ps1` asserts that and the instance exclusion together, which is
-what makes either one a guarantee instead of a claim. It is PowerShell only: there is
-no shell twin, so on a machine without `pwsh` the assertion does not run and the
-guarantee is unchecked there.
+`tools/check-ignores.sh` (or `tools/check-ignores.ps1` on Windows) asserts that and the
+instance exclusion together, which is what makes either one a guarantee instead of a
+claim.
 
 **No working file is ever written inside a project repo's own tree.** That repo's
 `.gitignore` belongs to its owner, so a promise made about it is one we have no

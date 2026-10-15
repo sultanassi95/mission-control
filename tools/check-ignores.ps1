@@ -64,6 +64,7 @@ $mustTrack = @(
   "framework/examples/fieldkit/tasks/T-001-offline-sync-conflict-merge/scripts/repro-sync-conflict.sh",
   "tools/leak-sweep.ps1",
   "tools/check-ignores.ps1",
+  "tools/check-ignores.sh",
   ".claude/skills/mission-flow/SKILL.md",
   "CLAUDE.md",
   "README.md",

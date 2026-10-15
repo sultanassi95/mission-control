@@ -24,7 +24,7 @@ flowchart LR
 | `leak-sweep` | scans text for anything that identifies the operator, before it ships | `.sh`, `.ps1` |
 | `leak-guard` | hook: blocks process vocabulary in commits, PRs and tracker writes | `.sh`, `.ps1` |
 | `check-refs` | every repo path and link a doc names must exist | `.sh` (with `.py`), `.ps1` |
-| `check-ignores` | the paths that must be gitignored are, and the ones that ship still can | `.ps1` only |
+| `check-ignores` | the paths that must be gitignored are, and the ones that ship still can | `.sh` + `.py`, `.ps1` |
 | `epic-coverage` | the E4 gate of epic-flow | `.sh`, `.py` |
 | `status-after-pipe-guard`, `front-context` | settings hooks | `.sh` |
 | `token-lint` | the design-token ratchet | `.sh`, `.py` |
@@ -106,7 +106,8 @@ named path does not exist. Run it with the sweep before any publish.
 
 ## check-ignores
 
-`tools/check-ignores.ps1` (PowerShell only, no shell twin yet) is the third gate: the paths that must be
+`tools/check-ignores.sh` (with `check-ignores.py`) and `tools/check-ignores.ps1` are the third gate; the bash
+twin reads its lists from the `.ps1`, so there is one list. The paths that must be
 gitignored are, and the paths that must ship still can be (exit 0 clean /
 1 listing each problem). Where the sweep reads file contents, this one
 reads the rules, because a doc claiming a path is ignored proves nothing

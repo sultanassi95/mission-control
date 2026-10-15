@@ -66,10 +66,9 @@ the universal grammar - PASS/FAIL evidence is discipline at every tier.
    instance mode reads `_command/` and the operating `CLAUDE.md` in both, so
    the two are equivalent here). Exit 0 required; paste the output.
 6. **The instance cannot be committed.** Run
-   `powershell -Command ".\tools\check-ignores.ps1"`. Exit 0 required; paste the
-   output. That gate exists only as a PowerShell script (no `.sh` twin yet), so
-   where `pwsh` is absent (macOS and Linux by default) it is skipped with a
-   note saying so, never reported as passed. Then two things the gate cannot
+   `bash tools/check-ignores.sh` (on Windows,
+   `powershell -Command ".\tools\check-ignores.ps1"`; both read the same lists).
+   Exit 0 required; paste the output. Then two things the gate cannot
    see, being about this clone rather than the rules: `git ls-files _command` must print nothing (anything listed is
    already in the index) and `git status --porcelain _command` must print nothing
    either (a `??` is untracked but not ignored, one `git add -A` from a commit).

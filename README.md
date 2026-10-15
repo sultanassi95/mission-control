@@ -178,8 +178,7 @@ own if you want its history.
   (`tools/mods/mission-fleet`).
 - **Node.js** for the Mission Control App and the docs viewer.
 - **Tailscale** (optional) to reach the app from your phone.
-- **macOS or Linux** is the primary platform: every gate has a bash form except `check-ignores`, which is
-  PowerShell only for now. On Windows the leak gates and the reference check also ship as
+- **macOS or Linux** is the primary platform: every gate has a bash form. On Windows the leak gates and the reference check also ship as
   PowerShell; a few newer tools are bash only.
 - **The superpowers plugin** (recommended): the doctrine uses its brainstorming, test-driven
   development and systematic debugging disciplines, and falls back to the written versions in
