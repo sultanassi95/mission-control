@@ -36,6 +36,17 @@ session (Step 1).
   may have in flight, `/console list` shows the model each console's last
   request ran on, and `_command/fleet/audit.log` holds the staff, retune and
   budget-denied lines.
+- **Measured usage, when the spend recorder is loaded** (`tools/mods/spend-recorder`):
+  call its `spend` tool. It returns this session's table, one line per agent
+  (the main session and each subagent, labelled by the description it was
+  started with): model, effort, calls, and input, cache-read, cache-write and
+  output tokens. `--sessions` gives one line per recent session for a
+  `--week` scope. These are the API's own counts, so they outrank every
+  estimate below; price them with the model ladder in
+  `_command/CONSTITUTION.local.md` section 2 (per MTok, input and output).
+  Cache reads and writes are priced at the input rate unless that ladder
+  says otherwise, and the report says which rate it used. Calls made before
+  the recorder loaded are not in it: say so when the session started earlier.
 - Harness-reported token usage where the environment surfaces it (usage
   panels, transcript reports). Never invent numbers: if only rough
   estimates are possible, label them as estimates.
@@ -46,8 +57,9 @@ gap first; a spend report cannot be better than its records.
 ## Step 2 - The tally
 
 One table: task, model x effort used, roughly proportional weight
-(tokens where known, else S/M/L), and the `framework/roles.md` preset for
-that task class.
+(measured tokens and their price where the recorder has them, else tokens
+where known, else S/M/L), and the `framework/roles.md` preset for that task
+class. Each row says whether its numbers are measured or estimated.
 
 ## Step 3 - Flag the mismatches
 

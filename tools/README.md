@@ -17,6 +17,9 @@ flowchart LR
   subgraph FLEET[console fleet]
     MF[mods/mission-fleet] --> APP[app]
   end
+  subgraph METER[spend meter]
+    SR[mods/spend-recorder] --> SPEND["/spend"]
+  end
 ```
 
 | Tool | What it does | Platforms |
@@ -29,6 +32,7 @@ flowchart LR
 | `status-after-pipe-guard`, `front-context` | settings hooks | `.sh` |
 | `token-lint` | the design-token ratchet | `.sh`, `.py` |
 | `mods/mission-fleet` | the console fleet, a Claude Code plugin | TypeScript |
+| `mods/spend-recorder` | records the tokens every model call used, for `/spend` | TypeScript |
 | `app/` | the Mission Control App | Node |
 
 On macOS and Linux use the `.sh` entry points; the `.ps1` twins exist for
@@ -219,6 +223,27 @@ that supports mods.
 Tests: `claude plugin test tools/mods/mission-fleet` (47 tests across
 `controller`, `guards`, `loops` and `register` at the time of writing; the run
 prints the count).
+
+## mods/spend-recorder
+
+The meter behind `/spend`: a Claude Code mod that records the model, effort
+and token usage of every model call the session makes, the main session's and
+each subagent's, summed per agent and kept in the plugin's store for the last
+30 sessions. A subagent's line carries the description and type it was started
+with. It prices nothing: prices live in the instance's routing doctrine, and
+`/spend` applies them.
+
+It adds `/spend-log` (this session's table; `--sessions` for one line per kept
+session) and a `spend` tool the model calls with the same arguments, which is
+how `/spend` reads it.
+
+Loading it works as for mission-fleet: add the absolute path of
+`tools/mods/spend-recorder` to `CLAUDE_CODE_PLUGIN_DIRS` (several paths join
+with `:`), or start a session with `claude --plugin-dir
+tools/mods/spend-recorder`. Calls made before it loaded are not recorded.
+
+Tests: `claude plugin test tools/mods/spend-recorder` (10 tests on the ledger at
+the time of writing; the run prints the count).
 
 ## app
 

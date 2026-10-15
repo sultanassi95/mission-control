@@ -1,0 +1,5 @@
+{
+  "name": "spend-recorder",
+  "version": "0.1.0",
+  "description": "Records the model, effort and token usage of every model call, per session and per agent, so /spend reports measured numbers"
+}
