@@ -386,9 +386,8 @@ export function shellRefusal(role: Role, command: string, protectedBranches: str
     if (rawMentionsGit && (name === 'xargs' || name === 'eval' || name === 'source' || name === '.' || name === 'exec') && rest.some(w => INTERPRETER.test(baseName(w.text)) || /\b(git|gh)\b/.test(w.text))) {
       return `git and gh run only as plain commands, never through ${name}.`
     }
-    const scriptArg = rest.find(w => !w.text.startsWith('-'))
-    const readsStdin = READS_STDIN.test(name) && (!scriptArg || scriptArg.text === '-' || rest.some(w => w.text === '-s' || w.text === '-c'))
-    if (rawMentionsGit && readsStdin) return `git and gh run only as plain commands, never through ${name} reading a program from a pipe, heredoc or -c.`
+    // Fail closed: on a line that names git or gh, no interpreter runs at all (a pipe, heredoc, -c, /dev/stdin or option can feed it a program).
+    if (rawMentionsGit && READS_STDIN.test(name)) return `git and gh run only as plain commands; ${name} on the same line is not allowed. Run it as a separate command.`
     if (name === 'git') {
       const why = gitRefusal(role, rest, protectedBranches)
       if (why) return why
