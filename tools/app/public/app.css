@@ -133,3 +133,44 @@ button { cursor: pointer; }
 .toast { position: fixed; left: var(--s4); right: var(--s4); bottom: calc(var(--toast-lift) + env(safe-area-inset-bottom, 0px)); max-width: 640px; margin-inline: auto; z-index: 8; background: var(--ink); color: var(--bg); padding: var(--s3) var(--s4); border-radius: var(--r-card); font-size: var(--t-sm); line-height: var(--lh-sm); }
 .toast.error { background: var(--fail-tint); color: var(--fail); border: 1px solid var(--fail); }
 @media (min-width: 900px) { .main { padding: var(--s5); } }
+
+/* Markdown in Flight's replies (md.js escapes the text before adding these elements). */
+.msg.md { white-space: normal; }
+.msg.md > :first-child { margin-top: 0; }
+.msg.md > :last-child { margin-bottom: 0; }
+.msg.md p, .msg.md ul, .msg.md ol, .msg.md blockquote, .msg.md .md-table, .msg.md .md-code { margin: var(--s2) 0; }
+.msg.md .who + * { margin-top: 0; }
+.msg.md .md-h { margin: var(--s3) 0 var(--s1); font-size: var(--t-md); line-height: var(--lh-md); }
+.msg.md ul, .msg.md ol { padding-left: var(--s5); }
+.msg.md li + li { margin-top: var(--s1); }
+.msg.md code { font-family: var(--mono); font-size: var(--t-sm); background: var(--bg); border-radius: var(--r-field); padding: 0 var(--s1); }
+.msg.md .md-code { background: var(--bg); border-radius: var(--r-field); padding: var(--s3); overflow-x: auto; white-space: pre; }
+.msg.md .md-code code { background: none; padding: 0; }
+.msg.md blockquote { border-left: var(--s1) solid var(--line); padding-left: var(--s3); color: var(--ink-soft); }
+.msg.md hr { border: 0; border-top: 1px solid var(--line); margin: var(--s3) 0; }
+.msg.md a { color: var(--accent); }
+.md-table { overflow-x: auto; }
+.md-table table { border-collapse: collapse; font-size: var(--t-sm); line-height: var(--lh-sm); min-width: 100%; }
+.md-table th, .md-table td { text-align: left; vertical-align: top; padding: var(--s1) var(--s2); border-bottom: 1px solid var(--line); }
+.md-table th { color: var(--ink-faint); font-weight: 600; }
+
+/* Desktop: a left navigation rail, a reading width for the conversation, cards in columns. */
+@media (min-width: 1024px) {
+  .app { max-width: none; display: grid; grid-template-columns: var(--rail) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; grid-template-areas: "rail top" "rail main" "rail composer"; }
+  .top { grid-area: top; }
+  .main { grid-area: main; padding: var(--s5); }
+  .composer { grid-area: composer; }
+  .tabs { grid-area: rail; display: flex; flex-direction: column; gap: var(--s1); border-top: 0; border-right: 1px solid var(--line); padding: var(--s5) var(--s3); }
+  .tab { flex-direction: row; justify-content: flex-start; gap: var(--s3); padding: var(--s2) var(--s3); font-size: var(--t-md); line-height: var(--lh-md); min-height: var(--target); }
+  .tab[aria-selected="true"] { background: var(--accent-tint); }
+  .badge { position: static; margin-left: auto; }
+  .view-flight > * { width: 100%; max-width: var(--read); margin-inline: auto; }
+  .view-flight .msg.user { max-width: calc(var(--read) * .75); margin-right: max(0px, calc((100% - var(--read)) / 2)); }
+  .view-flight .msg.assistant { max-width: var(--read); margin-left: max(0px, calc((100% - var(--read)) / 2)); }
+  .composer > * { width: 100%; max-width: var(--read); margin-inline: auto; }
+  .view-consoles, .view-poll { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--card-min), 1fr)); align-content: start; gap: var(--s4); }
+  .view-consoles > .summary, .view-consoles > .empty, .view-consoles > .sys, .view-poll > .empty, .view-poll > .sys, .view-poll > .section-label, .view-poll > .resolved { grid-column: 1 / -1; }
+  .view-loops > * { max-width: var(--read); width: 100%; margin-inline: auto; }
+  .toast { bottom: var(--s6); }
+  .sheet { max-width: var(--sheet-w); border-radius: var(--r-sheet); bottom: var(--s5); }
+}

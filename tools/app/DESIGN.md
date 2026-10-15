@@ -74,6 +74,7 @@ moves under `prefers-reduced-motion: reduce`.
 | State chip | five states | tinted pill | label carries the state |
 | Loop row | status, call, decision, advisory | timeline row | advisory rows tinted `--wait-tint` |
 | Toast | info, error | snackbar | announced via `role="status"` |
+| Markdown reply | default | rendered by `public/md.js` | headings, emphasis, code, lists, quotes, http(s) links in a new tab, tables in their own horizontal scroll; text escaped before markup |
 
 ## State matrix
 
@@ -83,6 +84,10 @@ moves under `prefers-reduced-motion: reduce`.
 | Consoles | "No consoles staffed." + the `/console staff` hint | four grey summary tiles | as Flight | task text wraps to 3 lines; the sheet shows all | LTR | 320 px |
 | Poll | "Nothing is waiting on you." | summary only | as Flight; an undelivered decision shows in its card | title wraps; detail in a scroll box | LTR | 320 px |
 | Loops | "No loop traffic yet." | none (data arrives with state) | as Flight | first line only; tap expands | LTR | 320 px, filter chips scroll sideways in their own row |
+
+## Desktop (1024 px and wider)
+
+The four destinations move to a left navigation rail (`--rail`) with the Poll badge beside its label; Flight's conversation and composer sit at a reading width (`--read`); Consoles and Poll lay their cards in columns (`--card-min`); sheets float as centred panels. Below 1024 px the phone layout is unchanged.
 
 ## Platform (mobile fronts)
 

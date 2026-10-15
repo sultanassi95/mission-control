@@ -55,7 +55,12 @@
     const parts = []
     if (!S.state) parts.push('<p class="sys">Waiting for the first state from Flight…</p>')
     else if (!f.messages?.length) parts.push('<p class="empty">No messages yet. Ask Flight anything, or tap / for a command.</p>')
-    for (const m of f.messages ?? []) parts.push(`<div class="msg ${m.role === 'user' ? 'user' : 'assistant'}"><div class="who">${m.role === 'user' ? 'You' : 'FLIGHT'}</div>${esc(str(m.text))}</div>`)
+    // Flight's replies are markdown, rendered by md.js (which escapes first); the founder's own messages stay plain text.
+    for (const m of f.messages ?? []) {
+      parts.push(m.role === 'user'
+        ? `<div class="msg user"><div class="who">You</div>${esc(str(m.text))}</div>`
+        : `<div class="msg assistant md"><div class="who">FLIGHT</div>${window.mcMarkdown ? window.mcMarkdown(str(m.text)) : esc(str(m.text))}</div>`)
+    }
     for (const q of S.queued) parts.push(`<div class="msg user"><div class="who">You · ${q.sent ? 'waiting for Flight' : 'sending'}</div>${esc(q.text)}</div>`)
     if (f.asking) parts.push(`<div class="notice" role="status">Flight is waiting for your answer on the Mac: ${esc(f.asking)}</div>`)
     if (f.busy) parts.push('<div class="typing" aria-label="Flight is working"><i></i><i></i><i></i></div>')
@@ -207,6 +212,7 @@
       const main = $('main')
       const atBottom = main.scrollHeight - main.scrollTop - main.clientHeight < 40
       $('title').textContent = TABS.find(t => t[0] === S.tab)?.[1] ?? 'Flight'
+      main.className = `main view-${S.tab}`
       const changed = paint(main, 'main', views[S.tab]())
       const busy = fleet().flight?.busy
       $('link-text').textContent = !token ? 'Not connected: reopen the link from your Mac.' : S.live ? (busy ? 'Live · Flight is working' : 'Live · connected to Flight') : 'Reconnecting…'
