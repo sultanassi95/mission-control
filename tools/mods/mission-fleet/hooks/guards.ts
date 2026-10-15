@@ -353,8 +353,7 @@ export function isFlightOnly(path: string): boolean {
   return FLIGHT_ONLY_FILES.some(f => n === f || n.endsWith(`/${f}`)) || /(^|\/)_command\/fleet\//.test(n)
 }
 
-/** The refusal for a shell command run by a fleet role, if any. */
-/** Folds `a/./b`, `a//b` and `a/x/../b`, keeping case (paths on disk). */
+/** Folds `a/./b`, `a//b` and `a/x/../b`, keeping case (paths on disk; normalisePath lower-cases for matching). */
 function foldPath(p: string): string {
   const out: string[] = []
   for (const part of p.split('/')) {
@@ -400,6 +399,7 @@ export function pinnedDir(commands: Simple[], index: number): string | undefined
   return dir
 }
 
+/** The refusal for a shell command run by a fleet role, if any. */
 export function shellRefusal(role: Role, command: string, protectedBranches: string[], scopeDir?: string): string | undefined {
   if (/_command\/fleet\b/.test(normalisePath(command)) || /\.claude[^/\s]*\/projects\b/.test(command)) return 'The fleet folder and Claude session transcripts are Flight\'s: fleet agents do not read them.'
   const parsed = tokenize(command)

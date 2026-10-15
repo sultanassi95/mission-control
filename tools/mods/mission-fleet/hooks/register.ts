@@ -4,6 +4,9 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { AuditEntry, Console, Lineage, LoopEntry, PendingAdvisory, PollItem, PrWatch, Reservation } from '../types'
 
 import { commonDir, CONTROLLER_PROMPT, CONTROLLER_TYPE, DEFAULT_BUDGET, EFFORTS, isInsideRelative, MODEL_IDS, spokeField, spokePath, staffingOrder } from './controller'
+
+const APP_PORT = 4777
+const MODEL_LIST = Object.keys(MODEL_IDS).join(', ')
 import { protectedFromSpoke, toolRefusal } from './guards'
 import { dependentsOf, isNothing, parseStatus, pollId, prSignature, prsIn } from './loops'
 import type { Role as GuardRole } from './guards'
@@ -28,6 +31,8 @@ let flightBusy = false
 let busySince = 0
 let pushChain: Promise<void> = Promise.resolve()
 let flightAsking: string | undefined
+// The result of the last action the app sent, so the page can say what actually happened.
+let lastOp: { id: number; text: string; at: string } | undefined
 
 const hex = (bytes: number) => Array.from(crypto.getRandomValues(new Uint8Array(bytes)), b => b.toString(16).padStart(2, '0')).join('')
 
@@ -278,7 +283,7 @@ async function runConsole($: EngineInterface, args: string, fromPerson: boolean)
     const [sign, model, effort] = rest
     const c = fleet.find(x => x.callSign === callSignOf(sign ?? '') && x.status === 'staffed')
     if (!c) return `No staffed console ${sign ?? ''}. /console list shows the fleet.`
-    if (!model || (model !== '-' && !(model in MODEL_IDS))) return `retune needs a model (haiku, sonnet, opus, fable, or - to keep it) and optionally an effort.\n${USAGE}`
+    if (!model || (model !== '-' && !(model in MODEL_IDS))) return `retune needs a model (${MODEL_LIST}, or - to keep it) and optionally an effort.\n${USAGE}`
     if (effort !== undefined && !(EFFORTS as readonly string[]).includes(effort)) return `effort must be one of ${EFFORTS.join(', ')}.`
     const tune = {
       ...(model === '-' ? (c.tune?.model ? { model: c.tune.model } : {}) : { model: MODEL_IDS[model] }),
@@ -441,7 +446,7 @@ async function staff($: EngineInterface, front: string | undefined, flags: Recor
   if (!front) return USAGE
   const project = flags.project
   if (!FRONT.test(front) || (project !== undefined && !FRONT.test(project))) return `"${project ?? front}" is not a front or project name (letters, digits, - and _ only).`
-  if (flags.model && !(flags.model in MODEL_IDS)) return `--model must be one of haiku, sonnet, opus, fable.`
+  if (flags.model && !(flags.model in MODEL_IDS)) return `--model must be one of ${MODEL_LIST}.`
   if (flags.effort && !(EFFORTS as readonly string[]).includes(flags.effort)) return `--effort must be one of ${EFFORTS.join(', ')}.`
   const budget = flags.budget === undefined ? DEFAULT_BUDGET : /^\d{1,2}$/.test(flags.budget) ? Number(flags.budget) : NaN
   if (!(budget >= 0 && budget <= 20)) return '--budget must be a whole number from 0 to 20.'
@@ -665,8 +670,10 @@ async function decide($: EngineInterface, id: string, verdict: 'go' | 'no-go', n
     for (const front of item.targets ?? []) {
       const target = fleet.find(c => c.front === front && c.status === 'staffed')
       const sent = target ? await $.session.send({ to: { agentId: target.agentId }, text }) : undefined
-      if (target && sent?.isDelivered) told.push(target.callSign)
-      else await hold($, front, text)
+      if (target && sent?.isDelivered) {
+        told.push(target.callSign)
+        await addLoop($, { from: 'FLIGHT', to: target.callSign, kind: 'advisory', text })
+      } else await hold($, front, text)
     }
   }
   await update($, poll, list =>
@@ -687,7 +694,7 @@ async function startApp($: EngineInterface): Promise<string> {
   const token = hex(24)
   const key = hex(24)
   const stateFile = `${root}/_command/fleet/app-state.json`
-  const stream = $.process.spawn({ argv: ['node', server], env: { MCAPP_PORT: '4777', MCAPP_STATE_FILE: stateFile }, input: `${JSON.stringify({ token, key })}\n` })
+  const stream = $.process.spawn({ argv: ['node', server], env: { MCAPP_PORT: String(APP_PORT), MCAPP_STATE_FILE: stateFile }, input: `${JSON.stringify({ token, key })}\n` })
   const current: App = { token, key, stateFile, stop: () => stream.return(undefined as never) }
   app = current
   let ready: (port: number | undefined) => void = () => undefined
@@ -711,7 +718,7 @@ async function startApp($: EngineInterface): Promise<string> {
         if (msg.type === 'ready') {
           current.port = msg.port
           ready(msg.port)
-        } else if (msg.type === 'op' && msg.op && typeof msg.text === 'string') await runAppOp($, msg.op, msg.text)
+        } else if (msg.type === 'op' && msg.op && typeof msg.text === 'string') await runAppOp($, msg.op, msg.text, Number((msg as { id?: number }).id ?? 0))
       }
     }
     if (app === current) app = undefined
@@ -727,7 +734,7 @@ async function startApp($: EngineInterface): Promise<string> {
   await log($, 'app', 'server', `started on 127.0.0.1:${port}`)
   return [
     `Mission Control App: http://127.0.0.1:${port}/?t=${token}`,
-    'Open it once with the token; the browser keeps it as a cookie. It stops with this session, or with /console app stop.',
+    'Open it once; the page keeps the token in its own storage and drops it from the address bar. It stops with this session, or with /console app stop.',
     'From the phone: `tailscale serve --bg ' + port + '` serves it to your tailnet only (see the remote-access runbook).',
   ].join('\n')
 }
@@ -743,8 +750,8 @@ async function stopApp($: EngineInterface): Promise<string> {
 
 /** What the app shows: the fleet, the poll, the loops and the commands the session can run. */
 async function snapshot($: EngineInterface) {
-  const [fleet, items, traffic, trail, agents, commands, messages] = await Promise.all([
-    read($, consoles), read($, poll), read($, loops), read($, audit), $.agent.list(), $.command.list().catch(() => []), $.session.messages().catch(() => []),
+  const [fleet, items, traffic, agents, commands, messages] = await Promise.all([
+    read($, consoles), read($, poll), read($, loops), $.agent.list(), $.command.list().catch(() => []), $.session.messages().catch(() => []),
   ])
   // The app link carries its token: never send it back into the page or the state file.
   const secret = app?.token
@@ -766,10 +773,17 @@ async function snapshot($: EngineInterface) {
           return { role: m.role, text: clean.length > 6000 ? `${clean.slice(0, 6000)}\n…` : clean }
         }),
     },
-    consoles: fleet.map(c => ({ ...c, live: agents.find(a => a.id === c.agentId)?.status ?? null })),
-    poll: items.slice(-50),
+    // Each console carries its own latest status check, parsed once here, so a quiet console never loses it to the loops window.
+    consoles: fleet.map(c => {
+      const mine = traffic.filter(l => l.from === c.callSign && l.kind === 'status')
+      return { ...c, live: agents.find(a => a.id === c.agentId)?.status ?? null, report: parseStatus(mine[mine.length - 1]?.text ?? '') }
+    }),
+    // Every open item, always; the decided ones as recent history.
+    poll: [...items.filter(p => p.state !== 'open').slice(-30), ...items.filter(p => p.state === 'open')],
     loops: traffic.slice(-80),
-    audit: trail.slice(-30),
+    lastOp: lastOp ?? null,
+    models: Object.keys(MODEL_IDS),
+    efforts: [...EFFORTS],
     commands: commands.map(c => ({ name: c.name, description: c.description, source: c.source })),
   }
 }
@@ -804,15 +818,19 @@ async function pushLoop($: EngineInterface, current: App) {
 }
 
 /** An action from the app: the founder's, since only the token-holder reaches /op. */
-async function runAppOp($: EngineInterface, op: string, text: string) {
+async function runAppOp($: EngineInterface, op: string, text: string, id = 0) {
   await log($, 'app-op', op, text.slice(0, 160))
-  if (op === 'prompt') await $.prompt.submit({ text })
-  else if (op === 'console') await runConsole($, text, true)
+  let result = ''
+  if (op === 'prompt') {
+    await $.prompt.submit({ text })
+    result = 'Sent to Flight.'
+  } else if (op === 'console') result = await runConsole($, text, true)
   else if (op === 'command') {
     const [command = '', ...words] = text.trim().split(/\s+/)
-    if (command === 'console') await runConsole($, words.join(' '), true)
-    else await $.command.run({ command, args: words.join(' ') })
+    if (command === 'console') result = await runConsole($, words.join(' '), true)
+    else result = (await $.command.run({ command, args: words.join(' ') })).text ?? `/${command} ran.`
   }
+  lastOp = { id, text: result, at: new Date().toISOString() }
   if (app) await pushState($, app).catch(() => undefined)
 }
 

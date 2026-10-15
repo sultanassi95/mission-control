@@ -21,8 +21,9 @@
   }
   // Built-in commands that open a terminal menu: listed, but marked as needing the Mac.
   const AT_MAC = new Set(['config', 'mcp', 'plugin', 'plugins', 'permissions', 'login', 'logout', 'model', 'agents', 'hooks', 'ide', 'terminal-setup', 'theme', 'vim', 'keybindings', 'resume', 'rewind', 'export', 'doctor', 'status', 'statusline', 'memory', 'add-dir', 'install-github-app', 'bug', 'feedback', 'release-notes', 'upgrade', 'privacy-settings', 'output-style'])
-  const MODELS = ['haiku', 'sonnet', 'opus', 'fable']
-  const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max']
+  const models = () => fleet().models ?? ['haiku', 'sonnet', 'opus', 'fable']
+  const efforts = () => fleet().efforts ?? ['low', 'medium', 'high', 'xhigh', 'max']
+  let seenOp = 0
   const TABS = [['flight', 'Flight'], ['consoles', 'Consoles'], ['poll', 'Poll'], ['loops', 'Loops']]
 
   const S = { tab: 'flight', state: null, live: false, sheet: null, sel: null, filter: 'ALL', query: '', open: new Set(), queued: [], tune: null, notes: {}, details: new Set(), sending: false, opener: null }
@@ -39,18 +40,14 @@
     if (openGates().some(p => p.from === c.callSign)) return ['waiting', 'Waiting on you']
     if (c.status === 'staffing') return ['running', 'Starting']
     if (c.live === 'failed' || c.live === 'killed') return ['failed', 'Stopped']
-    if (c.live === 'running' || c.live === 'pending') return ['running', 'Running']
+    if (c.live === 'running' || c.live === 'pending' || c.live === 'waiting') return ['running', 'Running']
     return ['idle', 'Idle']
   }
   const pill = ([cls, label]) => `<span class="pill st-${cls}">${esc(label)}</span>`
   const time = iso => (iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '')
 
-  function lastReport(sign) {
-    const rows = (fleet().loops ?? []).filter(l => l.from === sign && l.kind === 'status')
-    const text = str(rows[rows.length - 1]?.text)
-    const pick = re => [...text.split('\n')].reverse().map(l => re.exec(l.replace(/^[-*]\s+/, ''))).find(Boolean)?.[1]?.trim()
-    return { state: pick(/^state\s*:\s*(.*)$/i), shipped: pick(/^shipped\s*:\s*(.*)$/i), blocked: pick(/^blocked on you\s*:\s*(.*)$/i), next: pick(/^next\s*:\s*(.*)$/i) }
-  }
+  const reportOf = sign => consoles().find(c => c.callSign === sign)?.report ?? {}
+
 
   // ---------- views ----------
   function viewFlight() {
@@ -76,7 +73,7 @@
     const ordered = [...list].reverse().sort((a, b) => rank(a) - rank(b))
     for (const c of ordered) {
       const st = statusOf(c)
-      const r = lastReport(c.callSign)
+      const r = reportOf(c.callSign)
       h += `<button class="card stripe-${st[0]}" type="button" data-a="open" data-v="${esc(c.callSign)}">
         <span class="head"><span class="call">${esc(c.callSign)}</span>${pill(st)}</span>
         <span class="task">${esc(r.state ?? 'No status check yet.')}</span>
@@ -149,7 +146,7 @@
     } else if (S.sheet === 'console') {
       const c = consoles().find(x => x.callSign === S.sel)
       if (!c) return ''
-      const r = lastReport(c.callSign)
+      const r = reportOf(c.callSign)
       head = `<span class="call">${esc(c.callSign)}</span> ${pill(statusOf(c))}`
       body = `<dl class="report"><dt>State</dt><dd>${esc(r.state ?? '—')}</dd><dt>Shipped</dt><dd>${esc(r.shipped ?? '—')}</dd><dt>Blocked</dt><dd>${esc(r.blocked ?? '—')}</dd><dt>Next</dt><dd>${esc(r.next ?? '—')}</dd></dl>
         <p class="hint">${esc(c.front)}${c.project ? `/${esc(c.project)}` : ''} · ${esc(c.applied ?? c.model)} · budget ${esc(c.budget)} · ${esc(c.cwd)}</p>
@@ -159,8 +156,8 @@
       if (!c) return ''
       const t = (S.tune ??= { model: 'sonnet', effort: 'medium' })
       head = `Retune <span class="call">${esc(c.callSign)}</span>`
-      body = `<p class="section-label">Model</p><div class="seg" role="group" aria-label="Model">${MODELS.map(m => `<button type="button" data-a="tm" data-v="${m}" aria-pressed="${t.model === m}">${m}</button>`).join('')}</div>
-        <p class="section-label">Effort</p><div class="seg" role="group" aria-label="Effort">${EFFORTS.map(e => `<button type="button" data-a="te" data-v="${e}" aria-pressed="${t.effort === e}">${e}</button>`).join('')}</div>
+      body = `<p class="section-label">Model</p><div class="seg" role="group" aria-label="Model">${models().map(m => `<button type="button" data-a="tm" data-v="${m}" aria-pressed="${t.model === m}">${m}</button>`).join('')}</div>
+        <p class="section-label">Effort</p><div class="seg" role="group" aria-label="Effort">${efforts().map(e => `<button type="button" data-a="te" data-v="${e}" aria-pressed="${t.effort === e}">${e}</button>`).join('')}</div>
         <p class="hint">Applies from the console's next model request. Its work keeps its context.</p>
         <button class="primary" type="button" data-a="applytune">Retune to ${esc(t.model)} · ${esc(t.effort)}</button>`
     } else if (S.sheet === 'standdown') {
@@ -281,16 +278,13 @@
       case 'retune': S.tune = null; S.sheet = 'retune'; break
       case 'tm': S.tune.model = v; break
       case 'te': S.tune.effort = v; break
-      case 'applytune': if (await send('console', `retune ${S.sel} ${S.tune.model} ${S.tune.effort}`)) toast(`Retune sent: ${S.sel} → ${S.tune.model} · ${S.tune.effort}`); S.sheet = 'console'; break
+      case 'applytune': await send('console', `retune ${S.sel} ${S.tune.model} ${S.tune.effort}`); S.sheet = 'console'; break
       case 'standdown': S.sheet = 'standdown'; break
-      case 'sdyes': if (await send('console', `stand-down ${S.sel}`)) toast(`${S.sel} is writing its handoff.`); S.sheet = null; break
-      case 'dismiss': if (await send('console', `dismiss ${S.sel}`)) toast(`${S.sel} dismissed.`); S.sheet = null; break
+      case 'sdyes': await send('console', `stand-down ${S.sel}`); S.sheet = null; break
+      case 'dismiss': await send('console', `dismiss ${S.sel}`); S.sheet = null; break
       case 'go': case 'nogo': {
         const note = (S.notes[v] ?? '').trim()
-        if (await send('console', `${a} ${v}${note ? ` ${note}` : ''}`)) {
-          delete S.notes[v]
-          toast(`${a === 'go' ? 'GO' : 'NO-GO'} sent for ${v}.`)
-        }
+        if (await send('console', `${a} ${v}${note ? ` ${note}` : ''}`)) delete S.notes[v]
         break
       }
       case 'ask': S.tab = 'flight'; render(); $('draft').value = `About ${v}: `; $('draft').focus(); return
@@ -356,7 +350,15 @@
     es.onopen = () => { S.live = true; render() }
     es.onerror = () => { S.live = false; render() }
     es.onmessage = m => {
+      const first = S.state === null
       try { S.state = JSON.parse(m.data) } catch { return }
+      const op = fleet().lastOp
+      // The first state only records where results stand; a result from before this page opened is not news.
+      if (first && op) seenOp = Number(op.id) || 0
+      else if (op && op.id && op.id > seenOp) {
+        seenOp = op.id
+        if (op.text && !/^Sent to Flight\.$/.test(op.text)) toast(str(op.text).split('\n').slice(0, 3).join(' · ').slice(0, 220))
+      }
       const said = new Set((fleet().flight?.messages ?? []).filter(x => x.role === 'user').map(x => str(x.text).trim()))
       S.queued = S.queued.filter(q => !(q.sent && said.has(q.text)))
       render()

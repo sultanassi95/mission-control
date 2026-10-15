@@ -51,25 +51,26 @@ lowest text pair is idle on its tint, 4.93:1, above 4.5:1. `GO` text uses
 
 **Spacing scale:** `--s1` 4 · `--s2` 8 · `--s3` 12 · `--s4` 16 · `--s5` 24 · `--s6` 32 px.
 **Type scale:** `--t-xs` 12/16 · `--t-sm` 13/18 · `--t-md` 15/22 · `--t-lg` 18/24 px; system faces
-only (`--sans`: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-`--mono`: ui-monospace, "SF Mono", Menlo, monospace), because the app is served
+only (`--sans` and `--mono`, the full stacks in `public/tokens.css`), because the app is served
 from the founder's machine and must load nothing remote.
 **Layout and motion tokens:** `--target` 44 px (the minimum target) · `--r-field` 12 px (fields, buttons) · `--lh-*` line heights paired with each `--t-*` · `--scrim` (sheet backdrop) · `--rise` 220 ms (sheet entry) · `--pulse` 1.2 s and `--pulse-step` .2 s (the working dots) · `--dim` .25 (their low point) · `--bubble` 88% (message width) · `--toast-lift` 96 px (toast above the bars).
 **Letter spacing:** `--ls-1` .03em (button labels) · `--ls-2` .04em (call signs) · `--ls-3` .06em (small caps tags) · `--ls-4` .08em (section labels).
 **Radius · elevation · motion:** `--r-chip` 999px · `--r-card` 16px · `--r-sheet` 22px;
-one shadow, on the phone frame only; sheets rise 220 ms ease-out, and nothing
+no shadows; sheets rise 220 ms ease-out, and nothing
 moves under `prefers-reduced-motion: reduce`.
 
 ## Components
 
 | Component | States | Pattern it follows | Notes |
 |---|---|---|---|
-| Tab bar | default, selected, badge, focus | iOS tab bar / Material navigation bar (4 destinations) | bottom, thumb zone; Poll badge = open gates |
+| Tab bar | default, selected, badge, focus | iOS tab bar / Material navigation bar (4 destinations) | bottom, thumb zone; Poll badge = open poll items (gates and advisories) |
 | Composer | empty, typing, sending, queued, refused | messaging composer | `/` opens the command sheet; Enter sends on desktop |
 | Command sheet | open, filtered, empty result | bottom sheet + search | grouped by source; "at the Mac" mark for terminal menus |
 | Console card | running, waiting, idle, stood down, failed, focus | list card with a state stripe | stripe + pill, never colour alone |
 | Console sheet | default, retuning, confirming stand-down | bottom sheet | Call, Retune, Stand down; destructive action confirms in-page |
-| Gate card | open, sending, decided, undelivered | action card | GO and NO-GO full height at thumb reach; Ask writes to Flight |
+| Gate card | open, sending, decided, undelivered | action card | GO and NO-GO full height at thumb reach; only the first open gate's GO is solid (`.go`), the rest outlined (`.go.secondary`); NO-GO is outlined because it is a decision, not a destructive action; Ask writes to Flight |
+| Destructive button | default, focus | `.danger`, tinted fill | stand down, dismiss all, stop the server; always behind an in-page confirm |
+| Tags | default | `.tag` for values (model, budget), `.kindtag` for a loop row's kind | two jobs, two looks, on purpose |
 | State chip | five states | tinted pill | label carries the state |
 | Loop row | status, call, decision, advisory | timeline row | advisory rows tinted `--wait-tint` |
 | Toast | info, error | snackbar | announced via `role="status"` |
@@ -88,7 +89,7 @@ moves under `prefers-reduced-motion: reduce`.
 A web app installed to the home screen (PWA manifest, standalone display). It
 follows iOS and Material behaviour where they agree: bottom navigation with four
 destinations, bottom sheets for detail, 44 px minimum targets, safe-area insets
-on the bars, the system back gesture closing the open sheet. Departures: no
+on the bars; a sheet closes with its close button, the scrim or Escape. Departures: the system back gesture does not close a sheet yet (no history entries are pushed); no
 pull-to-refresh (the stream is live), no swipe actions (one tap is enough and
 discoverable).
 
