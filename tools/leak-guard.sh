@@ -34,7 +34,8 @@ fi
 GIT_PUBLISH='(^|[^A-Za-z])git([^;&|]*)(^|[^A-Za-z])(commit|tag)([^A-Za-z]|$)'
 GH_PUBLISH='(^|[^A-Za-z])gh([^;&|]*)(pr|issue|release)([^;&|]*)(create|edit|comment|review)'
 # -F / --file count only inside the git or gh command itself: grep -F or awk -F elsewhere on the line is not a message file.
-FILE_BORNE='(--file=|--body-file|--notes-file|--fill)|(^|[^A-Za-z])(git|gh)[^;&|]*[[:space:]](-F|--file)[[:space:]]+[^-][^[:space:]]*'
+# git and gh in any case (the disk is case-insensitive, so GIT runs git); the -F flag itself is case-sensitive.
+FILE_BORNE='(--file=|--body-file|--notes-file|--fill)|(^|[^A-Za-z])([Gg][Ii][Tt]|[Gg][Hh])[^;&|]*[[:space:]](-F|--file)[[:space:]]+[^-][^[:space:]]*'
 OUTWARD_TOOL='(add|create|edit|update|post|append).*(comment|issue|page|worklog|description|ticket)'
 
 text=""; file_borne=0

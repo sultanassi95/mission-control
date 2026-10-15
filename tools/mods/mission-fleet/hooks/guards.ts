@@ -256,7 +256,8 @@ export function headOf(s: Simple): { head?: Word; rest: Word[] } {
   return { head: w[i], rest: w.slice(i + 1) }
 }
 
-const baseName = (t: string) => t.slice(t.lastIndexOf('/') + 1)
+// Lowercased: the disk is case-insensitive, so GIT and Gh run git and gh (MC-116).
+const baseName = (t: string) => t.slice(t.lastIndexOf('/') + 1).toLowerCase()
 
 /** A push destination as compared: refs/heads/ or heads/ stripped, lower case. */
 export function pushDestination(spec: string): string {
@@ -439,11 +440,11 @@ export function shellRefusal(role: Role, command: string, protectedBranches: str
     }
   }
   if (parsed.opaque) return 'Commands run plainly here: no $(...), backticks, <(...) or unquoted heredocs that expand (a commit message may use $(cat <<\'EOF\' ... EOF)).'
-  const rawMentionsGit = /\b(git|gh)\b/.test(command)
+  const rawMentionsGit = /\b(git|gh)\b/i.test(command)
   const scanned: string[] = []
   for (const s of parsed.commands) {
     const { head, rest } = headOf(s)
-    const isCommit = head?.text === 'git' && rest.some(w => w.text === 'commit')
+    const isCommit = baseName(head?.text ?? '') === 'git' && rest.some(w => w.text === 'commit')
     if (!isCommit) scanned.push(...s.words.map(w => w.text), ...s.redirects.map(w => w.text))
     else scanned.push(...s.redirects.map(w => w.text))
   }
@@ -466,9 +467,9 @@ export function shellRefusal(role: Role, command: string, protectedBranches: str
     if (head.dynamic || head.glob) return 'Commands run plainly here: never a command name built from a variable, glob or brace.'
     if (/\s/.test(head.text)) return 'A command name with spaces in it (env -S and the like) is not allowed here.'
     const name = baseName(head.text)
-    const argsNameGit = rest.some(w => /\b(git|gh)\b/.test(w.text))
+    const argsNameGit = rest.some(w => /\b(git|gh)\b/i.test(w.text))
     if (argsNameGit && !['git', 'gh'].includes(name) && !TEXT_ONLY.has(name)) return `git and gh run only at the head of a command, not through ${name}.`
-    if (rawMentionsGit && (name === 'xargs' || name === 'eval' || name === 'source' || name === '.' || name === 'exec') && rest.some(w => INTERPRETER.test(baseName(w.text)) || /\b(git|gh)\b/.test(w.text))) {
+    if (rawMentionsGit && (name === 'xargs' || name === 'eval' || name === 'source' || name === '.' || name === 'exec') && rest.some(w => INTERPRETER.test(baseName(w.text)) || /\b(git|gh)\b/i.test(w.text))) {
       return `git and gh run only as plain commands, never through ${name}.`
     }
     // Fail closed: on a line that names git or gh, no interpreter runs at all (a pipe, heredoc, -c, /dev/stdin or option can feed it a program).

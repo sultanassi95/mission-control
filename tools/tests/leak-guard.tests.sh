@@ -58,6 +58,9 @@ allows "stat -f beside a commit" 'stat -f %z out.bin && git commit -m "fix(x): s
 allows "grep -F beside a commit" 'grep -F needle notes.txt && git commit -m "chore: tidy notes"'
 allows "awk -F with a spaced separator beside a commit" "awk -F ':' '{print \$1}' list.txt && git commit -m \"chore: list owners\""
 blocks "git's own -F after other flags" 'git commit -q -F /tmp/msg.txt'
+# The disk is case-insensitive: GIT and Gh run git and gh.
+blocks "an uppercase GIT with a message file" 'GIT commit -F /tmp/msg.txt'
+blocks "a mixed-case Gh with a body file flag" 'Gh pr create --title t -F /tmp/b.txt'
 for t in mcp__x__editJiraIssue mcp__x__createConfluencePage mcp__x__addCOMMENTToIssue; do
   run "$(tool_payload "$t" 'the founder decided')"; expect "outward tool $t" 2
 done

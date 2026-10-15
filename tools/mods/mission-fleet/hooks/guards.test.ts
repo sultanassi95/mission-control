@@ -314,3 +314,11 @@ test('the tokenizer cannot be blinded by heredoc tails, arithmetic shifts, ANSI-
   expect(C("git commit -F - <<'EOF'\nfix(x): tidy\nEOF")).toBeUndefined()
   expect(C("python3 - <<'EOF'\nprint(1 + 1)\nEOF")).toBeUndefined()
 })
+
+test('command names are matched in any case, as a case-insensitive disk runs them', () => {
+  expect(C('GIT push origin main', ['main'])).toBeDefined()
+  expect(C('Git push --force origin feat/x')).toBeDefined()
+  expect(C('Gh pr merge 12')).toBeDefined()
+  expect(B('GIT push origin feat/x')).toBeDefined()
+  expect(C("BASH <<'EOF'\ncat ~/.mission''-control/app-tok''en\nEOF")).toBeDefined()
+})
