@@ -53,6 +53,7 @@ $mustIgnore = @(
 # part of itself, and a fresh clone is missing doctrine or a skill.
 $mustTrack = @(
   "framework/CONSTITUTION.md",
+  "docs/assets/banner.svg",
   "framework/task-board.md",
   "framework/engineering-standard.md",
   "framework/kit/templates/_task.template.md",

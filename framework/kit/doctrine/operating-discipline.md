@@ -47,7 +47,7 @@ The user's approval can be:
 - A specific edit instruction ("change X to Y, then commit")
 - Silence is not approval
 
-After approval, save the artifact and update `progress.md`. Committing is separate and follows the git rule: the founder's explicit ask in the moment, or an active `/mission-flow` grant.
+After approval, save the artifact and update `progress.md`. Committing is separate and follows the git rule: the founder's explicit ask in the moment, or an active grant. The grants are narrow: a `/mission-flow` invocation grants commit, push and PR for its one ticket; an `/epic-flow` lock grants push to the epic branch and to it alone (with `--auto`, also landing each child on it and opening the epic PR, never the merge into the base); a staffed Controller may commit and push its own feature branches and open PRs inside its scope, never a base or deploy branch.
 
 ---
 

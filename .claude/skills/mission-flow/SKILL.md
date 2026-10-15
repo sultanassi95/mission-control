@@ -2,7 +2,7 @@
 name: mission-flow
 description: >-
   The standard playbook for turning a bug, task, or enhancement into a
-  checks-green PR on any front. Runs the fixed 8-phase sequence: classify,
+  checks-green PR on any front. Runs the fixed sequence, Phase 0 to 8: classify,
   investigate (systematic debugging OR brainstorming), ticket, branch,
   phase-commits, code review with fixes, local verification gauntlet, PR,
   link back and capture what the ticket taught about the front. Works with

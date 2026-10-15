@@ -3,7 +3,8 @@
 The pages the skills generate and open on the founder's machine: the standup
 report today, the docs viewer next. Instance of
 `framework/kit/templates/_design.template.md`, judged by
-`framework/design-standard.md`.
+`framework/design-standard.md`. The Mission Control App's own system,
+`tools/app/DESIGN.md`, is derived from this palette.
 
 ```mermaid
 flowchart LR

@@ -21,7 +21,8 @@ with evidence; a preflight that only says "looks good" has not run.
 (checks 2-3 below, scoped). Unscoped (default): the whole instance.
 
 **Dials:** `--spend lean` = checks 1 and 6 only (imports + machine profile, and
-the ignore gate, which is one script and never skipped) ·
+the ignore gate, which is one script, available where `pwsh` is installed - see
+check 6) ·
 `standard` (default) = all checks · `deep` = adds the full
 board-consistency scan and the cold-read self-summary. `--verbosity` per
 the universal grammar - PASS/FAIL evidence is discipline at every tier.
@@ -36,7 +37,9 @@ the universal grammar - PASS/FAIL evidence is discipline at every tier.
    doctrine - this is the highest-stakes check. Exception with a heal: a
    missing `machine.local.md`, or one whose `os:` does not match the
    running OS, is not a failure - REGENERATE it by detection on the spot
-   (`framework/platform.md` rule 4), then continue.
+   (`framework/platform.md` rule 4), then continue. The reference gate for
+   the repo paths and links a document names is `bash tools/check-refs.sh
+   [path ...]` (`tools/README.md`).
 2. **Board and spokes agree.** Every front row in `trackers/fronts.md`
    has a hub (`portfolio/<front>/_front.md`); every project named in a
    hub has a spoke (housed per the structure rule in
@@ -58,14 +61,16 @@ the universal grammar - PASS/FAIL evidence is discipline at every tier.
    per active front, and its "Founder-gated" items are still real (spot
    check one or two).
 5. **No leftover placeholders.** Run the instance-mode sweep:
-   `powershell -Command ".\tools\leak-sweep.ps1 instance"`
-   (or `tools/leak-sweep.sh instance`; instance mode reads `_command/` and the
-   operating `CLAUDE.md` in both, so the two are equivalent here). Exit 0
-   required; paste the output.
+   `bash tools/leak-sweep.sh instance`
+   (on Windows, `powershell -Command ".\tools\leak-sweep.ps1 instance"`;
+   instance mode reads `_command/` and the operating `CLAUDE.md` in both, so
+   the two are equivalent here). Exit 0 required; paste the output.
 6. **The instance cannot be committed.** Run
    `powershell -Command ".\tools\check-ignores.ps1"`. Exit 0 required; paste the
-   output. Then two things the gate cannot see, being about this clone rather than
-   the rules: `git ls-files _command` must print nothing (anything listed is
+   output. That gate exists only as a PowerShell script (no `.sh` twin yet), so
+   where `pwsh` is absent (macOS and Linux by default) it is skipped with a
+   note saying so, never reported as passed. Then two things the gate cannot
+   see, being about this clone rather than the rules: `git ls-files _command` must print nothing (anything listed is
    already in the index) and `git status --porcelain _command` must print nothing
    either (a `??` is untracked but not ignored, one `git add -A` from a commit).
 7. **Doctrine currency.** If `framework/` was recently pulled, read
@@ -89,11 +94,14 @@ approval - preflight diagnoses, the founder decides.
 
 ## Also audit the surfaces the epic layer added
 
-Four surfaces exist now that predate no check: the project's
+Five surfaces exist now that predate no check: the project's
 `deviations.md` register (present where drift has been logged, format per
 `/log-deviation`), any epic folder under `tasks/` (its stage documents each
 carry a `status:` header, and a `locked` document edited without a logged
 deviation is a finding), each fragment brief's state field (a brief reading
 `in-progress` with no branch behind it is stale), and a front's declared
 compliance or quality profile block (declared standards with no reader is a
-finding, as is a profile naming a collector that no PR evidence reaches).
+finding, as is a profile naming a collector that no PR evidence reaches), and
+the console fleet's folder `_command/fleet/`, where a fleet has run (the audit
+log, the app's state file and the uploaded photos), which only Flight and the
+app write.

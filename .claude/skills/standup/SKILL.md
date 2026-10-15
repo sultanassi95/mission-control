@@ -8,8 +8,9 @@ description: >-
   article. Bullets with ticket URLs, grouped by state. Use whenever the
   founder types /standup, asks what was done since a given time, or wants a
   handoff for a window spanning a night, a weekend or several sessions.
-  Writes a local HTML report - a timeline by day, grouped by repo - and
-  echoes only its path; the Slack / Jira / WhatsApp blocks ride inside the
+  Writes a local HTML report - a two-minute talk track grouped by kind of
+  work on top, then a timeline by day, grouped by repo - and echoes only its
+  path; the Slack / Jira / WhatsApp blocks ride inside the
   page as copy buttons. Nothing is uploaded. Flags: --from / --to / --front /
   --project / --all / --format slack|jira|whatsapp (default: slack).
 ---
@@ -235,6 +236,64 @@ The summary reads AS the founder, not as an assistant summarising them - no
 process leakage, no AI tells. Prefer the founder's own words for an outcome
 line where they have already stated it.
 
+## The talk track: what the founder says out loud
+
+The timeline is what the founder reads; the talk track is what the founder
+SAYS. It sits first on the page, under the header, and it is written to be
+spoken in about two minutes: roughly 250 to 300 words. Fifteen items read in
+timeline order are fifteen unrelated sentences. Grouped by what kind of work
+they were, the same fifteen are four things a listener can hold.
+
+**Group by kind of work, never by repo or by day.** The timeline already groups
+by repo; the talk track exists because a listener does not think in repos. Ask
+what each item DID: closed a compliance finding, made a pipeline faster, made a
+service survive a slow dependency, made a dashboard tell the truth. Items that
+answer the same way are one group, wherever their code lives, and the group
+names the repos it spans ("across Smart Data, Monitor and UI Kit") so the
+spread is said once instead of item by item.
+
+**Shape:**
+
+- **A headline**: the item count, how many shipped and how many are still in
+  review or in progress, and the one or two themes that dominated. One
+  sentence.
+- **Two to five groups**, largest first. Each opens with a bold label that
+  carries its count and its spread, then one short line per item, or per tight
+  cluster of items, in plain speech with the ticket keys at the end of the
+  line. Say the result, and the problem it solved where that makes the result
+  land, the way a person would say it ("the ingest consumer was running at a
+  quarter speed whenever nobody had the web app open; it now has its own
+  worker"). Keys are for the listener who wants to look later, not the
+  sentence's subject.
+- **Asks, last, and only when the records show one**: a blocker found in the
+  window, an action waiting on somebody. Each ask NAMES WHO ACTS. If the
+  founder can do it, it is the founder's next step, not a request: an ask
+  addressed to "someone with access" when the founder holds that access reads
+  as passing work off. When ownership is unknown from the records, say what is
+  blocked and leave the who out, rather than guessing at a role.
+
+**A count in the talk track is a claim, so it is exact.** Count a group by the
+evidence that puts an item in it, and say the categories separately when they
+differ. Five tickets titled as a compliance tool's findings plus three more
+the tool would flag next is "5 findings, and 3 it would have flagged next",
+never "8 findings" and never a rounder number the founder half remembers. When
+the founder's own framing of a group disagrees with the records, the records
+win and the difference is pointed out to them, once, in plain words.
+
+**Same items, same window.** The talk track is a re-grouping of exactly the
+items on the timeline below it. It adds nothing the window does not contain
+and drops nothing the timeline shows, except items folded into a sibling
+(a superseded ticket closed by another's merge). Its counts must equal the
+counts strip.
+
+**Same voice rules as everywhere else on the page**: no em or en dashes, no
+ellipsis character, no emoji, no process vocabulary, confidential fronts to
+the level of detail their IP rules permit. It reads as the founder speaking,
+not as a summary of the founder.
+
+It carries its own copy button, as plain text with the bold kept as
+`**...**`, so it can be pasted into notes or read straight off a phone.
+
 ## What to include
 
 For each item covered, name:
@@ -321,7 +380,7 @@ item is simply absent. A standup reports what happened, not what was considered.
 
 **`--format slack` (default):**
 
-- Section headers in bold via single asterisks: `*Merged*`, `*Open PR*`.
+- Section headers in bold via single asterisks: `*Done*`, `*In progress*`.
 - Bulleted items with a plain bullet character.
 - Ticket URL + PR URL inline on the same line, separated by ` and `
   or a middle dot; Slack unfurls both.
@@ -331,7 +390,7 @@ item is simply absent. A standup reports what happened, not what was considered.
 
 **`--format jira`:**
 
-- Section headers as `### Merged`, `### Open PR`, etc.
+- Section headers as `### Done`, `### In progress`.
 - Bulleted items with `-`.
 - Ticket keys as bare `TICK-214` (Jira auto-links them).
 - PR URLs in Jira wiki link syntax: `[PR #36|https://...]`.
@@ -339,7 +398,7 @@ item is simply absent. A standup reports what happened, not what was considered.
 
 **`--format whatsapp`:**
 
-- Section labels as `*Merged:*`, `*Open PR:*` (single asterisks, colon).
+- Section labels as `*Done:*`, `*In progress:*` (single asterisks, colon).
 - Numbered items `1. 2. 3.` (renders consistently across clients).
 - URLs inline, multiple separated by ` | `.
 - Tighter than Slack: two to five words of description, then the URLs.
@@ -350,23 +409,24 @@ The page's own structure, days outermost and repo grouped within each day:
 
 ```
  smileshape                              29 Sep 16:00 -> 30 Sep 14:00  [inferred]
- 7 items   3 merged   2 open PR   1 new   1 ci
+ 6 items   5 done   1 in progress
 
  29 SEP
    annotation-studio-3d
-     18:21  AI-2151  [merged]   duplicate-aware import: honest counts on
-                                the project import screen          ticket  PR #190
-     23:43  AI-2172  [out]      superseded, folded into the epic PR ticket
+     18:21  AI-2151  Done · merged       duplicate-aware import: honest counts on
+                                         the project import screen   ticket  PR #190
+     23:43  AI-2172  In progress         import progress for large archives
+                                                                     ticket
    smart-data
-     23:04  AI-2159  [merged]   body limit sized to the maximum the
-                                lookup advertises                  ticket  PR #13
+     23:04  AI-2159  Done · merged       body limit sized to the maximum the
+                                         lookup advertises           ticket  PR #13
 
  30 SEP
    smart-data
-     10:31  WB-761   [open PR]  rds cpu / memory / storage / io alarms
-                                (+ WB-758, WB-759, WB-760)          ticket  PR #15
-     13:35  -        [ci]       minio withdrawn upstream; swapped to s3mock
-     13:53  WB-761   [open PR]  memory threshold corrected after review
+     10:31  WB-761   Done · in PR        rds cpu / memory / storage / io alarms
+                                         (+ WB-758, WB-759, WB-760)  ticket  PR #15
+     13:35  -        Done · merged       minio withdrawn upstream; swapped to s3mock
+     13:53  WB-761   Done · in PR        memory threshold corrected after review
 
  Scope inferred from this session: smileshape.
  4 items on 2 other fronts fall in this window and are not shown - /standup --all
@@ -381,18 +441,13 @@ And the Slack block that rides inside that page, unchanged from what
 ```
 *orbit-app QA bash - 01 Jul 17:00 to 02 Jul 18:30*
 
-*Merged*
-- TICK-212 (QA-11): invitation acceptance flow now works end-to-end. https://acme.atlassian.net/browse/TICK-212 and https://github.com/acme/orbit-app/pull/36
-- TICK-214 (QA-1): silent invitation failures now surface with a Resend action. https://acme.atlassian.net/browse/TICK-214 and https://github.com/acme/orbit-app/pull/37
+*Done*
+- TICK-212 (QA-11): invitation acceptance flow now works end-to-end (merged). https://acme.atlassian.net/browse/TICK-212 and https://github.com/acme/orbit-app/pull/36
+- TICK-214 (QA-1): silent invitation failures now surface with a Resend action (merged). https://acme.atlassian.net/browse/TICK-214 and https://github.com/acme/orbit-app/pull/37
+- TICK-217 (QA-2 + QA-3): selection outline no longer stuck after undo (in PR). https://acme.atlassian.net/browse/TICK-217 and https://github.com/acme/orbit-app/pull/38
 
-*Open PR*
-- TICK-217 (QA-2 + QA-3): selection outline no longer stuck after undo. https://acme.atlassian.net/browse/TICK-217 and https://github.com/acme/orbit-app/pull/38
-
-*New (Open)*
+*In progress*
 - TICK-222 (QA-12): pen options widget. https://acme.atlassian.net/browse/TICK-222
-
-*Triaged out*
-QA-4, 5, 6: invalid or superseded. https://acme.atlassian.net/browse/TICK-200
 ```
 
 ## Delivery: a local HTML file, and one line in the terminal
@@ -403,7 +458,7 @@ write it to the session scratchpad as
 item count and the resolved window - and nothing else:
 
     wrote standup-smileshape-2026-09-30.html
-    (7 items, 29 Sep 16:00 -> 30 Sep 14:00)
+    (6 items, 29 Sep 16:00 -> 30 Sep 14:00)
 
 No commentary above or below it unless the founder asks. The report is the
 deliverable; the terminal is a pointer to it.
@@ -439,15 +494,18 @@ does.
    ("continuing the last smileshape report, 29 Sep 14:12" / "hub convention" /
    "default 16:00 previous day"). A window whose origin is stated can be
    checked; one that just appears cannot.
-2. **Counts strip** - `7 items · 3 merged · 2 open PR · 1 new · 1 ci`. This is
+2. **Talk track** - the two-minute spoken summary, grouped by kind of work, with
+   its own copy button (`## The talk track` above). First, because it is what
+   the founder needs in the room; everything below it is the evidence.
+3. **Counts strip** - `6 items · 5 done · 1 in progress`. This is
    what replaces grouping by state; without it the reader has to count.
-3. **Timeline** - day, then repo (or front when unscoped), then items. Each item:
+4. **Timeline** - day, then repo (or front when unscoped), then items. Each item:
    time, ticket key where there is one, state chip, the outcome in verb form,
    and its links.
-4. **Exclusions footer**, only when the scope was inferred - the count left out
+5. **Exclusions footer**, only when the scope was inferred - the count left out
    and the command that shows it.
-5. **Copy blocks** - one per chat format.
-6. **Sources line** - which records were read, and any that could not be. An
+6. **Copy blocks** - one per chat format.
+7. **Sources line** - which records were read, and any that could not be. An
    unread source is a hole in the window, and the page says so where the reader
    will see it rather than in a terminal they have already closed.
 

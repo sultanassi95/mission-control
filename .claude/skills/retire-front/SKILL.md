@@ -35,6 +35,10 @@ but it is still a portfolio decision.
 
 ## Step 2 - Archive
 
+If a console is staffed on the front (`/console list`), stand it down first
+with `/console stand-down <sign>`, so its handoff lands in the front's
+`progress.md` before the archive moves it.
+
 1. Move `_command/portfolio/<front>/` to
    `_command/portfolio/_archive/<front>/` (create `_archive/` on first
    use). History travels whole - nothing is deleted, ever.

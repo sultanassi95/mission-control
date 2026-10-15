@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="420" viewBox="0 0 1280 420" role="img" aria-labelledby="t d">
+  <title id="t">Mission Control</title>
+  <desc id="d">Mission Control: the AI CTO for founders who run more than one thing. A central Flight with Controllers in orbit, one per venture.</desc>
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0B1415"/>
+      <stop offset="0.55" stop-color="#111C1E"/>
+      <stop offset="1" stop-color="#0E2A2D"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.78" cy="0.5" r="0.45">
+      <stop offset="0" stop-color="#5CC4CB" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#5CC4CB" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#5CC4CB" stroke-opacity="0.06" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="1280" height="420" fill="url(#sky)"/>
+  <rect width="1280" height="420" fill="url(#grid)"/>
+  <rect width="1280" height="420" fill="url(#glow)"/>
+
+  <!-- orbit: Flight at the centre, a Controller per venture -->
+  <g transform="translate(1000 210)" fill="none" stroke="#5CC4CB">
+    <ellipse rx="210" ry="120" stroke-opacity="0.22" stroke-width="1.5"/>
+    <ellipse rx="140" ry="80" stroke-opacity="0.32" stroke-width="1.5" stroke-dasharray="4 6"/>
+    <ellipse rx="70" ry="40" stroke-opacity="0.45" stroke-width="1.5"/>
+    <path d="M-150 -55 L0 0 L122 -96 M0 0 L176 68 M0 0 L-196 44" stroke-opacity="0.35" stroke-width="1.5" stroke-dasharray="2 5"/>
+  </g>
+  <g fill="#5CC4CB">
+    <circle cx="1000" cy="210" r="22" fill-opacity="0.18"/>
+    <path d="M1000 192 l5 13 13 5 -13 5 -5 13 -5 -13 -13 -5 13 -5z"/>
+    <circle cx="850" cy="155" r="8"/>
+    <circle cx="1122" cy="114" r="8"/>
+    <circle cx="1176" cy="278" r="8"/>
+    <circle cx="804" cy="254" r="8"/>
+    <circle cx="850" cy="155" r="16" fill-opacity="0.15"/>
+    <circle cx="1122" cy="114" r="16" fill-opacity="0.15"/>
+    <circle cx="1176" cy="278" r="16" fill="#F0C26A" fill-opacity="0.25"/>
+    <circle cx="1176" cy="278" r="8" fill="#F0C26A"/>
+  </g>
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" fill="#94A8AC" letter-spacing="1.5">
+    <text x="778" y="132">STOREFRONT</text>
+    <text x="1080" y="92">MOBILE-APP</text>
+    <text x="1082" y="318" fill="#F0C26A">BILLING-API · GO?</text>
+    <text x="740" y="290">RESEARCH</text>
+    <text x="968" y="262" fill="#5CC4CB">FLIGHT</text>
+  </g>
+
+  <!-- wordmark -->
+  <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif">
+    <text x="88" y="122" font-size="15" fill="#5CC4CB" letter-spacing="4" font-weight="600">FOR FOUNDERS WHO RUN MORE THAN ONE THING</text>
+    <text x="84" y="206" font-size="78" fill="#E4EDEE" font-weight="700" letter-spacing="-1.5">Mission Control</text>
+    <text x="88" y="262" font-size="27" fill="#B3C3C6">Claude Code as the CTO of your whole portfolio.</text>
+    <text x="88" y="300" font-size="27" fill="#B3C3C6">One terminal. Every venture. Your phone in charge.</text>
+  </g>
+  <rect x="88" y="336" width="64" height="4" rx="2" fill="#5CC4CB"/>
+</svg>

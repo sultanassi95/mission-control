@@ -137,7 +137,9 @@ ticket folder sits in a tracked tree, which means the worked examples under
 ticket folder's contents and re-includes only `ticket.md` and `scripts/`, so a
 payload directory nobody anticipated is ignored by default rather than committed.
 `tools/check-ignores.ps1` asserts that and the instance exclusion together, which is
-what makes either one a guarantee instead of a claim.
+what makes either one a guarantee instead of a claim. It is PowerShell only: there is
+no shell twin, so on a machine without `pwsh` the assertion does not run and the
+guarantee is unchecked there.
 
 **No working file is ever written inside a project repo's own tree.** That repo's
 `.gitignore` belongs to its owner, so a promise made about it is one we have no
@@ -174,25 +176,19 @@ reason. It is the floor from `engineering-standard.md` made per-ticket and
 enforceable; an instance may bind a sharper version in
 `_command/CONSTITUTION.local.md`.
 
-- [ ] **Real path, end to end.** No stub or mock on the critical path.
-  "Compiles + unit-green" is a checkpoint, not done; every external boundary got
-  one live integration pass. Any remaining stub is labelled `[STUB]` and the
-  ticket stays open.
-- [ ] **Whole vertical slice.** Both sides wired and verified against the
-  acceptance criteria, proven by at least one test exercising the actual
-  serialized request across the boundary (not two independent mocks of the same
-  idea), with request validation so a contract violation is a clean 4xx.
-- [ ] **Terminal artifact verified.** The thing the user consumes (the index,
-  the rendered file, the row) was queried directly, broken down by the unit that
-  can partially fail. A green checkpoint is a promise, not a receipt.
-- [ ] **Designed for scale.** Bulk semantics, idempotency, and backpressure
-  considered; an action over N rows is one bulk call plus a queue, never N
-  requests.
-- [ ] **Tested at the altitude of the risk.** User-critical flows have e2e
-  coverage; unit is the floor, not the ceiling. The plan named the altitude.
-- [ ] **No guess worn as a finding.** Root cause shown with literal evidence;
-  assumptions labelled `[ASSUMPTION]`; external artifacts read as an engineer
-  authored them, with zero process vocabulary.
+**The single source is `kit/templates/_task.template.md`.** The full text of
+each item lives there and nowhere else, so it cannot drift between documents.
+It carries nine items:
+
+1. Real path, end to end
+2. Reachability proven
+3. Whole vertical slice
+4. Production-execution reality
+5. Terminal artifact verified
+6. Designed for scale
+7. Tested at the altitude of the risk (including the red-by-name check)
+8. Designed before built (UI-shaped tickets; N/A with a reason otherwise)
+9. No guess worn as a finding
 
 ## Epic-sized work - the folder above a ticket
 
@@ -274,6 +270,6 @@ tracks the set to done.
 | `tasks/` | what to do - the queue |
 | `progress.md` | what happened - the log |
 | `daily/today.md` | the pointer - references task ids, never copies bodies |
-| `deviations-register.md` | drift from plan |
+| `deviations.md` | drift from plan |
 
 Cross-references use `<front>/<project>/T-NNN` (single-project fronts: `<front>/T-NNN`).

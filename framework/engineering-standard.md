@@ -57,27 +57,44 @@ and `task-board.md` enforces it; an instance may bind a sharper version in
 done.
 
 1. **Real path, end to end** - no stub or mock on the critical path; every
-   external boundary gets one live integration pass; a remaining stub is
+   external boundary gets one live integration pass against a non-production
+   instance or a downloaded copy, never a production system; a remaining stub is
    `[STUB]` and the ticket stays open.
-2. **Whole vertical slice** - both sides wired and verified against the
+2. **Reachability proven** - each new service, handler, job or provider is
+   obtained the way production obtains it in at least one test (the container,
+   the route, the event, the scheduler), never only constructed; every value the
+   code reads has a named writer in the deployed environment; any string a remote
+   service parses was executed against that service. Code that nothing calls
+   passes every test it has.
+3. **Whole vertical slice** - both sides wired and verified against the
    acceptance criteria, proven by at least one test exercising the actual
    serialized request across the boundary (not two mocks of the same idea),
    plus request validation so a contract violation is a clean 4xx, not a 500.
-3. **Production-execution reality** - how the change runs in the DEPLOYED
+4. **Production-execution reality** - how the change runs in the DEPLOYED
    environment is established at design time, not after review: reachability,
    where jobs/migrations run, the secrets/roles/deploy hooks it relies on. A
-   thing that works locally but cannot run in prod is a planning defect.
-4. **Terminal artifact verified** - query the thing the user consumes, broken
+   bulk or one-off data change runs inside the deployed system, never from a
+   laptop. A thing that works locally but cannot run in prod is a planning
+   defect.
+5. **Terminal artifact verified** - query the thing the user consumes, broken
    down by the unit that can partially fail; a green checkpoint is a promise,
    not a receipt. **The command that proves it is DECLARED when the ticket is
    written, not chosen after the implementation exists** - choosing the proof
    once the code is in front of you invites choosing one that passes. A better
    assertion found later is adopted as a logged deviation, never a silent swap.
-5. **Designed for scale** - bulk semantics, idempotency, backpressure; N rows is
+6. **Designed for scale** - bulk semantics, idempotency, backpressure; N rows is
    one bulk call plus a queue, never N requests.
-6. **Tested at the altitude of the risk** - user-critical flows get e2e; unit is
-   the floor, never the ceiling; the plan names the altitude and why.
-7. **No guess worn as a finding** - root cause shown with literal evidence;
+7. **Tested at the altitude of the risk** - user-critical flows get e2e; unit is
+   the floor, never the ceiling; the plan names the altitude and why. At least
+   one new assertion is proven able to fail: break what it guards, see red,
+   restore, and the red output names the targeted assertion.
+8. **Designed before built (UI-shaped tickets)** - the front's DESIGN.md read
+   first; a comp and the six-state matrix row exist before the first UI commit;
+   rendered views match them; no new raw value outside the token files. N/A with
+   a reason for a ticket that changes nothing a user sees.
+9. **No guess worn as a finding** - root cause shown with literal evidence;
    assumptions labelled `[ASSUMPTION]` / `[UNVERIFIED]`; the outward artifacts
    (commit, PR, tracker, docs) read as an engineer authored them, zero process
    vocabulary.
+
+The full wording of each item is in the template, which is the single source.

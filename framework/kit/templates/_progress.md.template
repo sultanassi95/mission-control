@@ -62,6 +62,6 @@
 
 ## Deviations
 
-Tracked in `deviations-register.md` (per `kit/doctrine/deviations-protocol.md`).
+Tracked in `deviations.md` (per `kit/doctrine/deviations-protocol.md`).
 Anything 🔴 Open blocks promotion of the milestone it touches. Hardening
 sweeps (register-to-plans consistency passes) get one Session Log entry each.

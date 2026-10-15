@@ -1,4 +1,4 @@
-# Phases 3-4: Design, Architect and skeleton
+# Phases 3-5: Design, Architect, skeleton and release plan
 
 Between the bet gate and the blueprint gate, with the design gate in the middle. Still nothing is built in a repo, so forks are
 still recorded and taken; they reach the founder in the blueprint pack.
