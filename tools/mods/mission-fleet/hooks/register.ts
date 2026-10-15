@@ -22,9 +22,14 @@ const pollSeq = atom({ plugin: 'mission-fleet', key: 'pollSeq' } as const, 0)
 const watches = atom({ plugin: 'mission-fleet', key: 'watches' } as const, [] as PrWatch[])
 const WATCH_EVERY = 10 * 60_000
 let watching = false
+// The founder's /console app is a standing setting for this profile (kept in $.store across
+// sessions): while it is on, every session keeps its app running, starting it at session start and
+// after a plugin reload, and restarting it when the server dies. /console app stop turns it off.
+const APP_ALWAYS = 'appAlways'
+let supervising = false
 
 // The app bridge: one server per session, started by /console app.
-type App = { port?: number; token: string; key: string; stop: () => Promise<unknown>; stateFile: string; httpOk?: boolean; profile?: string; tokenFile?: string }
+type App = { port?: number; token: string; key: string; stop: () => Promise<unknown>; stateFile: string; httpOk?: boolean; profile?: string; tokenFile?: string; ended?: Promise<void> }
 let app: App | undefined
 // What the app shows about Flight itself: is a turn running, is it waiting on a question at the terminal.
 let flightBusy = false
@@ -141,6 +146,7 @@ export const register: Register = on => {
         return log($, 'watch', 'loop', `stopped: ${String(err).slice(0, 120)}`)
       })
     }
+    if ((await $.store.get(APP_ALWAYS).catch(() => false)) === true) void superviseApp($)
     await $.tool.register({
       name: TOOL,
       description: `Flight's console fleet. Pass the same arguments as the /console command.\n${USAGE}`,
@@ -350,7 +356,14 @@ async function runConsole($: EngineInterface, args: string, fromPerson: boolean)
 
   if (verb === 'app') {
     if (!fromPerson) return 'The app is started by the founder: type /console app.'
-    return rest[0] === 'stop' ? stopApp($) : startApp($)
+    if (rest[0] === 'stop') {
+      await $.store.set(APP_ALWAYS, false)
+      return stopApp($)
+    }
+    await $.store.set(APP_ALWAYS, true)
+    const text = await startApp($)
+    void superviseApp($)
+    return `${text}\nIt now runs in every session of this profile and restarts itself; /console app stop turns that off.`
   }
 
   if (verb === 'poll') {
@@ -794,7 +807,8 @@ async function startApp($: EngineInterface): Promise<string> {
   const key = hex(24)
   const stateFile = `${root}/_command/fleet/app-state.json`
   const stream = $.process.spawn({ argv: ['node', server], env: { MCAPP_PORT: String(APP_PORT), MCAPP_STATE_FILE: stateFile }, input: `${JSON.stringify({ token, key })}\n` })
-  const current: App = { token, key, stateFile, stop: () => stream.return(undefined as never) }
+  let markEnded: () => void = () => undefined
+  const current: App = { token, key, stateFile, stop: () => stream.return(undefined as never), ended: new Promise<void>(r => (markEnded = r)) }
   app = current
   let ready: (port: number | undefined) => void = () => undefined
   const started = new Promise<number | undefined>(r => (ready = r))
@@ -831,8 +845,12 @@ async function startApp($: EngineInterface): Promise<string> {
     }
     if (app === current) app = undefined
     ready(undefined)
+    markEnded()
     await log($, 'app', 'server', 'stopped')
-  })().catch((err: unknown) => log($, 'app', 'server', `failed: ${String(err).slice(0, 160)}`))
+  })().catch((err: unknown) => {
+    markEnded()
+    return log($, 'app', 'server', `failed: ${String(err).slice(0, 160)}`)
+  })
   const port = await Promise.race([started, $.clock.sleep(8000).then(() => undefined)])
   if (!port) {
     await current.stop()
@@ -846,6 +864,45 @@ async function startApp($: EngineInterface): Promise<string> {
     `Every profile's app shares the front door on ${APP_PORT} and one token; switch profiles from the app header. Open the link once per browser. This profile's Flight leaves the app when this session ends, or with /console app stop.`,
     'From the phone: `tailscale serve --bg ' + APP_PORT + '` serves it to your tailnet only (see the remote-access runbook).',
   ].join('\n')
+}
+
+/**
+ * Keeps the app running while the founder's standing setting is on: starts it, waits for the server
+ * to end, and starts it again with a backoff (1 s doubling to 60 s, back to 1 s after 5 minutes up).
+ * One supervisor per plugin load; a reload's new load starts its own.
+ */
+const currentApp = (): App | undefined => app
+
+async function superviseApp($: EngineInterface) {
+  if (supervising) return
+  supervising = true
+  let backoff = 1000
+  let refusedOnce = false
+  try {
+    while ((await $.store.get(APP_ALWAYS).catch(() => false)) === true) {
+      if (!app) {
+        const text = await startApp($)
+        // startApp sets the module's app; read it fresh, past TypeScript's narrowing of the check above.
+        if (!currentApp()?.port) {
+          // Another session of this profile holds the app (it takes over when that one ends), or the start failed.
+          if (!refusedOnce) await log($, 'app', 'supervisor', `waiting: ${text.slice(0, 160)}`)
+          refusedOnce = true
+          await $.clock.sleep(backoff)
+          backoff = Math.min(backoff * 2, 60_000)
+          continue
+        }
+        refusedOnce = false
+      }
+      const upSince = Date.now()
+      await currentApp()?.ended
+      if ((await $.store.get(APP_ALWAYS).catch(() => false)) !== true) break
+      backoff = Date.now() - upSince > 300_000 ? 1000 : Math.min(backoff * 2, 60_000)
+      await log($, 'app', 'supervisor', `server ended; restarting in ${Math.round(backoff / 1000)} s`)
+      await $.clock.sleep(backoff)
+    }
+  } finally {
+    supervising = false
+  }
 }
 
 async function stopApp($: EngineInterface): Promise<string> {
