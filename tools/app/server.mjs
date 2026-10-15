@@ -3,8 +3,9 @@
 // streams the fleet state to the browser, and hands the browser's actions to
 // the mod as one JSON line each on stdout. Node standard library only.
 //
-// Security: a per-start token (read from stdin) is required on every data
-// request (/op, /events, /state.json), sent from the page's localStorage; the Host header must be loopback
+// Security: every data request (/op, /events, /state.json) needs either the per-start token (read
+// from stdin, sent from the page's localStorage) or, through `tailscale serve`, the signed-in
+// Tailscale identity of this Mac's owner (serve sets that header itself); the Host header must be loopback
 // or a Tailscale name (DNS rebinding); a POST must come from this page's own
 // origin (cross-site requests); the bridge endpoint takes the mod's own key.
 
@@ -14,6 +15,7 @@ import { existsSync } from 'node:fs'
 import { join, dirname, normalize, extname } from 'node:path'
 import { timingSafeEqual } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
+import { execFile } from 'node:child_process'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const PUBLIC = join(here, 'public')
@@ -42,6 +44,24 @@ if (TOKEN.length < 32 || BRIDGE_KEY.length < 32) {
   process.exit(2)
 }
 
+// The tailnet owner's login and this Mac's own tailnet name, read once from the local Tailscale client.
+// Either empty (Tailscale absent) leaves the token as the only way in.
+const TAILNET = await new Promise(resolve => {
+  const app = '/Applications/Tailscale.app/Contents/MacOS/Tailscale'
+  execFile(existsSync(app) ? app : 'tailscale', ['status', '--json'], { timeout: 5000 }, (err, out) => {
+    try {
+      const st = JSON.parse(out)
+      if (err) return resolve({ owner: '', host: '' })
+      resolve({
+        owner: String(st.User?.[String(st.Self?.UserID)]?.LoginName ?? '').toLowerCase(),
+        host: String(st.Self?.DNSName ?? '').replace(/\.$/, '').toLowerCase(),
+      })
+    } catch {
+      resolve({ owner: '', host: '' })
+    }
+  })
+})
+
 let state = { at: null, fleet: null }
 const clients = new Set()
 let opSeq = 0
@@ -64,8 +84,16 @@ function hostAllowed(host, port) {
 // The token lives in the page's localStorage (scoped to scheme, host and port, unlike a cookie,
 // which every localhost port would receive) and comes back as a header, or as ?t= for the
 // EventSource, which cannot set headers.
+// A request through `tailscale serve` carries the viewer's Tailscale login, which serve sets and
+// overwrites (a client-sent value does not survive it, checked live 2026-10-15); Funnel requests carry none.
+function tailnetOwner(req) {
+  const host = String(req.headers.host ?? '').toLowerCase()
+  // Only this Mac's own tailnet name; a local process can still set both headers, but it can already read the token.
+  return TAILNET.owner !== '' && TAILNET.host !== '' && host === TAILNET.host && String(req.headers['tailscale-user-login'] ?? '').toLowerCase() === TAILNET.owner
+}
+
 function authorised(req, url) {
-  return same(req.headers['x-mcapp-token'], TOKEN) || same(url.searchParams.get('t') ?? undefined, TOKEN)
+  return tailnetOwner(req) || same(req.headers['x-mcapp-token'], TOKEN) || same(url.searchParams.get('t') ?? undefined, TOKEN)
 }
 
 function send(res, status, body, headers = {}) {

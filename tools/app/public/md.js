@@ -12,7 +12,7 @@
       let s = esc(part)
       s = s.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, (m, text, url) => `<a href="${url}" target="_blank" rel="noopener noreferrer">${text}</a>`)
       // Bare https URLs become links too, outside any link already made.
-      s = s.split(/(<a [^>]*>.*?<\/a>)/).map((seg, k) => (k % 2 ? seg : seg.replace(/\bhttps?:\/\/[^\s<]+[^\s<.,;:!?)]/g, url => `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`))).join('')
+      s = s.split(/(<a [^>]*>.*?<\/a>)/).map((seg, k) => (k % 2 ? seg : seg.replace(/\bhttps?:\/\/[^\s<*]+[^\s<*.,;:!?)]/g, url => `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`))).join('')
       s = s.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
       s = s.replace(/(^|[\s(])\*([^*\s][^*\n]*?)\*(?=[\s).,;:!?]|$)/g, '$1<em>$2</em>')
       s = s.replace(/(^|[\s(])_([^_\s][^_\n]*?)_(?=[\s).,;:!?]|$)/g, '$1<em>$2</em>')
@@ -99,5 +99,13 @@
     return out.join('')
   }
 
-  window.mcMarkdown = render
+  // Each message is parsed on its own so a tag left open in one bubble can never carry into the next:
+  // the HTML parser re-opens unclosed formatting tags (bold, italic) in every block that follows.
+  function contained(src) {
+    const t = document.createElement('template')
+    t.innerHTML = render(src)
+    return t.innerHTML
+  }
+
+  window.mcMarkdown = typeof document === 'undefined' ? render : contained
 })()

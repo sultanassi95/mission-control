@@ -11,6 +11,8 @@
 
   const $ = id => document.getElementById(id)
   const str = v => (v === undefined || v === null ? '' : String(v))
+  // Claude Code records a prompt the app submits between a plugin preamble and a trailing note; the founder typed only what follows it.
+  const typed = v => str(v).replace(/^The [\w-]+ plugin sent a message:\n/, '').replace(/\n+This is how Claude Code surfaces a prompt a plugin submits[\s\S]*$/, '').trim()
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
   const ICONS = {
     flight: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg>',
@@ -58,7 +60,7 @@
     // Flight's replies are markdown, rendered by md.js (which escapes first); the founder's own messages stay plain text.
     for (const m of f.messages ?? []) {
       parts.push(m.role === 'user'
-        ? `<div class="msg user"><div class="who">You</div>${esc(str(m.text))}</div>`
+        ? `<div class="msg user"><div class="who">You</div>${esc(typed(m.text))}</div>`
         : `<div class="msg assistant md"><div class="who">FLIGHT</div>${window.mcMarkdown ? window.mcMarkdown(str(m.text)) : esc(str(m.text))}</div>`)
     }
     for (const q of S.queued) parts.push(`<div class="msg user"><div class="who">You · ${q.sent ? 'waiting for Flight' : 'sending'}</div>${esc(q.text)}</div>`)
@@ -215,7 +217,7 @@
       main.className = `main view-${S.tab}`
       const changed = paint(main, 'main', views[S.tab]())
       const busy = fleet().flight?.busy
-      $('link-text').textContent = !token ? 'Not connected: reopen the link from your Mac.' : S.live ? (busy ? 'Live · Flight is working' : 'Live · connected to Flight') : 'Reconnecting…'
+      $('link-text').textContent = S.live ? (busy ? 'Live · Flight is working' : 'Live · connected to Flight') : S.state ? 'Reconnecting…' : 'Not connected: sign in to Tailscale, or open the link /console app printed'
       document.querySelector('.dot').className = `dot ${S.live ? (busy ? 'busy' : 'live') : ''}`
       $('composer').hidden = S.tab !== 'flight'
       paint($('quick'), 'quick', ['/console list', '/briefing', '/standup', '/debrief'].map(q => `<button type="button" data-a="quick" data-v="${esc(q)}">${esc(q)}</button>`).join(''))
@@ -249,12 +251,10 @@
   }
 
   async function send(op, text) {
-    if (!token) {
-      toast("Couldn't send: this page isn't connected. Reopen the link from your Mac.", 'error')
-      return false
-    }
     try {
-      const r = await fetch('/op', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-mcapp-token': token }, body: JSON.stringify({ op, text }) })
+      const headers = { 'Content-Type': 'application/json' }
+      if (token) headers['x-mcapp-token'] = token
+      const r = await fetch('/op', { method: 'POST', headers, body: JSON.stringify({ op, text }) })
       if (!r.ok) {
         toast(r.status === 401 ? "Couldn't send: this link has expired. Open the new link from your Mac." : "Couldn't send that. Try again in a moment.", 'error')
         return false
@@ -351,8 +351,8 @@
 
   // ---------- live state ----------
   function connect() {
-    if (!token) return render()
-    const es = new EventSource(`/events?t=${encodeURIComponent(token)}`)
+    // Over the tailnet the signed-in Tailscale identity is enough; a token is needed only on the Mac's own address.
+    const es = new EventSource(token ? `/events?t=${encodeURIComponent(token)}` : '/events')
     es.onopen = () => { S.live = true; render() }
     es.onerror = () => { S.live = false; render() }
     es.onmessage = m => {
@@ -365,7 +365,7 @@
         seenOp = op.id
         if (op.text && !/^Sent to Flight\.$/.test(op.text)) toast(str(op.text).split('\n').slice(0, 3).join(' · ').slice(0, 220))
       }
-      const said = new Set((fleet().flight?.messages ?? []).filter(x => x.role === 'user').map(x => str(x.text).trim()))
+      const said = new Set((fleet().flight?.messages ?? []).filter(x => x.role === 'user').map(x => typed(x.text)))
       S.queued = S.queued.filter(q => !(q.sent && said.has(q.text)))
       render()
     }
