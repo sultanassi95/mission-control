@@ -180,3 +180,10 @@ button { cursor: pointer; }
   .toast { bottom: var(--s6); }
   .sheet { max-width: var(--sheet-w); border-radius: var(--r-sheet); bottom: var(--s5); }
 }
+
+/* Photos (MC-107) */
+.attach svg { width: var(--t-lg); height: var(--t-lg); stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.preview[hidden] { display: none; }
+.preview { display: flex; align-items: center; gap: var(--s3); padding: var(--s2) 0; }
+.preview img { width: var(--target); height: var(--target); object-fit: cover; border-radius: var(--r-field); border: 1px solid var(--line); }
+.msg .photo { display: block; max-width: 100%; max-height: 40vh; border-radius: var(--r-field); margin-bottom: var(--s2); }

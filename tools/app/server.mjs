@@ -16,10 +16,10 @@
 
 import { createServer, request as httpRequest } from 'node:http'
 import { readFile, watch } from 'node:fs/promises'
-import { existsSync, mkdirSync, chmodSync, readFileSync, writeFileSync, readdirSync, unlinkSync, linkSync, renameSync } from 'node:fs'
+import { existsSync, mkdirSync, chmodSync, readFileSync, writeFileSync, readdirSync, unlinkSync, linkSync, renameSync, statSync } from 'node:fs'
 import { join, dirname, normalize, extname, basename } from 'node:path'
 import { homedir } from 'node:os'
-import { timingSafeEqual } from 'node:crypto'
+import { timingSafeEqual, randomBytes } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { execFile } from 'node:child_process'
 
@@ -41,7 +41,12 @@ const secrets = await new Promise(resolve => {
 const BRIDGE_KEY = typeof secrets.key === 'string' ? secrets.key : ''
 const FRONT_PORT = Number(process.env.MCAPP_PORT ?? 4777)
 const OPS = new Set(['prompt', 'command', 'console'])
-const FORWARDED = new Set(['/op', '/events', '/state.json'])
+const FORWARDED = new Set(['/op', '/events', '/state.json', '/upload'])
+const PHOTO = /^\/upload\/([a-f0-9]{24})\.(jpg|png|webp)$/
+const PHOTO_TYPES = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp' }
+const PHOTO_MAX = 8 * 1024 * 1024
+// A photo is kept only as long as a conversation needs it.
+const PHOTO_DAYS = 7
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.png': 'image/png' }
 
 if (typeof secrets.token !== 'string' || secrets.token.length < 32 || BRIDGE_KEY.length < 32) {
@@ -83,6 +88,36 @@ const TOKEN = (() => {
 
 // Each profile keeps its own fallback state file; one shared path let two profiles overwrite each other.
 const STATE_FILE = process.env.MCAPP_STATE_FILE ? join(dirname(process.env.MCAPP_STATE_FILE), `app-state-${PROFILE}.json`) : ''
+// Photos sit inside the portfolio beside the state file, where the session can Read them without a new permission.
+const UPLOADS = process.env.MCAPP_STATE_FILE ? join(dirname(process.env.MCAPP_STATE_FILE), 'uploads') : join(HOME, 'uploads')
+mkdirSync(UPLOADS, { recursive: true, mode: 0o700 })
+// Old photos go, and the folder never holds more than 200 photos or 256 MB (oldest first); hourly and after each upload.
+function prunePhotos() {
+  const files = []
+  for (const f of readdirSync(UPLOADS)) {
+    try {
+      const st = statSync(join(UPLOADS, f))
+      if (Date.now() - st.mtimeMs > PHOTO_DAYS * 86_400_000) unlinkSync(join(UPLOADS, f))
+      else files.push({ f, at: st.mtimeMs, size: st.size })
+    } catch {
+      /* removed by another server meanwhile */
+    }
+  }
+  files.sort((a, b) => b.at - a.at)
+  let total = 0
+  files.forEach((x, i) => {
+    total += x.size
+    if (i >= 200 || total > 256 * 1024 * 1024) {
+      try {
+        unlinkSync(join(UPLOADS, x.f))
+      } catch {
+        /* already gone */
+      }
+    }
+  })
+}
+prunePhotos()
+setInterval(prunePhotos, 3_600_000).unref()
 
 const alive = pid => {
   try {
@@ -218,7 +253,7 @@ async function serveStatic(res, pathname) {
   const body = await readFile(file)
   send(res, 200, body, {
     'Content-Type': TYPES[extname(file)] ?? 'application/octet-stream',
-    'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+    'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
   })
 }
 
@@ -245,7 +280,7 @@ function handler(port) {
     }
 
     // The page and its scripts carry no secrets and are public; every data endpoint needs the token.
-    const isData = url.pathname === '/op' || url.pathname === '/events' || url.pathname === '/state.json' || url.pathname === '/flights.json' || url.pathname.startsWith('/p/')
+    const isData = url.pathname === '/op' || url.pathname === '/events' || url.pathname === '/state.json' || url.pathname === '/flights.json' || url.pathname === '/upload' || url.pathname.startsWith('/upload/') || url.pathname.startsWith('/p/')
     if (req.method === 'GET' && !isData) return serveStatic(res, url.pathname).then(() => undefined, () => send(res, 500, 'error'))
     if (!authorised(req, url)) return send(res, 401, 'token required: open the URL /console app printed')
 
@@ -268,7 +303,7 @@ function handler(port) {
       const [, profile, rest] = routed
       if (profile !== PROFILE) {
         // Only the three data routes cross to another profile, and only by GET or POST.
-        if (!FORWARDED.has(rest)) return send(res, 404, 'not found')
+        if (!FORWARDED.has(rest) && !PHOTO.test(rest)) return send(res, 404, 'not found')
         if (req.method !== 'GET' && req.method !== 'POST') return send(res, 405, 'method not allowed')
         const target = flights().find(e => e.profile === profile)
         if (!target) return send(res, 404, `no ${profile} Flight is running`)
@@ -277,6 +312,7 @@ function handler(port) {
       path = rest
     }
 
+    if (req.method === 'POST' && path === '/upload') return receivePhoto(req, res)
     if (req.method === 'POST') {
       if (path !== '/op') return send(res, 404, 'not found')
       let op
@@ -304,8 +340,48 @@ function handler(port) {
       return
     }
     if (path === '/state.json') return send(res, 200, JSON.stringify(state), { 'Content-Type': 'application/json' })
+    const photo = PHOTO.exec(path)
+    if (photo) {
+      const file = join(UPLOADS, `${photo[1]}.${photo[2]}`)
+      if (!existsSync(file)) return send(res, 404, 'that photo is gone')
+      // Ids are random and a stored photo never changes, so the phone may keep it rather than refetch on every repaint.
+      return send(res, 200, await readFile(file), { 'Content-Type': PHOTO_TYPES[photo[2]], 'Cache-Control': 'private, max-age=604800, immutable', 'Content-Security-Policy': "default-src 'none'; sandbox" })
+    }
     return send(res, 404, 'not found')
   }
+}
+
+// Stores one photo from the app. The type comes from the file's own first bytes, never the header.
+async function receivePhoto(req, res) {
+  if (Number(req.headers['content-length'] ?? 0) > PHOTO_MAX) {
+    send(res, 413, 'that photo is over 8 MB', { Connection: 'close' })
+    req.resume()
+    return
+  }
+  const chunks = []
+  let size = 0
+  for await (const c of req) {
+    size += c.length
+    if (size > PHOTO_MAX) {
+      // Answer, then drain the rest, so the client reads the 413 instead of a reset connection.
+      send(res, 413, 'that photo is over 8 MB', { Connection: 'close' })
+      req.resume()
+      return
+    }
+    chunks.push(c)
+  }
+  const body = Buffer.concat(chunks)
+  const ext =
+    body.length > 3 && body[0] === 0xff && body[1] === 0xd8 && body[2] === 0xff ? 'jpg'
+    : body.length > 8 && body.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) ? 'png'
+    : body.length > 12 && body.toString('latin1', 0, 4) === 'RIFF' && body.toString('latin1', 8, 12) === 'WEBP' ? 'webp'
+    : ''
+  if (!ext) return send(res, 415, 'only JPEG, PNG or WebP photos')
+  const id = randomBytes(12).toString('hex')
+  const file = join(UPLOADS, `${id}.${ext}`)
+  writeFileSync(file, body, { mode: 0o600 })
+  prunePhotos()
+  return send(res, 201, JSON.stringify({ id: `${id}.${ext}`, path: file }), { 'Content-Type': 'application/json' })
 }
 
 // Forwards an already-authorised request to another profile's server on loopback, carrying the
@@ -317,7 +393,8 @@ function forward(req, res, port, path, entry) {
     if (req.headers['content-type']) headers['content-type'] = req.headers['content-type']
   }
   const upstream = httpRequest({ host: '127.0.0.1', port, method: req.method, path, headers }, up => {
-    res.writeHead(up.statusCode ?? 502, { ...up.headers, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' })
+    if (res.headersSent) return up.resume()
+    res.writeHead(up.statusCode ?? 502, { 'cache-control': 'no-store', ...up.headers, 'x-content-type-options': 'nosniff' })
     up.pipe(res)
     // A server that dies mid-stream never ends its response; end ours so the browser reconnects.
     up.on('close', () => res.writableEnded || res.end())
@@ -327,6 +404,19 @@ function forward(req, res, port, path, entry) {
     return res.headersSent ? res.end() : send(res, 502, 'that Flight did not answer')
   })
   res.on('close', () => upstream.destroy())
+  // The front door holds the photo size limit itself, so a body without a length still ends in a 413, not a 502.
+  if (path === '/upload') {
+    let size = 0
+    req.on('data', c => {
+      size += c.length
+      if (size > PHOTO_MAX && !res.headersSent) {
+        send(res, 413, 'that photo is over 8 MB', { Connection: 'close' })
+        upstream.destroy()
+        req.unpipe(upstream)
+        req.resume()
+      }
+    })
+  }
   req.pipe(upstream)
 }
 

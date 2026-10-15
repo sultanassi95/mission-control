@@ -35,6 +35,33 @@
   const authHeaders = () => (token ? { 'x-mcapp-token': token } : {})
   const NAMES = { tascode: 'TasCode' }
   const label = p => NAMES[p] ?? str(p).charAt(0).toUpperCase() + str(p).slice(1)
+  // A photo travels as a line naming its stored path; Flight opens the path with Read.
+  const PHOTO_LINE = /\n*\[Photo from the app: (.+?\/uploads\/([a-f0-9]{24}\.(?:jpg|png|webp))) - open it with Read\]\s*$/
+  // Photos are fetched with the token in a header and shown from a blob: URL, so the token never sits in the page.
+  const photos = new Map()
+  const photoSrc = id => {
+    const key = `${S.profile}/${id}`
+    if (!photos.has(key)) {
+      photos.set(key, '')
+      fetch(`${base()}/upload/${id}`, { headers: authHeaders() })
+        .then(r => (r.ok ? r.blob() : null))
+        .then(b => {
+          if (b) {
+            photos.set(key, URL.createObjectURL(b))
+            render()
+          }
+        })
+        .catch(() => undefined)
+    }
+    return photos.get(key)
+  }
+  const userBubble = (text, img, who = 'You') => {
+    const m = PHOTO_LINE.exec(text)
+    const body = m ? text.slice(0, m.index) : text
+    const src = img ?? (m ? photoSrc(m[2]) : '')
+    const pic = src ? `<img class="photo" src="${esc(src)}" alt="Photo you sent">` : m ? '<p class="hint">Photo loading…</p>' : ''
+    return `<div class="msg user"><div class="who">${esc(who)}</div>${pic}${body ? esc(body) : ''}</div>`
+  }
   let queueSeq = 0
   try { S.tab = sessionStorage.getItem('mcapp-tab') || 'flight' } catch {}
 
@@ -66,10 +93,10 @@
     // Flight's replies are markdown, rendered by md.js (which escapes first); the founder's own messages stay plain text.
     for (const m of f.messages ?? []) {
       parts.push(m.role === 'user'
-        ? `<div class="msg user"><div class="who">You</div>${esc(typed(m.text))}</div>`
+        ? userBubble(typed(m.text))
         : `<div class="msg assistant md"><div class="who">FLIGHT</div>${window.mcMarkdown ? window.mcMarkdown(str(m.text)) : esc(str(m.text))}</div>`)
     }
-    for (const q of S.queued) parts.push(`<div class="msg user"><div class="who">You · ${q.sent ? 'waiting for Flight' : 'sending'}</div>${esc(q.text)}</div>`)
+    for (const q of S.queued) parts.push(userBubble(q.text, q.preview, `You · ${q.sent ? 'waiting for Flight' : 'sending'}`))
     if (f.asking) parts.push(`<div class="notice" role="status">Flight is waiting for your answer on the Mac: ${esc(f.asking)}</div>`)
     if (f.busy) parts.push('<div class="typing" aria-label="Flight is working"><i></i><i></i><i></i></div>')
     return parts.join('')
@@ -341,10 +368,24 @@
     e.preventDefault()
     if (S.sending) return
     const box = $('draft')
-    const text = box.value.trim()
-    if (!text) return
-    const op = text.startsWith('/console ') ? ['console', text.slice(9)] : text.startsWith('/') ? ['command', text.slice(1)] : ['prompt', text]
-    const item = { id: ++queueSeq, text, sent: false }
+    const typedText = box.value.trim()
+    let text = typedText
+    const photo = S.photo
+    if (!text && !photo) return
+    if (photo && text.startsWith('/')) return toast('Remove the photo to run a command.', 'error')
+    if (photo) {
+      // Locked while it uploads, so the photo and the draft sent are the ones on screen.
+      S.sending = true
+      lockPhoto(true)
+      render()
+      const stored = await upload(photo.blob)
+      S.sending = false
+      lockPhoto(false)
+      if (!stored) return render()
+      text = `${text || 'A photo for you.'}\n\n[Photo from the app: ${stored.path} - open it with Read]`
+    }
+    const op = !photo && text.startsWith('/console ') ? ['console', text.slice(9)] : !photo && text.startsWith('/') ? ['command', text.slice(1)] : ['prompt', text]
+    const item = { id: ++queueSeq, text, sent: false, preview: photo?.url }
     S.queued.push(item)
     S.sending = true
     box.value = ''
@@ -352,11 +393,13 @@
     const ok = await send(op[0], op[1])
     S.sending = false
     if (ok) {
+      // The photo leaves the composer only once Flight has the message; a failed send keeps it for a retry.
+      if (photo && S.photo === photo) clearPhoto(false)
       item.sent = true
       if (fleet().flight?.busy) toast('Queued: Flight runs it when the current turn ends.')
     } else {
       S.queued = S.queued.filter(q => q.id !== item.id)
-      if (!box.value) box.value = text
+      if (!box.value) box.value = typedText
     }
     render()
   })
@@ -371,6 +414,69 @@
   })
 
   // ---------- live state ----------
+  // ---------- photos ----------
+  // Scaled on the device to 1600 px on the long side as JPEG, so a 10 MB camera file goes up as a few hundred KB.
+  async function shrink(file) {
+    const url = URL.createObjectURL(file)
+    try {
+      const img = await new Promise((resolve, reject) => {
+        const i = new Image()
+        i.onload = () => resolve(i)
+        i.onerror = reject
+        i.src = url
+      })
+      const k = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight))
+      const c = document.createElement('canvas')
+      c.width = Math.round(img.naturalWidth * k)
+      c.height = Math.round(img.naturalHeight * k)
+      const ctx = c.getContext('2d')
+      // JPEG has no transparency: a transparent PNG would otherwise turn black.
+      ctx.fillStyle = 'white'
+      ctx.fillRect(0, 0, c.width, c.height)
+      ctx.drawImage(img, 0, 0, c.width, c.height)
+      return await new Promise(resolve => c.toBlob(resolve, 'image/jpeg', 0.85))
+    } finally {
+      URL.revokeObjectURL(url)
+    }
+  }
+  async function upload(blob) {
+    try {
+      const r = await fetch(`${base()}/upload`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg', ...authHeaders() }, body: blob })
+      if (!r.ok) {
+        toast(r.status === 413 ? 'That photo is too large to send.' : r.status === 415 ? "That file isn't a photo the app can send." : "Couldn't send the photo. Try again.", 'error')
+        return null
+      }
+      return await r.json()
+    } catch {
+      toast("Couldn't reach Flight. Check that the Mac is awake and connected.", 'error')
+      return null
+    }
+  }
+  function lockPhoto(on) {
+    for (const id of ['attach', 'preview-remove', 'draft']) $(id).disabled = on
+  }
+  function clearPhoto(revoke = true) {
+    // A sent photo's blob URL stays alive for its queued bubble until the recorded message replaces it.
+    if (revoke && S.photo) URL.revokeObjectURL(S.photo.url)
+    S.photo = null
+    $('preview').hidden = true
+    $('preview-img').removeAttribute('src')
+  }
+  $('attach').addEventListener('click', () => $('photo').click())
+  $('photo').addEventListener('change', async e => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    const blob = await shrink(file).catch(() => null)
+    if (!blob) return toast("Couldn't read that photo.", 'error')
+    if (S.photo) URL.revokeObjectURL(S.photo.url)
+    S.photo = { blob, url: URL.createObjectURL(blob) }
+    $('preview-img').src = S.photo.url
+    $('preview').hidden = false
+    $('draft').focus()
+  })
+  $('preview-remove').addEventListener('click', clearPhoto)
+
   let es = null
   function connect() {
     if (es) es.close()
@@ -390,6 +496,7 @@
         if (op.text && !/^Sent to Flight\.$/.test(op.text)) toast(str(op.text).split('\n').slice(0, 3).join(' · ').slice(0, 220))
       }
       const said = new Set((fleet().flight?.messages ?? []).filter(x => x.role === 'user').map(x => typed(x.text)))
+      for (const q of S.queued) if (q.sent && said.has(q.text) && q.preview) URL.revokeObjectURL(q.preview)
       S.queued = S.queued.filter(q => !(q.sent && said.has(q.text)))
       render()
     }

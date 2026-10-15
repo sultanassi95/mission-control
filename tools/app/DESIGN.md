@@ -75,6 +75,7 @@ moves under `prefers-reduced-motion: reduce`.
 | Loop row | status, call, decision, advisory | timeline row | advisory rows tinted `--wait-tint` |
 | Toast | info, error | snackbar | announced via `role="status"` |
 | Profile switcher | hidden (one profile and none remembered), current, attention dot, sheet open, not answering | header button + bottom sheet of `.prof` rows | shows the current Claude profile; the dot means another profile has an open gate (`busy` colour) or is working (`live`); each row carries a state chip; the choice is remembered per device |
+| Photo attach | empty, picked (thumbnail + Remove photo), uploading, refused (toast) | camera button beside `/` + a preview row above the composer | downscaled on the device to 1600 px JPEG; the sent bubble shows the photo above the text; the stored path line is never shown |
 | Markdown reply | default | rendered by `public/md.js` | headings, emphasis, code, lists, quotes, http(s) links in a new tab, tables in their own horizontal scroll; text escaped before markup |
 
 ## State matrix

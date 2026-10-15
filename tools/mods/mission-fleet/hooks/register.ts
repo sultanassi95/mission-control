@@ -832,7 +832,8 @@ async function runAppOp($: EngineInterface, op: string, text: string, id = 0) {
   await log($, 'app-op', op, text.slice(0, 160))
   let result = ''
   if (op === 'prompt') {
-    await $.prompt.submit({ text })
+    // Only the token-holding app reaches /op, so its prompt is the founder's own words, read without the plugin frame.
+    await $.prompt.submit({ text, asUser: true })
     result = 'Sent to Flight.'
   } else if (op === 'console') result = await runConsole($, text, true)
   else if (op === 'command') {
