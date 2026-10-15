@@ -61,6 +61,7 @@ const USAGE = [
   '  /console stand-down <call-sign>      (writes a dated handoff to the front\'s progress.md)',
   '  /console dismiss <call-sign>         (ends it with nothing written: a test, or no work done)',
   '  /console answer <n|text>[ | <n|text>] (answers the question Flight sent to the app, from the Mac)',
+  '  /console dismiss-gate <id>          (closes a poll item that no longer matters; no verdict is sent)',
 ].join('\n')
 
 const callSignOf = (scope: string) => scope.toUpperCase().replace(/[^A-Z0-9]+/g, '-')
@@ -357,7 +358,8 @@ async function runConsole($: EngineInterface, args: string, fromPerson: boolean)
     const open = all.filter(p => p.state === 'open')
     const replaced = all.filter(p => p.state === 'superseded').slice(-3)
     const undelivered = all.filter(p => p.undelivered).slice(-3)
-    const lines = open.map(p => `${p.id}  ${p.from}  ${p.kind}: ${p.title}${p.targets?.length ? `  (tells: ${p.targets.join(', ')})` : ''}`)
+    const down = new Set(fleet.filter(c => c.status === 'stood-down').map(c => c.callSign))
+    const lines = open.map(p => `${p.id}  ${p.from}${down.has(p.from) ? ' (stood down; kept for its next Controller)' : ''}  ${p.kind}: ${p.title}${p.targets?.length ? `  (tells: ${p.targets.join(', ')})` : ''}`)
     if (lines.length === 0) lines.push('Nothing is waiting on the founder.')
     if (replaced.length) lines.push('', 'Recently replaced by a newer report:', ...replaced.map(p => `  ${p.id}  ${p.from}: ${p.title.slice(0, 100)}`))
     if (undelivered.length) lines.push('', 'Decided but not delivered:', ...undelivered.map(p => `  ${p.id}  ${p.from}: ${p.undelivered}`))
@@ -368,6 +370,11 @@ async function runConsole($: EngineInterface, args: string, fromPerson: boolean)
     const sign = rest[0] ? callSignOf(rest[0]) : undefined
     const list = (await read($, loops)).filter(l => !sign || l.from === sign || l.to === sign).slice(-15)
     return list.length ? list.map(l => `${l.at.slice(11, 16)}  ${l.from} -> ${l.to}  ${l.kind}: ${l.text.split('\n')[0]?.slice(0, 140) ?? ''}`).join('\n') : 'No loop traffic yet.'
+  }
+
+  if (verb === 'dismiss-gate') {
+    if (!fromPerson) return 'Dismissing a gate is the founder\'s: type /console dismiss-gate <id> yourself, or use the app.'
+    return dismissGate($, rest[0] ?? '')
   }
 
   if (verb === 'go' || verb === 'nogo' || verb === 'no-go') {
@@ -693,6 +700,18 @@ async function checkWatch($: EngineInterface, w: PrWatch, fleet: Console[]) {
     await log($, 'watch', w.callSign, `PR #${w.pr} ${sent.isDelivered ? 'changed, Controller woken' : `changed, not delivered: ${sent.reason}`}`)
   }
   await update($, watches, list => list.map(x => (same(x, w) ? { ...x, sig, fails: 0 } : x)))
+}
+
+/** Closes an open poll item that no longer matters, with no verdict sent to anyone. */
+async function dismissGate($: EngineInterface, id: string): Promise<string> {
+  const matches = (await read($, poll)).filter(p => p.id.toLowerCase() === id.toLowerCase())
+  const item = matches[matches.length - 1]
+  if (!item) return `No poll item ${id}. /console poll lists the open ones.`
+  if (item.state !== 'open') return `${item.id} is already closed: ${item.state}.`
+  await update($, poll, list => list.map(p => (p.id === item.id && p.at === item.at ? { ...p, state: 'dismissed' as const, decidedAt: new Date().toISOString() } : p)))
+  await addLoop($, { from: 'FOUNDER', to: item.from, kind: 'decision', text: `dismissed ${item.id}: no longer needed` })
+  await log($, 'dismissed', item.id, 'closed with no verdict')
+  return `${item.id} dismissed. Nothing was sent to ${item.from}.`
 }
 
 async function decide($: EngineInterface, id: string, verdict: 'go' | 'no-go', note: string): Promise<string> {

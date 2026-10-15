@@ -133,21 +133,24 @@
       h += `<article class="gate undelivered"><div class="kind"><span class="call">${esc(p.from)}</span><span>· ${esc(p.id)}</span></div><h3>Your ${p.state === 'go' ? 'GO' : 'NO-GO'} did not reach ${esc(p.from)}</h3><p class="hint">${esc(p.undelivered)}. Staff the console again from Flight, then call it with the decision.</p></article>`
     }
     if (!open.length) h += '<p class="empty">Nothing is waiting on you. New go/no-go calls appear here.</p>'
+    const down = new Set(consoles().filter(c => c.status === 'stood-down').map(c => c.callSign))
     open.forEach((p, i) => {
+      const orphan = down.has(p.from)
       h += `<article class="gate">
         <div class="kind"><span class="call">${esc(p.from)}</span><span>· ${esc(p.kind)} · ${esc(p.id)} · ${esc(time(p.at))}</span></div>
         <h3>${esc(p.title)}</h3>
+        ${orphan ? `<p class="hint">${esc(p.from)} is stood down: your answer is kept for the next Controller on this front.</p>` : ''}
         ${p.targets?.length ? `<p class="hint">Tells: ${esc(p.targets.join(', '))}</p>` : ''}
         <details data-id="${esc(p.id)}"${S.details.has(p.id) ? ' open' : ''}><summary>The report it came from</summary><pre>${esc(p.detail)}</pre></details>
         <label class="visually-hidden" for="note-${esc(p.id)}">Note for ${esc(p.id)}</label>
         <input class="note" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="sentences" id="note-${esc(p.id)}" data-id="${esc(p.id)}" placeholder="Note (optional), e.g. which option" value="${esc(S.notes[p.id] ?? '')}">
         <div class="gobar"><button class="go${i ? ' secondary' : ''}" type="button" data-a="go" data-v="${esc(p.id)}">GO</button><button class="nogo" type="button" data-a="nogo" data-v="${esc(p.id)}">NO-GO</button></div>
-        <button class="ghost" type="button" data-a="ask" data-v="${esc(p.id)}">Ask Flight first</button>
+        <div class="btnrow"><button class="ghost" type="button" data-a="ask" data-v="${esc(p.id)}">Ask Flight first</button>${orphan ? `<button class="ghost" type="button" data-a="gatedismiss" data-v="${esc(p.id)}">Dismiss</button>` : ''}</div>
       </article>`
     })
-    const decided = items.filter(p => (p.state === 'go' || p.state === 'no-go') && !p.undelivered).slice(-6).reverse()
+    const decided = items.filter(p => (p.state === 'go' || p.state === 'no-go' || p.state === 'dismissed') && !p.undelivered).slice(-6).reverse()
     const replaced = items.filter(p => p.state === 'superseded').slice(-3).reverse()
-    if (decided.length) h += '<p class="section-label">Decided</p>' + decided.map(p => `<p class="resolved">${pill(p.state === 'go' ? ['done', 'Go'] : ['failed', 'No-go'])}<span>${esc(p.id)} · ${esc(p.from)}</span></p>`).join('')
+    if (decided.length) h += '<p class="section-label">Decided</p>' + decided.map(p => `<p class="resolved">${pill(p.state === 'go' ? ['done', 'Go'] : p.state === 'dismissed' ? ['idle', 'Dismissed'] : ['failed', 'No-go'])}<span>${esc(p.id)} · ${esc(p.from)}</span></p>`).join('')
     if (replaced.length) h += '<p class="section-label">Replaced by a newer report</p>' + replaced.map(p => `<p class="resolved">${pill(['idle', 'Replaced'])}<span>${esc(p.id)} · ${esc(str(p.title).slice(0, 90))}</span></p>`).join('')
     return h
   }
@@ -398,6 +401,7 @@
         if (await send('console', `${a} ${v}${note ? ` ${note}` : ''}`)) delete S.notes[v]
         break
       }
+      case 'gatedismiss': await send('console', `dismiss-gate ${v}`); break
       case 'ask': S.tab = 'flight'; render(); $('draft').value = `About ${v}: `; $('draft').focus(); return
       case 'filter': S.filter = v; break
       case 'expand': S.open.has(v) ? S.open.delete(v) : S.open.add(v); break

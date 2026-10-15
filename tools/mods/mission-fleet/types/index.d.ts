@@ -32,7 +32,7 @@ export type PollItem = {
   kind: 'gate' | 'advisory'
   title: string
   detail: string
-  state: 'open' | 'go' | 'no-go' | 'superseded'
+  state: 'open' | 'go' | 'no-go' | 'superseded' | 'dismissed'
   /** The agent that raised it: a decision goes to this agent only. */
   agentId: string
   /** Set when a decision could not be delivered. */
