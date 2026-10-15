@@ -236,6 +236,7 @@
       const live = consoles().filter(c => c.status !== 'stood-down')
       head = 'Fleet'
       body = `<dl class="report"><dt>Link</dt><dd>${S.live ? 'Live' : 'Reconnecting'} · ${esc(location.host)}</dd><dt>Consoles</dt><dd>${live.length} staffed</dd><dt>Updated</dt><dd>${esc(time(S.state?.at))}</dd></dl>
+        <p class="section-label">Theme</p><div class="seg" role="group" aria-label="Theme">${['system', 'light', 'dark'].map(t => `<button type="button" data-a="theme" data-v="${t}" aria-pressed="${themeChoice() === t}">${t[0].toUpperCase() + t.slice(1)}</button>`).join('')}</div>
         <button class="danger" type="button" data-a="stopask"${live.length ? '' : ' disabled'}>Dismiss every console</button>
         <button class="ghost" type="button" data-a="appstopask">Stop the app server</button>
         <p class="hint">Flight keeps running in the terminal either way.</p>`
@@ -379,6 +380,7 @@
     if (['open', 'stopask', 'appstopask'].includes(a) && !S.sheet) S.opener = b
     switch (a) {
       case 'profile': S.sheet = null; switchProfile(v); return
+      case 'theme': setTheme(v); break
       case 'askpick': {
         const ask = fleet().flight?.ask
         if (!ask) return
@@ -504,6 +506,15 @@
   })
 
   // ---------- live state ----------
+  // ---------- theme ----------
+  // System follows the device; Light or Dark is kept per device and applied by theme.js before paint.
+  const themeChoice = () => { try { return localStorage.getItem('mcapp-theme') || 'system' } catch { return 'system' } }
+  function setTheme(t) {
+    try { t === 'system' ? localStorage.removeItem('mcapp-theme') : localStorage.setItem('mcapp-theme', t) } catch {}
+    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t
+    else delete document.documentElement.dataset.theme
+  }
+
   // ---------- photos ----------
   // Scaled on the device to 1600 px on the long side as JPEG, so a 10 MB camera file goes up as a few hundred KB.
   async function shrink(file) {
