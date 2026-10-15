@@ -6,7 +6,14 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
-- 2026-10-15 (latest): a shell twin of the reference checker (MC-110.1).
+- 2026-10-15 (latest): the spend recorder (MC-069), a Claude Code mod at
+  `tools/mods/spend-recorder` that records the model, effort and token usage
+  of every model call, per session and per agent, in the plugin's store (the
+  last 30 sessions). `/spend-log` shows this session's table, and `/spend`
+  now reads it through the recorder's `spend` tool, so its tally carries
+  measured tokens instead of estimates wherever the recorder was loaded.
+
+- 2026-10-15 (evening): a shell twin of the reference checker (MC-110.1).
   `tools/check-refs.sh`, with `tools/check-refs.py`, checks every repo path a
   Markdown doc names under `framework/`, `.claude/skills/`, `kit/` and
   `tools/`, and every relative Markdown link, against the files on disk, on a
