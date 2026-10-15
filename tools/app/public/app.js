@@ -513,7 +513,15 @@
     try { t === 'system' ? localStorage.removeItem('mcapp-theme') : localStorage.setItem('mcapp-theme', t) } catch {}
     if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t
     else delete document.documentElement.dataset.theme
+    themeBar()
   }
+  // The status bar follows the chosen theme, not only the device's: read from the tokens once they apply.
+  function themeBar() {
+    const meta = document.getElementById('theme-color')
+    const t = themeChoice()
+    if (meta) meta.content = t === 'system' ? '' : getComputedStyle(document.documentElement).getPropertyValue(t === 'dark' ? '--bg' : '--accent').trim()
+  }
+  themeBar()
 
   // ---------- photos ----------
   // Scaled on the device to 1600 px on the long side as JPEG, so a 10 MB camera file goes up as a few hundred KB.

@@ -31,6 +31,12 @@ def main():
     with open(os.path.join(HERE, 'check-ignores.ps1'), encoding='utf-8') as fh:
         ps1 = fh.read()
     must_ignore, must_track = array('mustIgnore', ps1), array('mustTrack', ps1)
+    # Every entry line in each list must parse: a single-quoted or reshaped entry would be dropped silently.
+    for name, got in (('mustIgnore', must_ignore), ('mustTrack', must_track)):
+        block = re.search(r'\$' + name + r'\s*=\s*@\((.*?)\n\)', ps1, re.S).group(1)
+        lines = [l for l in block.splitlines() if l.strip() and not l.strip().startswith('#')]
+        if len(lines) != len(got):
+            sys.exit(f'check-ignores: ${name} has {len(lines)} entry lines but {len(got)} parsed; keep entries as "path", one per line')
     failures = [f'NOT IGNORED but must be: {p}' for p in must_ignore if not ignored(p)]
     failures += [f'IGNORED but must stay trackable: {p}' for p in must_track if ignored(p)]
     tracked = subprocess.run(['git', '-c', 'core.quotePath=false', '-C', ROOT, 'ls-files'], capture_output=True, text=True, check=True).stdout.splitlines()

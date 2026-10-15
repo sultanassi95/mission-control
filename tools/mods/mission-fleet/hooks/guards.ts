@@ -8,6 +8,12 @@
  * protection is best effort. This is not a sandbox: a script file written and
  * then executed is outside what a text guard can see, which is why base
  * branches also need server-side branch protection.
+ *
+ * It also keeps fleet agents away from the app's home (~/.mission-control:
+ * the app token and the profile registry, names fixed in tools/app/server.mjs)
+ * and from the app's ports. A path spelled so the tokenizer cannot see it (a
+ * glob, a value assembled by a pipeline or an interpreter, a copy of the home
+ * folder read later) is outside it; only an OS-level boundary closes that.
  */
 
 /** Branches no Controller pushes to, whatever its spoke says. */
@@ -55,14 +61,15 @@ const READS_STDIN = /^(sh|bash|zsh|dash|ksh|fish|csh|tcsh|python[0-9.]*|perl|rub
 
 export type Word = { text: string; dynamic: boolean; glob: boolean }
 export type Simple = { words: Word[]; redirects: Word[]; sep: string }
-export type Parsed = { commands: Simple[]; opaque: boolean }
+export type Parsed = { commands: Simple[]; opaque: boolean; bodies: string[] }
 
 /**
  * Replaces each `$(cat <<'EOF' ... EOF)` (quoted delimiter only) with a literal
  * word, ending at the FIRST terminator line and only when `)` follows it.
  */
 function literalCommitHeredocs(input: string): string {
-  const open = /\$\(\s*cat\s+<<-?\s*(['"])(\w+)\1[^\n]*\n/g
+  // Nothing may follow the delimiter on its line: text there runs as a command (MC-116).
+  const open = /\$\(\s*cat\s+<<-?\s*(['"])(\w+)\1[ \t]*\n/g
   let out = ''
   let from = 0
   for (let m = open.exec(input); m; m = open.exec(input)) {
@@ -93,6 +100,7 @@ export function tokenize(input: string): Parsed {
   let cur: Word | undefined
   let redirecting = false
   const heredocs: { delim: string; quoted: boolean }[] = []
+  const bodies: string[] = []
   const end = () => {
     if (cur) (redirecting ? redirects : words).push(cur)
     if (cur) redirecting = false
@@ -115,6 +123,7 @@ export function tokenize(input: string): Parsed {
         const rest = text.slice(i + 1)
         const m = new RegExp(`^[ \\t]*${h.delim}[ \\t]*$`, 'm').exec(rest)
         const body = m ? rest.slice(0, m.index) : rest
+        bodies.push(body)
         // An unquoted heredoc expands $(...), backticks and variables inside its body.
         if (!h.quoted && /\$|`/.test(body)) opaque = true
         if (!m) {
@@ -130,6 +139,9 @@ export function tokenize(input: string): Parsed {
       end()
       continue
     }
+    // Arithmetic ((...)) and $[...] read << as a shift, not a heredoc: the guard cannot follow it.
+    if (c === '(' && ch(i + 1) === '(') opaque = true
+    if (c === '$' && ch(i + 1) === '[') opaque = true
     if (c === ';' || c === '|' || c === '&' || c === '(' || c === ')') {
       const two = (c === '|' || c === '&') && ch(i + 1) === c
       flush(two ? c + c : c)
@@ -142,6 +154,8 @@ export function tokenize(input: string): Parsed {
       continue
     }
     if (c === '<' && ch(i + 1) === '<') {
+      // Inside ${...} a << is pattern text, not a heredoc.
+      if (cur && cur.text.lastIndexOf('${') > cur.text.lastIndexOf('}')) opaque = true
       end()
       let j = i + 2
       if (ch(j) === '<') {
@@ -207,6 +221,11 @@ export function tokenize(input: string): Parsed {
     }
     if (c === '$') {
       if (ch(i + 1) === "'" || ch(i + 1) === '"') cur.dynamic = true
+      // $'...' decodes escapes (\x2e is a dot): with any backslash inside, the word is unreadable here.
+      if (ch(i + 1) === "'") {
+        const close = text.indexOf("'", i + 2)
+        if (text.slice(i + 2, close < 0 ? text.length : close).includes('\\')) opaque = true
+      }
       if (ch(i + 1) === '(') {
         opaque = true
         cur.dynamic = true
@@ -219,7 +238,7 @@ export function tokenize(input: string): Parsed {
     cur.text += c
   }
   flush()
-  return { commands, opaque }
+  return { commands, opaque, bodies }
 }
 
 /** The command a simple command runs: keywords, assignments and wrappers skipped. */
@@ -413,6 +432,12 @@ export function shellRefusal(role: Role, command: string, protectedBranches: str
   if (/_command\/fleet\b/.test(normalisePath(command)) || /\.claude[^/\s]*\/projects\b/.test(command)) return 'The fleet folder and Claude session transcripts are Flight\'s: fleet agents do not read them.'
   const parsed = tokenize(command)
   if (parsed.commands.some(s => [...s.words, ...s.redirects].some(w => APP_HOME.test(w.text)))) return APP_HOME_REFUSAL
+  // A heredoc read by an interpreter is a program: its words are checked like the command line's.
+  if (parsed.bodies.length && parsed.commands.some(s => INTERPRETER.test(baseName(headOf(s).head?.text ?? '')))) {
+    for (const body of parsed.bodies) {
+      if (APP_HOME.test(body) || tokenize(body).commands.some(s => [...s.words, ...s.redirects].some(w => APP_HOME.test(w.text)))) return APP_HOME_REFUSAL
+    }
+  }
   if (parsed.opaque) return 'Commands run plainly here: no $(...), backticks, <(...) or unquoted heredocs that expand (a commit message may use $(cat <<\'EOF\' ... EOF)).'
   const rawMentionsGit = /\b(git|gh)\b/.test(command)
   const scanned: string[] = []

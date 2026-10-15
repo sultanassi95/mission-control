@@ -54,7 +54,10 @@ allows "rm -f beside a heredoc commit" "rm -f /tmp/a.png && git commit -F - <<EO
 fix(x): tidy
 EOF"
 allows "stat -f beside a commit" 'stat -f %z out.bin && git commit -m "fix(x): smaller output"'
-allows "awk -F beside a commit" "awk -F: '{print \$1}' list.txt && git commit -m \"chore: list owners\""
+# A -F flag of another command on the same line is not git's message flag either.
+allows "grep -F beside a commit" 'grep -F needle notes.txt && git commit -m "chore: tidy notes"'
+allows "awk -F with a spaced separator beside a commit" "awk -F ':' '{print \$1}' list.txt && git commit -m \"chore: list owners\""
+blocks "git's own -F after other flags" 'git commit -q -F /tmp/msg.txt'
 for t in mcp__x__editJiraIssue mcp__x__createConfluencePage mcp__x__addCOMMENTToIssue; do
   run "$(tool_payload "$t" 'the founder decided')"; expect "outward tool $t" 2
 done
@@ -92,7 +95,14 @@ as an AI|chore: as an AI I cannot verify this
 as a language model|chore: as a language model I inferred it
 I am an? (|chore: I am an assistant and cannot merge
 generated (with|by) (|docs: generated with Claude
+Co-Authored-By:|feat: add thing Co-Authored-By: Claude
+🤖|docs: add the page 🤖
 CASES
+
+# The table above has one row per active term: a term added without a case fails here.
+active_terms="$(grep -v '^[[:space:]]*#' "$HERE/../leak-guard.terms.txt" | grep -cv '^[[:space:]]*$')"
+case_rows="$(sed -n '/^done <<.CASES./,/^CASES$/p' "$0" | grep -c '|')"
+if [ "$active_terms" -eq "$case_rows" ]; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "FAIL: $active_terms active terms but $case_rows term cases"; fi
 
 # --- scope: only outward commands are scanned ---
 allows "a non-outward git command" 'git status --short'

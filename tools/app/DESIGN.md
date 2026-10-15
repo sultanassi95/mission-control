@@ -111,7 +111,7 @@ discoverable).
 
 - Contrast: every pair above at 4.5:1 or more in both themes, recomputed when a value changes.
 - Shipping sizes: 320, 390 and 1280 px wide.
-- Themes: light and dark, following the system setting.
+- Themes: light and dark, following the system setting unless the founder picks Light or Dark in the menu (Theme choice).
 - Offline: no http(s) load other than the app's own origin (CSP `default-src 'self'`).
 - Accessibility: every control reachable by keyboard with a visible focus; every icon-only control (tab icons, the `/` button, sheet close) carries an accessible name; live regions for toasts and the link line; the gate is axe-core with no violations, run on a view when it changes.
 - Visual baselines: screenshots at 390 px, light and dark, taken when a view changes and kept with that change's evidence, not in this repo.

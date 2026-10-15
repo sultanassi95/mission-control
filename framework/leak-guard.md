@@ -141,7 +141,7 @@ pwsh -NoProfile -File tools/tests/leak-guard.tests.ps1   # Windows: tests leak-g
 Each suite tests the guard its own platform runs. The bash suite carries one case
 per active term, so deleting a line from the terms file turns that line's case red,
 and it pins the file-borne check to git's own `-F`: a lowercase `-f` or `-F:` that
-belongs to another command on the line (`rm -f`, `stat -f`, `awk -F:`) is not a
+belongs to another command on the line (`rm -f`, `stat -f`, `grep -F`, `awk -F ':'`) is not a
 file-borne message.
 
 The suite carries two negative controls. One proves a custom term blocks; the
