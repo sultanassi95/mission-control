@@ -24,9 +24,10 @@ app read as one family.
 
 ## Tokens - `public/tokens.css` (mirrored in `tokens.json`, DTCG)
 
-No raw value is written outside the token file; `tools/token-lint.sh tools/app`
-holds the count of exceptions to the baseline in `.token-lint.json` (wired with
-the first view in MC-100) and only lets it fall.
+No raw value is written outside the token file. `tools/token-lint.sh tools/app`
+holds the count of exceptions to the baseline in `.token-lint.json`, which is at
+the floor: hex 0, spacing 0. Any raw colour or spacing value added to a view
+fails the check.
 
 | Role | Light | Dark | Use | Contrast pair (light / dark) |
 |---|---|---|---|---|
@@ -68,7 +69,8 @@ moves under `prefers-reduced-motion: reduce`.
 | Command sheet | open, filtered, empty result | bottom sheet + search | grouped by source; "at the Mac" mark for terminal menus |
 | Console card | running, waiting, idle, stood down, failed, focus | list card with a state stripe | stripe + pill, never colour alone |
 | Console sheet | default, retuning, confirming stand-down | bottom sheet | Call, Retune, Stand down; destructive action confirms in-page |
-| Gate card | open, sending, decided, undelivered | action card | GO and NO-GO full height at thumb reach; only the first open gate's GO is solid (`.go`), the rest outlined (`.go.secondary`); NO-GO is outlined because it is a decision, not a destructive action; Ask writes to Flight |
+| Gate card | open, sending, decided, undelivered, Controller stood down | action card | GO and NO-GO full height at thumb reach; only the first open gate's GO is solid (`.go`), the rest outlined (`.go.secondary`); NO-GO is outlined because it is a decision, not a destructive action; Ask writes to Flight; when the raising Controller has stood down the card says the answer is kept for the next Controller on the front and adds Dismiss, which closes the item with no verdict sent |
+| Question card | unanswered, option picked, typing, sending (Send answer disabled until one question is answered) | action card in the Flight tab | Flight's own question, not a Controller's gate: each question shows its options (single or pick-any), an "Or type your own answer" box, or a text or number input; one answer is enough to send; the answer returns to the session as the question tool's own answer; at the Mac the same question is answered with `/console answer` |
 | Destructive button | default, focus | `.danger`, tinted fill | stand down, dismiss all, stop the server; always behind an in-page confirm |
 | Tags | default | `.tag` for values (model, budget), `.kindtag` for a loop row's kind | two jobs, two looks, on purpose |
 | State chip | five states | tinted pill | label carries the state |
@@ -91,6 +93,10 @@ moves under `prefers-reduced-motion: reduce`.
 
 The four destinations move to a left navigation rail (`--rail`) with the Poll badge beside its label; Flight's conversation and composer sit at a reading width (`--read`); Consoles and Poll lay their cards in columns (`--card-min`); sheets float as centred panels. Below 1024 px the phone layout is unchanged.
 
+## Profiles
+
+One server runs per Claude profile (work, personal and any other config). The one that holds the shared front-door port, 4777, serves the app and every other profile's data through `/p/<profile>/`, so one URL and one token cover every profile, and the front door survives any single session closing. The profile switcher in the header lists the live profiles with an attention dot, the choice is remembered per device, and with one live profile and none remembered the switcher is hidden. A profile already running refuses a second server for itself.
+
 ## Platform (mobile fronts)
 
 A web app installed to the home screen (PWA manifest, standalone display). It
@@ -106,5 +112,5 @@ discoverable).
 - Shipping sizes: 320, 390 and 1280 px wide.
 - Themes: light and dark, following the system setting.
 - Offline: no http(s) load other than the app's own origin (CSP `default-src 'self'`).
-- Accessibility: every control reachable by keyboard with a visible focus; every icon-only control (tab icons, the `/` button, sheet close) carries an accessible name; live regions for toasts and the link line; axe-core checked by the MC-100 screenshots run, no violations.
-- Visual baselines: screenshots at 390 px, light and dark, in the MC-100 ticket folder.
+- Accessibility: every control reachable by keyboard with a visible focus; every icon-only control (tab icons, the `/` button, sheet close) carries an accessible name; live regions for toasts and the link line; the gate is axe-core with no violations, run on a view when it changes.
+- Visual baselines: screenshots at 390 px, light and dark, taken when a view changes and kept with that change's evidence, not in this repo.

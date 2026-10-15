@@ -15,7 +15,7 @@ The orchestrator session is **Flight**. Each **Controller** owns one front or
 one project of a front, staffed on a **console** with a call sign. A
 Controller's own sub-agents are its **back room**; messages between them are
 the **loops**; whatever needs the founder lands in the **go/no-go poll**; the
-**Front Room** is the Mission Control App.
+The **Mission Control App** is the Front Room (the console's own name for it).
 
 ```mermaid
 flowchart LR
@@ -31,15 +31,17 @@ flowchart LR
 
 | Command | What it does |
 |---|---|
-| `/console staff <front> [--project <p>] [--model haiku\|sonnet\|opus\|fable] [--effort <e>] [--budget <n>]` | starts a Controller as the `mission-fleet:controller` agent type, in its scope's repo directory, with a staffing order naming the hub, spokes, progress log and back-room budget |
+| `/console staff <front> [--project <p>] [--model haiku\|sonnet\|opus\|fable] [--effort low\|medium\|high\|xhigh\|max] [--budget <n>] [--cwd <dir>]` | starts a Controller as the `mission-fleet:controller` agent type, in its scope's repo directory (or `--cwd`), with a staffing order naming the hub, spokes, progress log and back-room budget; `--budget` is a whole number from 0 to 20, default 4 |
 | `/console list` | the fleet: state, the model its last request ran on, type, scope |
 | `/console call <sign> <message>` | a message to one Controller; its answer comes back as a status check |
 | `/console retune <sign> <model\|-> [<effort>]` | changes model and effort from the Controller's next request |
 | `/console poll` · `/console loops [<sign>]` | what waits on the founder; recent traffic |
 | `/console go\|nogo <id> [note]` | **the founder's alone**: refused when Flight's model sends it |
+| `/console dismiss-gate <id>` | **the founder's alone**: closes a poll item that no longer matters; no verdict is sent to the Controller |
+| `/console answer <n\|text>[ \| <n\|text>]` | **the founder's alone**: answers a question Flight sent to the app, from the Mac (an option number or free text, ` \| ` between several questions) |
 | `/console stand-down <sign>` | a dated handoff to the front's progress log, then the end |
 | `/console dismiss <sign>` | the end, nothing written (tests, or no work done) |
-| `/console app [stop]` | **the founder's alone**: starts or stops the Front Room on 127.0.0.1 |
+| `/console app [stop]` | **the founder's alone**: starts the Front Room on 127.0.0.1 and makes it a standing setting for this profile: it starts in every session of the profile, restarts after a plugin reload or a crash, and `/console app stop` stops it and turns the setting off |
 
 ## How Flight staffs
 
@@ -52,7 +54,7 @@ flowchart LR
 
 - **Route advisories.** A Controller's `contract:` line opens an advisory naming the fronts whose `_map.md` names its scope. On the founder's go it reaches the dependent consoles, or waits for them to be staffed.
 - **Single writer.** Only Flight writes `_command/trackers/fronts.md`, `_command/daily/today.md` and `_command/fleet/`; Controllers propose, Flight writes.
-- **Rituals fan in.** `/briefing`, `/debrief`, `/standup` and `/retro` ask each staffed console for its one line before reading the repos.
+- **Rituals do not read the fleet.** `/briefing`, `/debrief`, `/standup` and `/retro` read the repos and boards only; they do not ask staffed consoles for a line. To see the fleet, use `/console list`, `/console poll` and `/console call <sign> <message>`.
 - **Verify before relaying.** A Controller's state is only as fresh as its front's files; check a PR's real state (`gh pr view`) before reporting it to the founder.
 - **Never answer a gate.** Go and no-go are typed by the founder or sent from the app.
 
@@ -67,7 +69,7 @@ stood-down consoles drop out of the watch.
 
 ## What the guard enforces, and what it does not
 
-The mission-fleet guard refuses, for Controllers and their back rooms: unpinned git and gh calls (every call is `cd <repo> && git ...` or `git -C <repo> ...`), pushes to base or deploy branches, force pushes and deletions, stash, PR merges, writes to Flight's files, the Claude CLI, the app's port and other processes' environments. It is a text guard: it catches mistakes and steered agents, and it is **not a sandbox**. Base branches are held by server-side branch protection with administrators included (`framework/remote-access.md`).
+The mission-fleet guard refuses, for Controllers and their back rooms: unpinned git and gh calls (every call is `cd <repo> && git ...` or `git -C <repo> ...`), pushes to base or deploy branches, force pushes and deletions, stash, PR merges, writes to Flight's files, the Claude CLI, the app's port and other processes' environments. What a Controller may do inside its scope: commit, push its own feature branches and open PRs; it never merges a PR (`controller.ts`, `guards.ts`). In git, a back room may only read, add and commit. The guard is a text guard: it catches mistakes and steered agents, and it is **not a sandbox**. Base branches are held by server-side branch protection with administrators included (`framework/remote-access.md`).
 
 ## Remote
 

@@ -380,7 +380,7 @@ item is simply absent. A standup reports what happened, not what was considered.
 
 **`--format slack` (default):**
 
-- Section headers in bold via single asterisks: `*Merged*`, `*Open PR*`.
+- Section headers in bold via single asterisks: `*Done*`, `*In progress*`.
 - Bulleted items with a plain bullet character.
 - Ticket URL + PR URL inline on the same line, separated by ` and `
   or a middle dot; Slack unfurls both.
@@ -390,7 +390,7 @@ item is simply absent. A standup reports what happened, not what was considered.
 
 **`--format jira`:**
 
-- Section headers as `### Merged`, `### Open PR`, etc.
+- Section headers as `### Done`, `### In progress`.
 - Bulleted items with `-`.
 - Ticket keys as bare `TICK-214` (Jira auto-links them).
 - PR URLs in Jira wiki link syntax: `[PR #36|https://...]`.
@@ -398,7 +398,7 @@ item is simply absent. A standup reports what happened, not what was considered.
 
 **`--format whatsapp`:**
 
-- Section labels as `*Merged:*`, `*Open PR:*` (single asterisks, colon).
+- Section labels as `*Done:*`, `*In progress:*` (single asterisks, colon).
 - Numbered items `1. 2. 3.` (renders consistently across clients).
 - URLs inline, multiple separated by ` | `.
 - Tighter than Slack: two to five words of description, then the URLs.
@@ -409,23 +409,24 @@ The page's own structure, days outermost and repo grouped within each day:
 
 ```
  smileshape                              29 Sep 16:00 -> 30 Sep 14:00  [inferred]
- 7 items   3 merged   2 open PR   1 new   1 ci
+ 6 items   5 done   1 in progress
 
  29 SEP
    annotation-studio-3d
-     18:21  AI-2151  [merged]   duplicate-aware import: honest counts on
-                                the project import screen          ticket  PR #190
-     23:43  AI-2172  [out]      superseded, folded into the epic PR ticket
+     18:21  AI-2151  Done · merged       duplicate-aware import: honest counts on
+                                         the project import screen   ticket  PR #190
+     23:43  AI-2172  In progress         import progress for large archives
+                                                                     ticket
    smart-data
-     23:04  AI-2159  [merged]   body limit sized to the maximum the
-                                lookup advertises                  ticket  PR #13
+     23:04  AI-2159  Done · merged       body limit sized to the maximum the
+                                         lookup advertises           ticket  PR #13
 
  30 SEP
    smart-data
-     10:31  WB-761   [open PR]  rds cpu / memory / storage / io alarms
-                                (+ WB-758, WB-759, WB-760)          ticket  PR #15
-     13:35  -        [ci]       minio withdrawn upstream; swapped to s3mock
-     13:53  WB-761   [open PR]  memory threshold corrected after review
+     10:31  WB-761   Done · in PR        rds cpu / memory / storage / io alarms
+                                         (+ WB-758, WB-759, WB-760)  ticket  PR #15
+     13:35  -        Done · merged       minio withdrawn upstream; swapped to s3mock
+     13:53  WB-761   Done · in PR        memory threshold corrected after review
 
  Scope inferred from this session: smileshape.
  4 items on 2 other fronts fall in this window and are not shown - /standup --all
@@ -440,18 +441,13 @@ And the Slack block that rides inside that page, unchanged from what
 ```
 *orbit-app QA bash - 01 Jul 17:00 to 02 Jul 18:30*
 
-*Merged*
-- TICK-212 (QA-11): invitation acceptance flow now works end-to-end. https://acme.atlassian.net/browse/TICK-212 and https://github.com/acme/orbit-app/pull/36
-- TICK-214 (QA-1): silent invitation failures now surface with a Resend action. https://acme.atlassian.net/browse/TICK-214 and https://github.com/acme/orbit-app/pull/37
+*Done*
+- TICK-212 (QA-11): invitation acceptance flow now works end-to-end (merged). https://acme.atlassian.net/browse/TICK-212 and https://github.com/acme/orbit-app/pull/36
+- TICK-214 (QA-1): silent invitation failures now surface with a Resend action (merged). https://acme.atlassian.net/browse/TICK-214 and https://github.com/acme/orbit-app/pull/37
+- TICK-217 (QA-2 + QA-3): selection outline no longer stuck after undo (in PR). https://acme.atlassian.net/browse/TICK-217 and https://github.com/acme/orbit-app/pull/38
 
-*Open PR*
-- TICK-217 (QA-2 + QA-3): selection outline no longer stuck after undo. https://acme.atlassian.net/browse/TICK-217 and https://github.com/acme/orbit-app/pull/38
-
-*New (Open)*
+*In progress*
 - TICK-222 (QA-12): pen options widget. https://acme.atlassian.net/browse/TICK-222
-
-*Triaged out*
-QA-4, 5, 6: invalid or superseded. https://acme.atlassian.net/browse/TICK-200
 ```
 
 ## Delivery: a local HTML file, and one line in the terminal
@@ -462,7 +458,7 @@ write it to the session scratchpad as
 item count and the resolved window - and nothing else:
 
     wrote standup-smileshape-2026-09-30.html
-    (7 items, 29 Sep 16:00 -> 30 Sep 14:00)
+    (6 items, 29 Sep 16:00 -> 30 Sep 14:00)
 
 No commentary above or below it unless the founder asks. The report is the
 deliverable; the terminal is a pointer to it.
@@ -501,7 +497,7 @@ does.
 2. **Talk track** - the two-minute spoken summary, grouped by kind of work, with
    its own copy button (`## The talk track` above). First, because it is what
    the founder needs in the room; everything below it is the evidence.
-3. **Counts strip** - `7 items · 3 merged · 2 open PR · 1 new · 1 ci`. This is
+3. **Counts strip** - `6 items · 5 done · 1 in progress`. This is
    what replaces grouping by state; without it the reader has to count.
 4. **Timeline** - day, then repo (or front when unscoped), then items. Each item:
    time, ticket key where there is one, state chip, the outcome in verb form,

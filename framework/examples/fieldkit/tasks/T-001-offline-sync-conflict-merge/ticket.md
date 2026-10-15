@@ -37,13 +37,24 @@ the sync event count, not a green sync status: the row the agronomist reads.
 
 - [ ] **Real path, end to end** - two real devices sync against the real
   server, not a merge unit test alone.
+- [ ] **Reachability proven** - the merge function is called by the sync
+  client the way the app calls it (through the sync route), in at least one test;
+  the server setting that enables merged payloads has a named writer in the
+  deployed config.
 - [ ] **Whole vertical slice** - the merge runs client-side AND the server
   accepts the merged payload; one test sends the actual serialized sync body.
+- [ ] **Production-execution reality** - the server accepts merged payloads in
+  the deployed environment, and any stored-note migration runs in the deploy
+  path, not from a laptop.
 - [ ] **Terminal artifact verified** - after sync, the note row on device A
   shows BOTH edits (query the stored note, not the sync event count).
 - [ ] **Designed for scale** - 200-note sync batches, no per-note round trip.
 - [ ] **Tested at the altitude of the risk** - e2e for the conflict path (data
-  loss is unforgivable); unit for the field-merge function.
+  loss is unforgivable); unit for the field-merge function. Prove the e2e
+  assertion can fail: disable the merge, see red on the named assertion,
+  restore.
+- [ ] **Designed before built (UI-shaped tickets)** - the pick-one prompt has a
+  comp and a six-state matrix row in DESIGN.md before its first commit.
 - [ ] **No guess worn as a finding** - the "earlier readings vanish" cause shown
   with a captured before/after, not inferred.
 
@@ -52,6 +63,7 @@ the sync event count, not a green sync status: the row the agronomist reads.
 All of them beside this file, in `tasks/<ID>-<slug>/`. None of them is tracked,
 because `_command/` is gitignored in full.
 
+- `records/` - none yet; one per dispatched sub-agent.
 - `scripts/` - `repro-sync-conflict.sh`, recorded in the project's `scripts.md`.
 - `samples/` - two exported note rows that reproduce the collision.
 - `artifacts/` - the merged output the script writes for comparison.

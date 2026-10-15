@@ -26,14 +26,22 @@ that sits at the mechanical tier.
 ## What it blocks
 
 Everything in `tools/leak-guard.terms.txt`: one case-insensitive regex per
-line, comments with `#`. Four families.
+line, comments with `#`. Three families are active.
 
 | Family | Example |
 |---|---|
 | A decision attributed to a person, not to the change | `founder decided`, `per the founder`, `as requested by` |
-| Internal orchestration vocabulary | `orchestrator`, `sub-agent`, `pause point` |
-| Deliberation labels that belong in working notes | `[ASSUMPTION]`, `[UNVERIFIED]`, `[STUB]` |
-| Authorship tells | `Co-Authored-By: Claude`, `generated with`, `as an AI` |
+| Internal orchestration vocabulary, bound to the verb that makes it process talk | `the orchestrator decided`, `dispatched a sub-agent`, `the gate passed`, `gate-locked` |
+| Authorship tells | `Co-Authored-By: Claude`, `generated with Claude` (or GPT, Gemini, Copilot, an AI), `as an AI` |
+
+A fourth family, deliberation labels, is deliberately empty. `[ASSUMPTION]`,
+`[UNVERIFIED]` and `[STUB]` are required usage in the doctrine, so blocking them
+would forbid the text the floor mandates; they are not blocked.
+
+Bare `orchestrator` and `sub-agent` are not on the list either. Both are ordinary
+domain nouns (a Saga orchestrator, an SNMP sub-agent), so only the verb-bound
+phrases are. `pause point` was dropped for the same reason: it is video-editing
+vocabulary, and the flow no longer uses it.
 
 **The tuning rule: prefer a multiword phrase over a bare word.** A bare common
 word is a false-positive engine. `gate` alone is inside delegate, mitigate,
@@ -64,39 +72,41 @@ command and is scanned normally.
 
 ## Enable it
 
-Per repo, in `.claude/settings.json`. Nothing is enabled by default.
+Per repo, in `.claude/settings.local.json` (gitignored) or `.claude/settings.json`
+when the repo wants it shared. The hooks sit under a top-level `"hooks"` key.
+Nothing is enabled by default.
 
 ```json
 {
-  "PreToolUse": [
-    {
-      "matcher": "Bash|mcp__.*",
-      "hooks": [
-        { "type": "command", "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PROJECT_DIR}/tools/leak-guard.ps1\"", "timeout": 10 }
-      ]
-    }
-  ]
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|mcp__.*",
+        "hooks": [
+          { "type": "command", "command": "bash \"${CLAUDE_PROJECT_DIR}/tools/leak-guard.sh\"", "timeout": 10 }
+        ]
+      }
+    ]
+  }
 }
 ```
+
+The shell script needs `jq`. It pre-filters before it requires `jq`, so a machine
+without `jq` still runs ordinary commands; only a genuinely outward-looking one
+hits the hard failure.
 
 The matcher is deliberately wide. Narrowing it to comment-named tools was tried
 and dropped: it silently excluded `editJiraIssue`, `createConfluencePage` and
 `addWorklogToJiraIssue`, so the hook never saw them. The script decides what to
 scan; the matcher only decides what reaches the script.
 
-Use `powershell`, not `pwsh`. The scripts are PowerShell 5.1 style, `pwsh` is
-absent on a stock Windows box, and the test suite exercises `powershell`, so a
-`pwsh` snippet fails while the suite stays green.
-
-On macOS and Linux use the shell twin, which needs `jq`:
+On a Windows machine use the PowerShell twin instead, with `powershell`, not
+`pwsh`: the scripts are PowerShell 5.1 style and `pwsh` is absent on a stock
+Windows box.
 
 ```json
-{ "type": "command", "command": "bash \"${CLAUDE_PROJECT_DIR}/tools/leak-guard.sh\"", "timeout": 10 }
+{ "type": "command", "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PROJECT_DIR}/tools/leak-guard.ps1\"", "timeout": 10 }
 ```
-
-The shell twin pre-filters before it requires `jq`, so a machine without `jq`
-still runs ordinary commands; only a genuinely outward-looking one hits the
-hard failure.
 
 Hooks load at session start, so restart the session after adding it. Verify
 with `/hooks`.
@@ -104,8 +114,8 @@ with `/hooks`.
 ## Decide per repo, because subject matter differs
 
 A repo whose SUBJECT is process will legitimately use these words. This repo is
-one: `orchestrator` and `sub-agent` are what its commits are about, not leakage
-in them. A product repo is the opposite case, and there the same words in a
+one: the orchestration phrases are what its commits are about, not leakage in
+them. A product repo is the opposite case, and there the same words in a
 commit are exactly the leak.
 
 The evidence for taking that seriously is in the term list itself.
@@ -126,6 +136,13 @@ suite and scan real history rather than trusting the change:
 ```
 pwsh -NoProfile -File tools/tests/leak-guard.tests.ps1
 ```
+
+**The test-suite gap.** The only suite is the PowerShell one,
+`tools/tests/leak-guard.tests.ps1`; there is no `leak-guard.tests.sh`. On a
+machine without `pwsh` (this one, for example) the shell guard that actually runs
+has no automated suite, so after any change to `leak-guard.sh` or the terms file,
+feed it a blocked and an allowed payload by hand and read the exit code, rather
+than assuming the PowerShell run covers it.
 
 The suite carries two negative controls. One proves a custom term blocks; the
 other proves the same text passes under the shipped list, so a green run cannot

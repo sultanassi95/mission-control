@@ -22,12 +22,20 @@ work actually cost in routing terms.
 `--front <name>`: tally only dispatches attributable to that front (by
 the identity header on each record). Unscoped (default): everything.
 
+`--week`: the week's records and progress entries rather than only this
+session (Step 1).
+
 ## Step 1 - Gather the evidence
 
 - This session's dispatches: every sub-agent or review fan-out visible in
   the session, with its model, effort (where known), and task.
 - For a `--week` scope: the week's records and progress entries that name
   dispatches.
+- A staffed Controller's back room, where the console fleet ran: the
+  back-room budget granted at `/console staff` bounds how many sub-agents it
+  may have in flight, `/console list` shows the model each console's last
+  request ran on, and `_command/fleet/audit.log` holds the staff, retune and
+  budget-denied lines.
 - Harness-reported token usage where the environment surfaces it (usage
   panels, transcript reports). Never invent numbers: if only rough
   estimates are possible, label them as estimates.

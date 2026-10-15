@@ -6,6 +6,75 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-10-15 (latest): a shell twin of the reference checker (MC-110.1).
+  `tools/check-refs.sh`, with `tools/check-refs.py`, checks every repo path a
+  Markdown doc names under `framework/`, `.claude/skills/`, `kit/` and
+  `tools/`, and every relative Markdown link, against the files on disk, on a
+  machine without PowerShell. Links inside code, links in the instance
+  templates and gitignored paths are not counted as broken. It takes files or
+  folders (default: every tracked `.md`) and exits 1 with `file:line` per
+  broken reference. The docs sweep (MC-110) brings the root, tools and app
+  docs up to date.
+
+- 2026-10-15 (later still): the standup report opens with a two-minute talk
+  track (MC-109). The timeline grouped by repo reads well and speaks badly, so
+  the talk track regroups the same items by what the work did: a one-sentence
+  headline, two to five groups by kind of work (largest first, each naming the
+  repos it spans), then the asks and who acts. Counts are exact, the talk track
+  covers exactly the timeline's items, and its counts equal the counts strip.
+
+- 2026-10-15 (later): the Mission Control App, the fleet's control surface
+  (`tools/app`, MC-098..MC-100, MC-105..MC-108). A Node standard-library
+  server, switched on by the founder's `/console app` (then kept running in
+  every session of that profile), serves a web app on
+  127.0.0.1 and hands the founder's actions to the mission-fleet mod. Four
+  tabs: Flight (the conversation, with Flight's replies rendered as markdown and
+  a `/` command picker), Consoles (call, retune or stand down a Controller),
+  Poll (go and no-go with a note) and Loops (filterable traffic). Built
+  only from its own tokens, with the design-token ratchet held at zero
+  (`tools/app/DESIGN.md`), installable as a home-screen web app, light and
+  dark. A desktop layout (from 1024 px) adds a navigation rail and card
+  columns. Access: one token kept owner-only in `~/.mission-control/app-token` and
+  shared by every profile's server, or over `tailscale serve` the signed-in
+  Tailscale identity of the machine's owner, plus a Host allowlist, a
+  same-origin check on every POST and a strict CSP. One front door serves every
+  Claude profile (MC-106): each profile's server registers and the one holding
+  port 4777 routes `/p/<profile>/` to the others, with a profile switcher in the
+  header and one shared token. Photos (MC-107): a camera button scales the
+  photo on the device and the session opens it by path. Answering Flight's
+  questions (MC-108): while the app runs, a question Flight asks lands as a
+  card with its options, an Other box and text or number inputs, with a phone
+  alert; at the machine, `/console answer <n|text>` answers it. Also: gates
+  whose Controller stood down say so and can be dismissed (`/console
+  dismiss-gate <id>`); the app stays running for as long as Flight does (a
+  supervisor restarts it with backoff; `/console app stop` ends it); replies the
+  saved transcript dropped are restored; Claude Code's own notices show as a
+  quiet line, not as the founder; the phone keyboard stays open while typing.
+
+- 2026-10-15: the console fleet (MC-092, children MC-093..MC-103). A Claude
+  Code mod, `tools/mods/mission-fleet`, adds `/console` and a console tool for
+  Flight, the orchestrator session. `/console staff <front> [--project <p>]
+  [--model] [--effort] [--budget]` starts a kept-alive Controller as the
+  `mission-fleet:controller` agent type, in its front's repo, cold-started from
+  the front hub, spokes and progress log; `list`, `call`, `retune` (model and
+  effort from the next request, for that console only), `poll`, `loops`, `go` and
+  `nogo` (the founder's alone), `stand-down` (a dated handoff, then the end),
+  `dismiss` (the end, nothing written) and `app` complete the verbs. Each
+  Controller's own sub-agents are its back room, held to the budget stated at
+  staffing. A guard refuses, for Controllers and back rooms, unpinned git and gh
+  calls, pushes to base or deploy branches, force pushes, deletions, stash, PR
+  merges, writes to Flight's files and the Claude CLI; it is a text guard, not a
+  sandbox, so base branches also need server-side branch protection. Every
+  report is recorded as loop traffic; a "blocked on you" line opens one go/no-go
+  gate per console and a `contract:` line opens an advisory for the fronts whose
+  dependency map names it. A new gate sends the founder an alert, and a PR a
+  Controller names is watched every ten minutes, waking the Controller on a
+  change in state, reviews, comments or checks. The mod ships 47 tests, run
+  with `claude plugin test tools/mods/mission-fleet`. New: the console skill
+  (`.claude/skills/console/SKILL.md`), the Controller clause in the
+  constitution, and `framework/remote-access.md`, the runbook for reaching the
+  app from a phone through `tailscale serve` only, never a public tunnel.
+
 - 2026-10-11 (later still): `/product-flow` after its first dry run (MC-091).
   A tabletop run of a sample idea through every instruction found eleven
   defects, fixed here. The founder reviews the design at a new gate between
@@ -440,4 +509,4 @@ changes should never reach you silently.
   Tools: reference-checker (`tools/check-refs.ps1`) joins the promote
   gate; leak-sweep gains the model-pin rule.
 - 2026-07-14: v1 built: framework, LIFTOFF zero-paste onboarding,
-  sixteen skills, leak-sweep publish gate (TDD, 18 tests).
+  sixteen skills, leak-sweep publish gate (test-driven).

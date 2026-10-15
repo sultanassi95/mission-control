@@ -17,7 +17,9 @@ An artifact is read by someone who did not watch the work. It earns the same
 design care as a product view: a deciding sentence, tokens, hierarchy, every
 state it can be in. The rules are `framework/design-standard.md`'s; the
 values are the product's own (`.claude/skills/DESIGN.md`) unless the artifact
-speaks for one front, in which case that front's DESIGN.md.
+speaks for one front, in which case that front's DESIGN.md. The Mission
+Control App has its own system, `tools/app/DESIGN.md`, derived from the
+product's and extending its palette with state pairs.
 
 ```mermaid
 flowchart LR

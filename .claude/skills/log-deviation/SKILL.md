@@ -33,7 +33,7 @@ a noisy register costs less than invisible drift.
 
 ## The write
 
-Target: the current project's `deviations-register.md` (create it from
+Target: the current project's `deviations.md` (create it from
 `framework/kit/templates/_deviations-register.md.template` if absent).
 
 1. **Master Tracker row:**
