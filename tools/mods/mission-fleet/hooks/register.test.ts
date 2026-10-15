@@ -145,3 +145,15 @@ test('a controller-type spawn that does not come from the console is refused', a
   expect(r.deny).toBe('Controllers are staffed only through /console staff.')
   expect(reached).toBe(false)
 })
+
+test('go and no-go are the founder\'s: refused through Flight\'s tool, answered for a typed command', async ($, on) => {
+  portfolio(on)
+  const viaTool = await $.tool.call({ tool: 'mcp__mission-fleet__console', args: 'go FI1' } as Parameters<Engine['tool']['call']>[0])
+  expect(JSON.stringify(viaTool)).toContain('founder')
+  const typed = await $.command.run({ command: 'console', args: 'go FI1', origin: { kind: 'composer' } } as Parameters<Engine['command']['run']>[0])
+  expect(typed.text).toContain('No poll item FI1')
+  const unknown = await $.command.run({ command: 'console', args: 'go FI1', origin: { kind: 'sdk' } } as Parameters<Engine['command']['run']>[0])
+  expect(unknown.text).toContain('founder')
+  expect((await run($, 'go FI1')).text).toContain('founder')
+  expect((await run($, 'poll')).text).toContain('Nothing is waiting on the founder')
+})

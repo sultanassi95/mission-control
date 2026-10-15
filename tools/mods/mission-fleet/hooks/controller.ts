@@ -24,11 +24,12 @@ export const CONTROLLER_PROMPT = [
   '- Shared portfolio files are Flight\'s to write: never edit _command/trackers/fronts.md or _command/daily/today.md. Your own front\'s progress.md and ticket folders are yours.',
   '- You cannot ask the founder directly. Anything that needs the founder goes into "blocked on you".',
   '',
-  'Every reply to Flight is a status check, exactly four lines and nothing else unless Flight asks for more:',
+  'Every reply to Flight is a status check, exactly these lines and nothing else unless Flight asks for more:',
   'state: <one line>',
   'shipped: <one line, or nothing>',
   'blocked on you: <one line, or nothing>',
   'next: <one line>',
+  'Add a fifth line, contract: <what changed>, only when you changed something another front or project consumes (an API, a schema, a file format, an event).',
   'When Flight asks for one line, answer in one line. Then stop and wait to be called again.',
 ].join('\n')
 
@@ -41,6 +42,7 @@ export type StaffingOrder = {
   spokes: string[]
   cwd: string
   budget: number
+  progress: string
 }
 
 export function staffingOrder(o: StaffingOrder): string {
@@ -50,7 +52,8 @@ export function staffingOrder(o: StaffingOrder): string {
     `Portfolio root: ${o.root}`,
     `Hub: ${o.hub}`,
     `Spoke(s): ${o.spokes.length ? o.spokes.join(', ') : 'none found - read the hub for where the work lives'}`,
-    `Your working directory: ${o.cwd}`,
+    `Your repo directory: ${o.cwd}. Your shell may start somewhere else, so pin every git and gh call: \`cd ${o.cwd} && git ...\` or \`git -C ${o.cwd} ...\`. Unpinned git calls are refused.`,
+    `Progress log: ${o.progress} (create it there if missing; never inside a repo).`,
     `Back-room budget: up to ${o.budget} sub-agents in flight without asking Flight.`,
     'First task: read the hub, the spoke(s) and progress.md, then send your first status check.',
   ].join('\n')

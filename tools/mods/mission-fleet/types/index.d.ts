@@ -23,10 +23,32 @@ export type Lineage = { agentId: string; parentId: string }
 
 export type Reservation = { controller: string; token: string; at: number }
 
+export type LoopEntry = { at: string; from: string; to: string; kind: 'status' | 'call' | 'decision' | 'advisory'; text: string }
+
+export type PollItem = {
+  id: string
+  at: string
+  from: string
+  kind: 'gate' | 'advisory'
+  title: string
+  detail: string
+  state: 'open' | 'go' | 'no-go' | 'superseded'
+  /** The agent that raised it: a decision goes to this agent only. */
+  agentId: string
+  /** Set when a decision could not be delivered. */
+  undelivered?: string
+  decidedAt?: string
+  note?: string
+  /** For an advisory: the fronts whose map names the changed scope. */
+  targets?: string[]
+}
+
+export type PendingAdvisory = { id: string; front: string; text: string; at: string }
+
 export type AuditEntry = { at: string; op: string; target: string; result: string }
 
 declare module 'claude-code' {
   interface PluginState {
-    'mission-fleet': { consoles: Console[]; audit: AuditEntry[]; reserving: Reservation[]; lineage: Lineage[] }
+    'mission-fleet': { consoles: Console[]; audit: AuditEntry[]; reserving: Reservation[]; lineage: Lineage[]; loops: LoopEntry[]; poll: PollItem[]; pending: PendingAdvisory[]; pollSeq: number }
   }
 }

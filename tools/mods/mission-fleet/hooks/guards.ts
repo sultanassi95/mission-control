@@ -46,7 +46,7 @@ const READERS = new Set(['cat', 'grep', 'rg', 'head', 'tail', 'less', 'more', 'w
 const READS_STDIN = /^(sh|bash|zsh|dash|ksh|fish|csh|tcsh|python[0-9.]*|perl|ruby|node|deno|bun|php|lua|osascript)$/
 
 export type Word = { text: string; dynamic: boolean; glob: boolean }
-export type Simple = { words: Word[]; redirects: Word[] }
+export type Simple = { words: Word[]; redirects: Word[]; sep: string }
 export type Parsed = { commands: Simple[]; opaque: boolean }
 
 /**
@@ -90,9 +90,9 @@ export function tokenize(input: string): Parsed {
     if (cur) redirecting = false
     cur = undefined
   }
-  const flush = () => {
+  const flush = (sep = ';') => {
     end()
-    if (words.length || redirects.length) commands.push({ words, redirects })
+    if (words.length || redirects.length) commands.push({ words, redirects, sep })
     words = []
     redirects = []
     redirecting = false
@@ -101,7 +101,7 @@ export function tokenize(input: string): Parsed {
   for (let i = 0; i < text.length; i++) {
     const c = ch(i)
     if (c === '\n') {
-      flush()
+      flush('\n')
       while (heredocs.length) {
         const h = heredocs.shift() ?? { delim: '', quoted: true }
         const rest = text.slice(i + 1)
@@ -123,7 +123,9 @@ export function tokenize(input: string): Parsed {
       continue
     }
     if (c === ';' || c === '|' || c === '&' || c === '(' || c === ')') {
-      flush()
+      const two = (c === '|' || c === '&') && ch(i + 1) === c
+      flush(two ? c + c : c)
+      if (two) i++
       continue
     }
     if ((c === '<' || c === '>') && ch(i + 1) === '(') {
@@ -352,7 +354,53 @@ export function isFlightOnly(path: string): boolean {
 }
 
 /** The refusal for a shell command run by a fleet role, if any. */
-export function shellRefusal(role: Role, command: string, protectedBranches: string[]): string | undefined {
+/** Folds `a/./b`, `a//b` and `a/x/../b`, keeping case (paths on disk). */
+function foldPath(p: string): string {
+  const out: string[] = []
+  for (const part of p.split('/')) {
+    if (part === '' || part === '.') continue
+    if (part === '..') out.pop()
+    else out.push(part)
+  }
+  return `/${out.join('/')}`
+}
+
+/**
+ * The repo directory a git or gh call is pinned to: `git -C <dir>`, else the
+ * last literal `cd` before it on the line; undefined when nothing pins it.
+ * A fleet agent's shell starts wherever Flight's does, so an unpinned git call
+ * can land in the wrong repo.
+ */
+export function pinnedDir(commands: Simple[], index: number): string | undefined {
+  const target = commands[index]
+  if (!target) return undefined
+  const { head, rest } = headOf(target)
+  if (head && baseName(head.text) === 'git') {
+    if (rest.filter(w => w.text === '-C').length > 1) return undefined
+    if (rest.some(w => /^--(git-dir|work-tree)/.test(w.text))) return undefined
+    const c = rest.findIndex(w => w.text === '-C')
+    const dir = c >= 0 ? rest[c + 1] : undefined
+    if (dir) return dir.dynamic || dir.glob || !dir.text.startsWith('/') ? undefined : foldPath(dir.text)
+  }
+  // Only a run of `cd <dir> &&` directly before the call pins it: anything else may not have run, or ran in a subshell.
+  const chain: Word[] = []
+  for (let k = index - 1; k >= 0; k--) {
+    const prev = commands[k] as Simple
+    const { head: h, rest: r } = headOf(prev)
+    if (prev.sep !== '&&' || !h || h.text !== 'cd' || r.length !== 1) break
+    chain.unshift(r[0] as Word)
+  }
+  let dir: string | undefined
+  for (const to of chain) {
+    if (to.dynamic || to.glob || to.text.startsWith('-')) return undefined
+    if (to.text.startsWith('/')) dir = foldPath(to.text)
+    else if (dir) dir = foldPath(`${dir}/${to.text}`)
+    else return undefined
+  }
+  return dir
+}
+
+export function shellRefusal(role: Role, command: string, protectedBranches: string[], scopeDir?: string): string | undefined {
   const parsed = tokenize(command)
   if (parsed.opaque) return 'Commands run plainly here: no $(...), backticks, <(...) or unquoted heredocs that expand (a commit message may use $(cat <<\'EOF\' ... EOF)).'
   const rawMentionsGit = /\b(git|gh)\b/.test(command)
@@ -388,9 +436,18 @@ export function shellRefusal(role: Role, command: string, protectedBranches: str
       return `git and gh run only as plain commands, never through ${name}.`
     }
     // Fail closed: on a line that names git or gh, no interpreter runs at all (a pipe, heredoc, -c, /dev/stdin or option can feed it a program).
+    if (['export', 'declare', 'typeset', 'set', 'setenv'].includes(name) && rest.some(w => /^(GH_|GIT_|GITHUB_)/.test(w.text))) return 'Setting GH_*, GIT_* or GITHUB_* variables is not allowed here: they can redirect git and gh in later commands.'
+    if (name === 'claude') return 'A fleet agent never starts another Claude session: it would run without the fleet guards or budget. Use your back room (the Agent tool) instead.'
     if (rawMentionsGit && READS_STDIN.test(name)) return `git and gh run only as plain commands; ${name} on the same line is not allowed. Run it as a separate command.`
     if ((name === 'git' || name === 'gh') && s.words.slice(0, s.words.indexOf(head)).some(w => /^[A-Za-z_][A-Za-z0-9_]*=/.test(w.text) || w.text === 'env')) {
       return `${name} runs here with no environment prefix (VAR=... or env): variables like GIT_SSH_COMMAND or GIT_CONFIG_PARAMETERS can redirect it.`
+    }
+    if (scopeDir && (name === 'git' || name === 'gh')) {
+      if (name === 'gh' && rest.some(w => /^-R/.test(w.text) || /^--repo(=|$)/.test(w.text) || (/^-[A-Za-z]+$/.test(w.text) && w.text.includes('R')))) return 'gh -R/--repo is not allowed here: pin the repo with `cd <your repo> && gh ...`.'
+      const dir = pinnedDir(parsed.commands, k)
+      const scope = foldPath(scopeDir)
+      if (!dir) return `Pin the repo on every ${name} call: \`cd ${scope} && ${name} ...\`${name === 'git' ? ` or \`git -C ${scope} ...\`` : ''}. Your shell may start in another repo.`
+      if (dir !== scope && !dir.startsWith(`${scope}/`)) return `${dir} is outside your console's directory (${scope}).`
     }
     if (name === 'git') {
       const why = gitRefusal(role, rest, protectedBranches)
@@ -409,12 +466,12 @@ export function isShellLikeTool(tool: string): boolean {
 }
 
 /** The refusal for any tool call by a fleet role, if any. */
-export function toolRefusal(role: Role, tool: string, input: unknown, protectedBranches: string[]): string | undefined {
+export function toolRefusal(role: Role, tool: string, input: unknown, protectedBranches: string[], scopeDir?: string): string | undefined {
   if (tool === 'Workflow') return 'Workflows are Flight\'s to run; a Controller dispatches its back room with the Agent tool.'
   if (isShellLikeTool(tool)) return `${tool} runs shell commands the fleet guard cannot read; use Bash.`
   const args = (input ?? {}) as Record<string, unknown>
   if (typeof args.command === 'string') {
-    const why = shellRefusal(role, args.command, protectedBranches)
+    const why = shellRefusal(role, args.command, protectedBranches, scopeDir)
     if (why) return why
   }
   if (!['Read', 'Grep', 'Glob', 'Bash'].includes(tool) && mentionsFlightFile(JSON.stringify(input ?? {}))) return 'fronts.md and today.md are Flight\'s to write.'

@@ -1,18 +1,28 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { AuditEntry, Console, Lineage, Reservation } from '../types'
+import type { AuditEntry, Console, Lineage, LoopEntry, PendingAdvisory, PollItem, Reservation } from '../types'
 
 import { commonDir, CONTROLLER_PROMPT, CONTROLLER_TYPE, DEFAULT_BUDGET, EFFORTS, isInsideRelative, MODEL_IDS, spokeField, spokePath, staffingOrder } from './controller'
 import { protectedFromSpoke, toolRefusal } from './guards'
+import { dependentsOf, isNothing, parseStatus, pollId } from './loops'
 import type { Role as GuardRole } from './guards'
 
 const consoles = atom({ plugin: 'mission-fleet', key: 'consoles' } as const, [] as Console[])
 const audit = atom({ plugin: 'mission-fleet', key: 'audit' } as const, [] as AuditEntry[])
 const reserving = atom({ plugin: 'mission-fleet', key: 'reserving' } as const, [] as Reservation[])
 const lineage = atom({ plugin: 'mission-fleet', key: 'lineage' } as const, [] as Lineage[])
+const loops = atom({ plugin: 'mission-fleet', key: 'loops' } as const, [] as LoopEntry[])
+const poll = atom({ plugin: 'mission-fleet', key: 'poll' } as const, [] as PollItem[])
+const pending = atom({ plugin: 'mission-fleet', key: 'pending' } as const, [] as PendingAdvisory[])
+const pollSeq = atom({ plugin: 'mission-fleet', key: 'pollSeq' } as const, 0)
+
+// Audit-file writes run one at a time, so two hooks logging at once cannot drop a line.
+let auditChain: Promise<void> = Promise.resolve()
 
 const TOOL = 'console'
+/** Origins a person typed: the prompt box, or their own Remote Control client. Anything else is not the founder. */
+const PERSON_ORIGINS = new Set(['composer', 'bridge'])
 const FRONT = /^[a-z0-9][a-z0-9_-]{0,63}$/i
 
 const USAGE = [
@@ -50,7 +60,33 @@ export function parseArgs(args: string): Parsed {
 }
 
 async function log($: EngineInterface, op: string, target: string, result: string) {
-  await update($, audit, list => [...list, { at: new Date().toISOString(), op, target, result }].slice(-500))
+  const at = new Date().toISOString()
+  await update($, audit, list => [...list, { at, op, target, result }].slice(-500))
+  const line = `${at}\t${op}\t${target}\t${result.replace(/\s+/g, ' ')}\n`
+  auditChain = auditChain.then(() => appendAudit($, line)).catch(() => undefined)
+  await auditChain
+}
+
+const AUDIT_HEADER = '# mission-fleet audit log: one line per fleet operation (time, op, target, result)\n'
+
+async function appendAudit($: EngineInterface, line: string) {
+  const root = await findRoot($)
+  if (!root) return
+  const file = `${root}/_command/fleet/audit.log`
+  let before: string
+  try {
+    before = await $.fs.read(file)
+  } catch (err) {
+    // Seed a new file only when it is truly missing; any other read error must not overwrite history.
+    if (!/ENOENT|not found|no such file|missing/i.test(String(err))) return
+    before = AUDIT_HEADER
+  }
+  if (before.length > 1_000_000) before = AUDIT_HEADER + before.slice(before.indexOf('\n', before.length - 500_000) + 1)
+  await $.fs.write(file, before + line)
+}
+
+async function addLoop($: EngineInterface, entry: Omit<LoopEntry, 'at'>) {
+  await update($, loops, list => [...list, { at: new Date().toISOString(), ...entry }].slice(-300))
 }
 
 const FAILED = 'The console command failed partway. /console list shows what the fleet holds now.'
@@ -82,7 +118,7 @@ export const register: Register = on => {
     if (!e.agentId) return next(e)
     const role = await roleOf($, e.agentId)
     if (!role) return next(e)
-    const why = toolRefusal(role.kind, e.tool, e.input, role.console.protectedBranches)
+    const why = toolRefusal(role.kind, e.tool, e.input, role.console.protectedBranches, role.console.cwd)
     if (!why) return next(e)
     await log($, 'guard', role.console.callSign, `${role.kind} ${e.tool} denied: ${why}`)
     return { decision: 'deny' as const, reason: why }
@@ -132,17 +168,26 @@ export const register: Register = on => {
     return yield* next(step)
   })
 
-  on('command.run', { command: 'console' }, async ($, e) => ({ text: await runConsole($, e.args) }))
+  // Loops and poll: every Controller turn's report is recorded; a gate or a contract change opens a poll item.
+  on('turn.complete', async ($, e, next) => {
+    const done = await next(e)
+    const agentId = e.agentId
+    // Recorded without holding up the turn; a failure is audited, never silent.
+    if (agentId) void recordReport($, agentId, e.answer).catch((err: unknown) => log($, 'poll', agentId, `report not recorded: ${String(err).slice(0, 160)}`))
+    return done
+  })
+
+  on('command.run', { command: 'console' }, async ($, e) => ({ text: await runConsole($, e.args, PERSON_ORIGINS.has(e.origin?.kind ?? '')) }))
     .catch(() => ({ text: FAILED }))
 
   on('tool.call', { tool: /^mcp__mission-fleet__console$/ }, async ($, e) => {
     if (e.agentId) return { result: 'Only Flight runs the console tool; a Controller reports to Flight instead.', isError: true }
     const args = typeof (e as { args?: unknown }).args === 'string' ? (e as { args: string }).args : ''
-    return { result: await runConsole($, args) }
+    return { result: await runConsole($, args, false) }
   }).catch(() => ({ result: FAILED, isError: true }))
 }
 
-async function runConsole($: EngineInterface, args: string): Promise<string> {
+async function runConsole($: EngineInterface, args: string, fromPerson: boolean): Promise<string> {
   const { verb, rest, flags, error } = parseArgs(args)
   if (error) return `${error}\n${USAGE}`
 
@@ -170,6 +215,7 @@ async function runConsole($: EngineInterface, args: string): Promise<string> {
     if (words.length === 0) return USAGE
     const sent = await $.session.send({ to: { agentId: c.agentId }, text: words.join(' ') })
     await log($, 'call', c.callSign, sent.isDelivered ? 'delivered' : `refused: ${sent.reason}`)
+    if (sent.isDelivered) await addLoop($, { from: 'FLIGHT', to: c.callSign, kind: 'call', text: words.join(' ') })
     return sent.isDelivered ? `Called ${c.callSign}. Its answer arrives as a status check.` : `Call to ${c.callSign} not delivered: ${sent.reason}`
   }
 
@@ -187,6 +233,29 @@ async function runConsole($: EngineInterface, args: string): Promise<string> {
     const label = `${tune.model ?? 'its model'} ${tune.effort ?? 'its effort'}`
     await log($, 'retune', c.callSign, label)
     return `${c.callSign} retuned to ${label}, from its next model request. /console list shows what its last request ran on.`
+  }
+
+  if (verb === 'poll') {
+    const all = await read($, poll)
+    const open = all.filter(p => p.state === 'open')
+    const replaced = all.filter(p => p.state === 'superseded').slice(-3)
+    const undelivered = all.filter(p => p.undelivered).slice(-3)
+    const lines = open.map(p => `${p.id}  ${p.from}  ${p.kind}: ${p.title}${p.targets?.length ? `  (tells: ${p.targets.join(', ')})` : ''}`)
+    if (lines.length === 0) lines.push('Nothing is waiting on the founder.')
+    if (replaced.length) lines.push('', 'Recently replaced by a newer report:', ...replaced.map(p => `  ${p.id}  ${p.from}: ${p.title.slice(0, 100)}`))
+    if (undelivered.length) lines.push('', 'Decided but not delivered:', ...undelivered.map(p => `  ${p.id}  ${p.from}: ${p.undelivered}`))
+    return lines.join('\n')
+  }
+
+  if (verb === 'loops') {
+    const sign = rest[0] ? callSignOf(rest[0]) : undefined
+    const list = (await read($, loops)).filter(l => !sign || l.from === sign || l.to === sign).slice(-15)
+    return list.length ? list.map(l => `${l.at.slice(11, 16)}  ${l.from} -> ${l.to}  ${l.kind}: ${l.text.split('\n')[0]?.slice(0, 140) ?? ''}`).join('\n') : 'No loop traffic yet.'
+  }
+
+  if (verb === 'go' || verb === 'nogo' || verb === 'no-go') {
+    if (!fromPerson) return 'Go and no-go are the founder\'s: type /console go|nogo <id> yourself, or use the app.'
+    return decide($, rest[0] ?? '', verb === 'go' ? 'go' : 'no-go', rest.slice(1).join(' '))
   }
 
   if (verb === 'stand-down' || verb === 'dismiss') {
@@ -353,7 +422,7 @@ async function staff($: EngineInterface, front: string | undefined, flags: Recor
   let spawned: Awaited<ReturnType<EngineInterface['agent']['spawn']>>
   try {
     spawned = await $.agent.spawn({
-      prompt: staffingOrder({ front, ...(project ? { project } : {}), callSign, root, hub, spokes: spokes.map(x => x.file), cwd, budget }),
+      prompt: staffingOrder({ front, ...(project ? { project } : {}), callSign, root, hub, spokes: spokes.map(x => x.file), cwd, budget, progress: `${frontDir}/progress.md` }),
       description: `${callSign} console`,
       subagentType: `mission-fleet:${CONTROLLER_TYPE}`,
       name,
@@ -376,5 +445,96 @@ async function staff($: EngineInterface, front: string | undefined, flags: Recor
     list.map(c => (c.callSign === callSign && c.status === 'staffing' ? { ...c, agentId, model: spawned.model, status: 'staffed' as const } : c)),
   )
   await log($, 'staff', callSign, `agent ${agentId} on ${spawned.model} in ${cwd}`)
+  const waiting = (await read($, pending)).filter(a => a.front === front)
+  if (waiting.length) {
+    const text = ['Advisories Flight held for your front while no console was staffed:', ...waiting.map(a => `- ${a.at.slice(0, 16)} ${a.text}`)].join('\n')
+    const sent = await $.session.send({ to: { agentId }, text })
+    const ids = new Set(waiting.map(a => a.id))
+    if (sent.isDelivered) await update($, pending, list => list.filter(a => !ids.has(a.id)))
+  }
   return `${callSign} staffed as ${name} (agent ${agentId}, ${spawned.model}) in ${cwd}. Its first status check arrives when it finishes reading the hub.`
+}
+
+async function hold($: EngineInterface, front: string, text: string) {
+  await update($, pending, list =>
+    list.some(a => a.front === front && a.text === text)
+      ? list
+      : [...list, { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, front, text, at: new Date().toISOString() }].slice(-200),
+  )
+}
+
+async function recordReport($: EngineInterface, agentId: string, answer: string) {
+  const c = (await read($, consoles)).find(x => x.agentId === agentId)
+  if (!c || !answer.trim()) return
+  await addLoop($, { from: c.callSign, to: 'FLIGHT', kind: 'status', text: answer.trim() })
+  const status = parseStatus(answer)
+  const items: Omit<PollItem, 'id'>[] = []
+  const at = new Date().toISOString()
+  if (!isNothing(status.blocked)) items.push({ at, from: c.callSign, agentId, kind: 'gate', title: status.blocked ?? '', detail: answer.trim(), state: 'open' })
+  if (!isNothing(status.contract)) {
+    const root = await findRoot($)
+    const maps: { front: string; text: string }[] = []
+    if (root) {
+      for (const e of await $.fs.list(`${root}/_command/portfolio`).catch(() => [])) {
+        if (e.kind !== 'dir') continue
+        const text = await $.fs.read(`${root}/_command/portfolio/${e.name}/_map.md`).catch(() => '')
+        if (text) maps.push({ front: e.name, text })
+      }
+    }
+    items.push({ at, from: c.callSign, agentId, kind: 'advisory', title: `contract change: ${status.contract ?? ''}`, detail: answer.trim(), state: 'open', targets: [...new Set(dependentsOf(c.front, maps, c.front))] })
+  }
+  if (items.length === 0) return
+  let first = 0
+  await update($, pollSeq, n => {
+    first = (n ?? 0) + 1
+    return (n ?? 0) + items.length
+  })
+  await update($, poll, list => {
+    // A console has one open gate: its latest report is its current state. Replaced gates stay listed in /console poll.
+    const hasGate = items.some(i => i.kind === 'gate')
+    const kept = list.map(p => (hasGate && p.state === 'open' && p.kind === 'gate' && p.from === c.callSign ? { ...p, state: 'superseded' as const } : p))
+    const fresh = items.filter(i => !kept.some(p => p.state === 'open' && p.from === i.from && p.title === i.title))
+    return [...kept, ...fresh.map((i, k) => ({ ...i, id: pollId(i.from, first + k) }))].slice(-200)
+  })
+  for (const i of items) await log($, 'poll', c.callSign, `${i.kind} opened: ${i.title.slice(0, 120)}`)
+}
+
+async function decide($: EngineInterface, id: string, verdict: 'go' | 'no-go', note: string): Promise<string> {
+  const matches = (await read($, poll)).filter(p => p.id.toLowerCase() === id.toLowerCase())
+  const item = matches[matches.length - 1]
+  if (!item) return `No poll item ${id}. /console poll lists the open ones.`
+  if (item.state !== 'open') return `${item.id} was already decided: ${item.state}.`
+  const verdictText = [
+    `${verdict === 'go' ? 'GO' : 'NO-GO'} from the founder on ${item.id}${note ? `: ${note}` : '.'}`,
+    `It answers your report of ${item.at.slice(0, 16)}:`,
+    item.detail,
+  ].join('\n')
+  const told: string[] = []
+  let undelivered: string | undefined
+  if (item.kind === 'gate') {
+    // Only the agent that raised the gate hears the decision, never a later console with the same call sign.
+    // Items opened before agent ids were recorded fall back to the console staffed under that call sign now.
+    const legacy = item.agentId ? undefined : (await read($, consoles)).find(c => c.callSign === item.from && c.status === 'staffed')?.agentId
+    const to = item.agentId || legacy
+    const sent = to ? await $.session.send({ to: { agentId: to }, text: verdictText }) : { isDelivered: false as const, reason: 'no agent recorded for this item' }
+    if (sent.isDelivered) told.push(item.from)
+    else undelivered = sent.reason
+  }
+  if (item.kind === 'advisory' && verdict === 'go') {
+    const fleet = await read($, consoles)
+    const text = `Advisory from Flight: ${item.from} reports a ${item.title}. Check what your front consumes from it before your next change.${note ? ` Founder note: ${note}` : ''}`
+    for (const front of item.targets ?? []) {
+      const target = fleet.find(c => c.front === front && c.status === 'staffed')
+      const sent = target ? await $.session.send({ to: { agentId: target.agentId }, text }) : undefined
+      if (target && sent?.isDelivered) told.push(target.callSign)
+      else await hold($, front, text)
+    }
+  }
+  await update($, poll, list =>
+    list.map(p => (p.id === item.id && p.at === item.at ? { ...p, state: verdict, decidedAt: new Date().toISOString(), ...(note ? { note } : {}), ...(undelivered ? { undelivered } : {}) } : p)),
+  )
+  await addLoop($, { from: 'FOUNDER', to: item.from, kind: 'decision', text: verdictText.split('\n')[0] ?? '' })
+  await log($, verdict, item.id, undelivered ? `NOT delivered to ${item.from}: ${undelivered}` : told.length ? `told ${told.join(', ')}` : 'recorded; held for unstaffed fronts')
+  if (undelivered) return `${item.id}: ${verdict.toUpperCase()} recorded, but NOT delivered to ${item.from} (${undelivered}). Call the console again when it is staffed.`
+  return `${item.id}: ${verdict.toUpperCase()} recorded${told.length ? `, told ${told.join(', ')}` : ''}${item.kind === 'advisory' && (item.targets ?? []).length > told.length ? '; unstaffed or unreachable fronts get it when staffed' : ''}.`
 }

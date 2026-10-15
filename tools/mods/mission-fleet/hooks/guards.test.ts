@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { isFlightOnly, isShellLikeTool, protectedFromSpoke, pushDestination, shellRefusal, tokenize, toolRefusal } from './guards'
+import { isFlightOnly, isShellLikeTool, pinnedDir, protectedFromSpoke, pushDestination, shellRefusal, tokenize, toolRefusal } from './guards'
 
 const C = (cmd: string, prot: string[] = []) => shellRefusal('controller', cmd, prot)
 const B = (cmd: string) => shellRefusal('back room', cmd, [])
@@ -197,4 +197,51 @@ test('environment prefixes and pager options cannot redirect git', () => {
   expect(C('git grep --open-files-in-pager=x foo')).toContain('can run a command')
   expect(C('git grep -n foo')).toBeUndefined()
   expect(C('NODE_ENV=test npm test')).toBeUndefined()
+})
+
+test('every fleet git and gh call pins its repo inside the console directory', () => {
+  const P = (cmd: string) => shellRefusal('controller', cmd, [], '/w/fronts/karnak')
+  expect(P('git status')).toContain('Pin the repo')
+  expect(P('gh pr list')).toContain('Pin the repo')
+  expect(P('cd /w/fronts/karnak && git status')).toBeUndefined()
+  expect(P('git -C /w/fronts/karnak status')).toBeUndefined()
+  expect(P('cd /w/fronts/karnak && cd sub && git status')).toBeUndefined()
+  expect(P('cd /w/fronts/karnak && gh pr checks 3')).toBeUndefined()
+  expect(P('cd /w && git status')).toContain('outside your console')
+  expect(P('cd /w/fronts/karnak/../tascode && git push -u origin feat/x')).toContain('outside your console')
+  expect(P('git -C /w/fronts/karnakX status')).toContain('outside your console')
+  expect(P('cd $REPO && git status')).toContain('Pin the repo')
+  expect(P('cd fronts/karnak && git status')).toContain('Pin the repo')
+  expect(P('npm test')).toBeUndefined()
+  expect(P('git -C /w/fronts/karnak -C /w/fronts/tascode status')).toContain('Pin the repo')
+  expect(P('cd /w/fronts/karnak && git --git-dir=/w/fronts/tascode/.git status')).toContain('Pin the repo')
+  expect(P('cd /w/fronts/karnak && git --work-tree /x status')).toContain('Pin the repo')
+  expect(P('cd /w/fronts/karnak && pushd /w/fronts/tascode && git status')).toContain('Pin the repo')
+  expect(pinnedDir(tokenize('cd /a && cd ../b && git log').commands, 2)).toBe('/b')
+  expect(toolRefusal('controller', 'Bash', { command: 'git status' }, [], '/w/fronts/karnak')).toContain('Pin the repo')
+})
+
+test('a fleet agent cannot start another Claude session', () => {
+  expect(C('claude -p --model haiku "hi"')).toContain('never starts another Claude session')
+  expect(B('cd /tmp && claude -p x')).toContain('never starts another Claude session')
+})
+
+test('a pin counts only for a directly preceding cd chain, with no options or subshells', () => {
+  const P = (cmd: string) => shellRefusal('controller', cmd, [], '/w/fronts/karnak')
+  expect(P('false && cd /w/fronts/karnak; git status')).toContain('Pin the repo')
+  expect(P('(cd /w/fronts/karnak); git status')).toContain('Pin the repo')
+  expect(P('cd /w/fronts/karnak | cat; git status')).toContain('Pin the repo')
+  expect(P('cd -P /w/fronts/karnak && git status')).toContain('Pin the repo')
+  expect(P('cd /w/fronts/karnak && npm test && git status')).toContain('Pin the repo')
+  expect(P('cd /w/fronts/karnak/ && git status')).toBeUndefined()
+  expect(P('cd /w/fronts/karnak && gh -R other/repo pr list')).toContain('gh -R')
+})
+
+test('gh repo overrides in any form are refused', () => {
+  const P = (cmd: string) => shellRefusal('controller', cmd, [], '/w/fronts/karnak')
+  expect(P('cd /w/fronts/karnak && gh pr list -Rother/repo')).toContain('gh -R')
+  expect(P('cd /w/fronts/karnak && gh pr list --repo=other/repo')).toContain('gh -R')
+  expect(P('export GH_REPO=other/repo')).toContain('GH_')
+  expect(P('export GIT_DIR=/x')).toContain('GIT_')
+  expect(P('export NODE_ENV=test')).toBeUndefined()
 })

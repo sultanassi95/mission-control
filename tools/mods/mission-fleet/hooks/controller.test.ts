@@ -15,11 +15,13 @@ test('the staffing order names the scope, the files, the directory and the budge
   const order = staffingOrder({
     front: 'fieldkit', project: 'api', callSign: 'FIELDKIT-API', root: '/p',
     hub: '/p/_command/portfolio/fieldkit/_front.md', spokes: ['/p/_command/portfolio/fieldkit/api/api.md'],
-    cwd: '/p/fronts/fieldkit/api', budget: 2,
+    cwd: '/p/fronts/fieldkit/api', budget: 2, progress: '/p/_command/portfolio/fieldkit/progress.md',
   })
   expect(order).toContain('FIELDKIT-API console, owning the project "api" of front "fieldkit"')
   expect(order).toContain('Hub: /p/_command/portfolio/fieldkit/_front.md')
-  expect(order).toContain('Your working directory: /p/fronts/fieldkit/api')
+  expect(order).toContain('Your repo directory: /p/fronts/fieldkit/api')
+  expect(order).toContain('cd /p/fronts/fieldkit/api && git')
+  expect(order).toContain('Progress log: /p/_command/portfolio/fieldkit/progress.md')
   expect(order).toContain('up to 2 sub-agents')
 })
 
