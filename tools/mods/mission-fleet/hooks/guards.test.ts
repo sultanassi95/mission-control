@@ -60,9 +60,10 @@ test('git and gh run only at the head of a command', () => {
   for (const cmd of ['echo origin main | xargs git push', 'bash -c "git push origin main"', 'sh -c \'git stash\'', 'eval "git push origin main"', 'python3 -c "import os; os.system(\'git push origin main\')"']) {
     expect(C(cmd)).toBeDefined()
   }
-  for (const cmd of ['if true; then git stash; fi', '(git stash)', '{ git stash; }', '! git stash', 'command git stash', 'env git stash', 'time git stash', 'nohup git stash', '\\git stash']) {
+  for (const cmd of ['if true; then git stash; fi', '(git stash)', '{ git stash; }', '! git stash', 'command git stash', 'time git stash', 'nohup git stash', '\\git stash']) {
     expect(C(cmd)).toContain('never stashes')
   }
+  expect(C('env git stash')).toContain('environment prefix')
   expect(C('git -c alias.p=push p origin main')).toContain('-c')
   expect(C('git -c remote.origin.pushurl=x push origin feat/x')).toContain('-c')
   expect(C('git p origin main')).toContain('allowlist')
@@ -186,4 +187,14 @@ test('re-pass F10-F11: ordinary reads and pipelines pass, git diff --output does
   expect(C('echo "git push origin main" | bash -o posix')).toBeDefined()
   expect(C('echo "git push origin main" | bash /dev/stdin')).toBeDefined()
   expect(C('git ls-files | xargs sh -c "git stash"')).toBeDefined()
+})
+
+test('environment prefixes and pager options cannot redirect git', () => {
+  expect(C('GIT_SSH_COMMAND="sh -c x" git push -u origin feat/x')).toContain('environment prefix')
+  expect(C('GIT_CONFIG_PARAMETERS="\'alias.push=!x\'" git status')).toContain('environment prefix')
+  expect(C('env GIT_DIR=/tmp/x git status')).toContain('environment prefix')
+  expect(C('git grep -O"sh -c x" foo')).toContain('can run a command')
+  expect(C('git grep --open-files-in-pager=x foo')).toContain('can run a command')
+  expect(C('git grep -n foo')).toBeUndefined()
+  expect(C('NODE_ENV=test npm test')).toBeUndefined()
 })

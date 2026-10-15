@@ -292,10 +292,11 @@ function gitRefusal(role: Role, rest: Word[], protectedBranches: string[]): stri
     return role === 'controller' ? `git ${name} is not on a Controller's allowlist.` : `A back-room agent never runs git ${name}; report to your Controller instead.`
   }
   const args = rest.slice(i + 1)
-  const RUNNERS = ['--exec', '--upload-pack', '--receive-pack', '--ext-diff', '--textconv', '--output']
+  const RUNNERS = ['--exec', '--upload-pack', '--receive-pack', '--ext-diff', '--textconv', '--output', '--open-files-in-pager']
   const runs = args.find(a => {
     const opt = a.text.split('=')[0] ?? ''
     if (name === 'rebase' && (opt === '-x' || /^-[A-Za-z]*x/.test(opt) && !opt.startsWith('--'))) return true
+    if (name === 'grep' && /^-[A-Za-z]*O/.test(opt) && !opt.startsWith('--')) return true
     return opt.startsWith('--') && opt.length >= 4 && RUNNERS.some(r => r.startsWith(opt))
   })
   if (runs) return `git ${name} ${runs.text} can run a command or write a file; it is not allowed here.`
@@ -388,6 +389,9 @@ export function shellRefusal(role: Role, command: string, protectedBranches: str
     }
     // Fail closed: on a line that names git or gh, no interpreter runs at all (a pipe, heredoc, -c, /dev/stdin or option can feed it a program).
     if (rawMentionsGit && READS_STDIN.test(name)) return `git and gh run only as plain commands; ${name} on the same line is not allowed. Run it as a separate command.`
+    if ((name === 'git' || name === 'gh') && s.words.slice(0, s.words.indexOf(head)).some(w => /^[A-Za-z_][A-Za-z0-9_]*=/.test(w.text) || w.text === 'env')) {
+      return `${name} runs here with no environment prefix (VAR=... or env): variables like GIT_SSH_COMMAND or GIT_CONFIG_PARAMETERS can redirect it.`
+    }
     if (name === 'git') {
       const why = gitRefusal(role, rest, protectedBranches)
       if (why) return why
