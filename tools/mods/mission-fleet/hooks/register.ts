@@ -7,7 +7,7 @@ import { commonDir, CONTROLLER_PROMPT, CONTROLLER_TYPE, DEFAULT_BUDGET, EFFORTS,
 
 const APP_PORT = 4777
 const MODEL_LIST = Object.keys(MODEL_IDS).join(', ')
-import { protectedFromSpoke, toolRefusal } from './guards'
+import { fleetSelfApproval, protectedFromSpoke, toolRefusal } from './guards'
 import { dependentsOf, isNothing, parseStatus, pollId, prSignature, prsIn } from './loops'
 import type { Role as GuardRole } from './guards'
 
@@ -192,6 +192,14 @@ export const register: Register = on => {
 
   // Guards: what a Controller and its back room may run. A guard that fails denies.
   on('tool.check', async ($, e, next) => {
+    // Auto mode cannot judge a call a plugin raised, so the fleet approves its own sends and spawns.
+    if (next.origin.plugin === 'mission-fleet' && !e.agentId) {
+      const seat = fleetSelfApproval(e.tool, e.input, await read($, consoles))
+      if (seat) {
+        await log($, 'approve', seat, `fleet ${e.tool === 'Agent' ? 'staffing' : 'message'} approved by the fleet, not the mode`)
+        return { decision: 'allow' as const }
+      }
+    }
     if (!e.agentId) return next(e)
     const role = await roleOf($, e.agentId)
     if (!role) return next(e)

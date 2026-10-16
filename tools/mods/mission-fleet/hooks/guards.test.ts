@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { isFlightOnly, isShellLikeTool, pinnedDir, protectedFromSpoke, pushDestination, shellRefusal, tokenize, toolRefusal } from './guards'
+import { fleetSelfApproval, isFlightOnly, isShellLikeTool, pinnedDir, protectedFromSpoke, pushDestination, shellRefusal, tokenize, toolRefusal } from './guards'
 
 const C = (cmd: string, prot: string[] = []) => shellRefusal('controller', cmd, prot)
 const B = (cmd: string) => shellRefusal('back room', cmd, [])
@@ -321,4 +321,25 @@ test('command names are matched in any case, as a case-insensitive disk runs the
   expect(C('Gh pr merge 12')).toBeDefined()
   expect(B('GIT push origin feat/x')).toBeDefined()
   expect(C("BASH <<'EOF'\ncat ~/.mission''-control/app-tok''en\nEOF")).toBeDefined()
+})
+
+test('the fleet approves its own send only to an agent it has on record', () => {
+  const seats = [
+    { callSign: 'MISSION-CONTROL', agentId: 'a1', name: 'console-mission-control', status: 'staffed' },
+    { callSign: 'KARNAK', agentId: '', name: 'console-karnak', status: 'staffing' },
+  ]
+  expect(fleetSelfApproval('SendMessage', { to: 'a1', message: 'go' }, seats)).toBe('MISSION-CONTROL')
+  expect(fleetSelfApproval('SendMessage', { to: 'someone-else', message: 'go' }, seats)).toBeUndefined()
+  expect(fleetSelfApproval('SendMessage', { to: '', message: 'go' }, seats)).toBeUndefined()
+  expect(fleetSelfApproval('SendMessage', { message: 'go' }, seats)).toBeUndefined()
+  expect(fleetSelfApproval('SendMessage', { to: 'a1' }, [])).toBeUndefined()
+})
+
+test('the fleet approves its own spawn only of a Controller under a reserved console name', () => {
+  const seats = [{ callSign: 'KARNAK', agentId: '', name: 'console-karnak', status: 'staffing' }]
+  expect(fleetSelfApproval('Agent', { subagent_type: 'mission-fleet:controller', name: 'console-karnak' }, seats)).toBe('KARNAK')
+  expect(fleetSelfApproval('Agent', { subagent_type: 'general-purpose', name: 'console-karnak' }, seats)).toBeUndefined()
+  expect(fleetSelfApproval('Agent', { subagent_type: 'mission-fleet:controller', name: 'console-other' }, seats)).toBeUndefined()
+  expect(fleetSelfApproval('Agent', { subagent_type: 'mission-fleet:controller', name: 'console-karnak' }, [{ ...seats[0]!, status: 'staffed', agentId: 'a2' }])).toBeUndefined()
+  expect(fleetSelfApproval('Bash', { command: 'ls' }, seats)).toBeUndefined()
 })

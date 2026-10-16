@@ -537,3 +537,25 @@ export function protectedFromSpoke(baseBranchLine: string | undefined): string[]
   }
   return [...out]
 }
+
+/** A console as the self-approval check reads it. */
+export type FleetSeat = { callSign: string; agentId: string; name: string; status: string }
+
+/**
+ * Whether one of the fleet's own sends or spawns may skip the mode's decider, and for which
+ * console. Only the founder's console actions raise these, and the auto mode classifier
+ * cannot judge a call a plugin raised. Anything else returns undefined and is decided as usual.
+ */
+export function fleetSelfApproval(tool: string, input: unknown, seats: FleetSeat[]): string | undefined {
+  const i = (input ?? {}) as Record<string, unknown>
+  if (tool === 'SendMessage') {
+    const to = i.to
+    if (typeof to !== 'string' || to === '') return undefined
+    return seats.find(s => s.agentId !== '' && s.agentId === to)?.callSign
+  }
+  if (tool === 'Agent') {
+    if (i.subagent_type !== 'mission-fleet:controller' || typeof i.name !== 'string') return undefined
+    return seats.find(s => s.status === 'staffing' && s.agentId === '' && s.name === i.name)?.callSign
+  }
+  return undefined
+}
