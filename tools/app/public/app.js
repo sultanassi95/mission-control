@@ -81,6 +81,14 @@
   const fleet = () => S.state?.fleet ?? {}
   const consoles = () => fleet().consoles ?? []
   const pollItems = () => fleet().poll ?? []
+  // Each call sign's colour slot, 0 to 7, as the fleet keeps it (placeSlots in the mod's hooks/loops.ts).
+  const slots = () => fleet().slots ?? {}
+  // A call sign as the app draws it everywhere: a chip in its Controller's colour, the idle fill when it
+  // has none (badge.js, which also gives the colour's class).
+  const slotClass = sign => (window.mcBadge ? window.mcBadge.slotClass(slots(), sign) : '')
+  const call = sign => (window.mcBadge ? window.mcBadge.chip(sign, slots()) : `<span class="call">${esc(sign)}</span>`)
+  // The call signs a Flight message's marker may name: every console's, and every one with a kept colour.
+  const knownSigns = () => new Set([...consoles().map(c => c.callSign), ...Object.keys(slots())])
   // A decision the app sent to Flight holds its gate for the relay code's lifetime (RELAY_TTL in guards.ts).
   const SENT_HOLD = 10 * 60_000
   const sentToFlight = p => Boolean(p.sentAt) && Date.now() - Date.parse(p.sentAt) <= SENT_HOLD
@@ -111,15 +119,22 @@
     if (!S.state) parts.push('<p class="sys">Waiting for the first state from Flight…</p>')
     else if (!f.messages?.length) parts.push('<p class="empty">No messages yet. Ask Flight anything, or tap / for a command.</p>')
     // Flight's replies are markdown, rendered by md.js (which escapes first); the founder's own messages stay plain text.
+    // A reply whose first line is the call-sign marker (badge.js) is badged with those Controllers, and the marker leaves the text.
+    const known = knownSigns()
     for (const m of f.messages ?? []) {
       const notice = m.role === 'user' ? harnessNotice(m.text) : null
       if (notice !== null) {
         if (notice) parts.push(`<p class="sys">${esc(notice)}</p>`)
         continue
       }
-      parts.push(m.role === 'user'
-        ? userBubble(typed(m.text))
-        : `<div class="msg assistant md"><div class="who">FLIGHT</div>${window.mcMarkdown ? window.mcMarkdown(str(m.text)) : esc(str(m.text))}</div>`)
+      if (m.role === 'user') {
+        parts.push(userBubble(typed(m.text)))
+        continue
+      }
+      const { signs, text } = window.mcBadge ? window.mcBadge.parse(str(m.text), known) : { signs: [], text: str(m.text) }
+      // A screen reader hears "FLIGHT, about MISSION-CONTROL, FIELDKIT"; on screen the chips stand alone.
+      const who = window.mcBadge ? window.mcBadge.label(signs, slots()) : 'FLIGHT'
+      parts.push(`<div class="msg assistant md"><div class="who">${who}</div>${window.mcMarkdown ? window.mcMarkdown(text) : esc(text)}</div>`)
     }
     for (const q of S.queued) parts.push(userBubble(q.text, q.preview, `You · ${q.sent ? 'waiting for Flight' : 'sending'}`))
     if (f.ask) parts.push(askCard(f.ask))
@@ -142,7 +157,7 @@
       const st = statusOf(c)
       const r = reportOf(c.callSign)
       h += `<button class="card stripe-${st[0]}" type="button" data-a="open" data-v="${esc(c.callSign)}">
-        <span class="head"><span class="call">${esc(c.callSign)}</span>${pill(st)}</span>
+        <span class="head">${call(c.callSign)}${pill(st)}</span>
         <span class="task">${esc(r.state ?? 'No status check yet.')}</span>
         <span class="meta"><span class="tag">${esc(c.applied ?? c.model)}</span><span>${esc(c.project ? `${c.front}/${c.project}` : c.front)}</span><span>budget ${esc(c.budget ?? '-')}</span></span>
       </button>`
@@ -156,7 +171,7 @@
     const open = items.filter(p => p.state === 'open' && !sentToFlight(p))
     let h = ''
     for (const p of items.filter(x => x.state === 'open' && sentToFlight(x))) {
-      h += `<article class="gate"><div class="kind"><span class="call">${esc(p.from)}</span><span>· ${esc(p.id)}</span></div><h3>${esc(p.title)}</h3><p class="hint" role="status">Sent to Flight. It runs once Flight is free.</p></article>`
+      h += `<article class="gate"><div class="kind">${call(p.from)}<span>· ${esc(p.id)}</span></div><h3>${esc(p.title)}</h3><p class="hint" role="status">Sent to Flight. It runs once Flight is free.</p></article>`
     }
     for (const p of items.filter(undelivered).reverse()) h += undeliveredCard(p)
     if (!open.length && !items.some(x => (x.state === 'open' && sentToFlight(x)) || undelivered(x))) h += '<p class="empty">Nothing is waiting on you. New go/no-go calls appear here.</p>'
@@ -164,7 +179,7 @@
     open.forEach((p, i) => {
       const orphan = down.has(p.from)
       h += `<article class="gate">
-        <div class="kind"><span class="call">${esc(p.from)}</span><span>· ${esc(p.kind)} · ${esc(p.id)} · ${esc(time(p.at))}</span></div>
+        <div class="kind">${call(p.from)}<span>· ${esc(p.kind)} · ${esc(p.id)} · ${esc(time(p.at))}</span></div>
         <h3>${esc(p.title)}</h3>
         ${orphan ? `<p class="hint">${esc(p.from)} is stood down: your answer is held for the next ${esc(p.from)} Controller.</p>` : ''}
         ${p.targets?.length ? `<p class="hint">Tells: ${esc(p.targets.join(', '))}</p>` : ''}
@@ -180,7 +195,7 @@
     if (kept.length) h += '<p class="section-label">Held for the next Controller</p>' + kept.map(heldCard).join('')
     const decided = items.filter(p => (p.state === 'go' || p.state === 'no-go' || p.state === 'dismissed') && !undelivered(p) && !held(p)).slice(-6).reverse()
     const replaced = items.filter(p => p.state === 'superseded').slice(-3).reverse()
-    if (decided.length) h += '<p class="section-label">Decided</p>' + decided.map(p => `<p class="resolved">${pill(p.state === 'go' ? ['done', 'Go'] : p.state === 'dismissed' ? ['idle', 'Dismissed'] : ['failed', 'No-go'])}<span>${esc(p.id)} · ${esc(p.from)}</span></p>`).join('')
+    if (decided.length) h += '<p class="section-label">Decided</p>' + decided.map(p => `<p class="resolved">${pill(p.state === 'go' ? ['done', 'Go'] : p.state === 'dismissed' ? ['idle', 'Dismissed'] : ['failed', 'No-go'])}<span>${esc(p.id)} · ${call(p.from)}</span></p>`).join('')
     if (replaced.length) h += '<p class="section-label">Replaced by a newer report</p>' + replaced.map(p => `<p class="resolved">${pill(['idle', 'Replaced'])}<span>${esc(p.id)} · ${esc(str(p.title).slice(0, 90))}</span></p>`).join('')
     return h
   }
@@ -200,7 +215,7 @@
     else if (p.seat === 'live') body = `<p class="hint">${why} Retry sends the same ${verdict} to ${esc(p.from)}.</p>${raw}<div class="btnrow two"><button class="${p.state === 'go' ? 'go secondary' : 'nogo'}" type="button" data-a="gateretry" data-v="${esc(p.id)}">Retry ${verdict}</button>${dismiss('ghost')}</div>`
     else if (p.seat === 'replaced') body = `<p class="hint">${why} The ${esc(p.from)} Controller that raised it has been replaced. Tell the new one from Flight, or dismiss this.</p>${raw}<div class="btnrow one">${dismiss('warn')}</div>`
     else body = `<p class="hint">${why} ${esc(p.from)} is no longer staffed. Staff the console again from Flight, then tell it the decision, or dismiss this.</p>${raw}<div class="btnrow one">${dismiss('warn')}</div>`
-    return `<article class="gate undelivered"><div class="kind"><span class="call">${esc(p.from)}</span><span>· ${esc(p.id)}</span></div><h3>Your ${verdict} did not reach ${esc(p.from)}</h3>${body}</article>`
+    return `<article class="gate undelivered"><div class="kind">${call(p.from)}<span>· ${esc(p.id)}</span></div><h3>Your ${verdict} did not reach ${esc(p.from)}</h3>${body}</article>`
   }
 
   // A decision made after the Controller that raised it stood down: kept until the next Controller
@@ -208,20 +223,24 @@
   function heldCard(p) {
     const verdict = p.state === 'go' ? 'GO' : 'NO-GO'
     const key = `${p.id}:held`
-    return `<article class="gate held"><div class="kind"><span class="call">${esc(p.from)}</span><span>· ${esc(p.id)} · ${esc(time(p.held))}</span></div><h3>Your ${verdict} is held for the next ${esc(p.from)} Controller</h3><p class="hint">The ${esc(p.from)} Controller that raised it had stood down when you decided. The next Controller staffed under ${esc(p.from)} gets it with its staffing. Dismiss clears it and nothing is sent.</p><details data-id="${esc(key)}"${S.details.has(key) ? ' open' : ''}><summary>The report it answers</summary><pre>${esc(p.detail)}</pre></details><div class="btnrow one"><button class="warn" type="button" data-a="gatedismiss" data-v="${esc(p.id)}">Dismiss</button></div></article>`
+    return `<article class="gate held"><div class="kind">${call(p.from)}<span>· ${esc(p.id)} · ${esc(time(p.held))}</span></div><h3>Your ${verdict} is held for the next ${esc(p.from)} Controller</h3><p class="hint">The ${esc(p.from)} Controller that raised it had stood down when you decided. The next Controller staffed under ${esc(p.from)} gets it with its staffing. Dismiss clears it and nothing is sent.</p><details data-id="${esc(key)}"${S.details.has(key) ? ' open' : ''}><summary>The report it answers</summary><pre>${esc(p.detail)}</pre></details><div class="btnrow one"><button class="warn" type="button" data-a="gatedismiss" data-v="${esc(p.id)}">Dismiss</button></div></article>`
   }
 
   function viewLoops() {
     const rows = fleet().loops ?? []
-    const signs = ['ALL', 'FLIGHT', 'FOUNDER', ...new Set(consoles().map(c => c.callSign))]
+    const named = [...new Set(consoles().map(c => c.callSign))]
+    const signs = ['ALL', 'FLIGHT', 'FOUNDER', ...named]
+    // A Controller wears its colour here too: its filter outlined, filled while pressed. FLIGHT and FOUNDER stay neutral.
+    const known = knownSigns()
+    const who = s => (known.has(s) ? call(s) : esc(s))
     const list = rows.filter(l => S.filter === 'ALL' || l.from === S.filter || l.to === S.filter).slice().reverse()
-    let h = `<div class="filters" role="group" aria-label="Filter by call sign">${signs.map(s => `<button type="button" data-a="filter" data-v="${esc(s)}" aria-pressed="${S.filter === s}">${esc(s)}</button>`).join('')}</div>`
+    let h = `<div class="filters" role="group" aria-label="Filter by call sign">${signs.map(s => `<button type="button"${known.has(s) ? ` class="signed${slotClass(s)}"` : ''} data-a="filter" data-v="${esc(s)}" aria-pressed="${S.filter === s}">${esc(s)}</button>`).join('')}</div>`
     if (!list.length) h += '<p class="empty">No loop traffic yet.</p>'
     list.forEach(l => {
       const key = `${l.at}|${l.from}|${l.to}|${l.kind}`
       const full = S.open.has(key)
       const text = full ? str(l.text) : str(l.text).split('\n')[0]
-      h += `<button type="button" class="loop ${l.kind === 'advisory' ? 'adv' : ''}" data-a="expand" data-v="${esc(key)}" aria-expanded="${full}"><span class="route">${esc(l.from)} → ${esc(l.to)}<span class="kindtag">${esc(l.kind)}</span></span><time>${esc(time(l.at))}</time><span class="body">${esc(text)}</span></button>`
+      h += `<button type="button" class="loop ${l.kind === 'advisory' ? 'adv' : ''}" data-a="expand" data-v="${esc(key)}" aria-expanded="${full}"><span class="route">${who(l.from)} → ${who(l.to)}<span class="kindtag">${esc(l.kind)}</span></span><time>${esc(time(l.at))}</time><span class="body">${esc(text)}</span></button>`
     })
     return h
   }
@@ -247,7 +266,7 @@
       const c = consoles().find(x => x.callSign === S.sel)
       if (!c) return ''
       const r = reportOf(c.callSign)
-      head = `<span class="call">${esc(c.callSign)}</span> ${pill(statusOf(c))}`
+      head = `${call(c.callSign)} ${pill(statusOf(c))}`
       body = `<dl class="report"><dt>State</dt><dd>${esc(r.state ?? '—')}</dd><dt>Shipped</dt><dd>${esc(r.shipped ?? '—')}</dd><dt>Blocked</dt><dd>${esc(r.blocked ?? '—')}</dd><dt>Next</dt><dd>${esc(r.next ?? '—')}</dd></dl>
         <p class="hint">${esc(c.front)}${c.project ? `/${esc(c.project)}` : ''} · ${esc(c.applied ?? c.model)} · budget ${esc(c.budget)} · ${esc(c.cwd)}</p>
         ${c.status === 'stood-down' ? '<p class="hint">This console is stood down. Staff it again from Flight.</p>' : `<div class="btnrow"><button class="ghost" type="button" data-a="callc">Call</button><button class="ghost" type="button" data-a="retune">Retune</button><button class="danger" type="button" data-a="standdown">Stand down</button></div>`}`
@@ -255,13 +274,13 @@
       const c = consoles().find(x => x.callSign === S.sel)
       if (!c) return ''
       const t = (S.tune ??= { model: 'sonnet', effort: 'medium' })
-      head = `Retune <span class="call">${esc(c.callSign)}</span>`
+      head = `Retune ${call(c.callSign)}`
       body = `<p class="section-label">Model</p><div class="seg" role="group" aria-label="Model">${models().map(m => `<button type="button" data-a="tm" data-v="${m}" aria-pressed="${t.model === m}">${m}</button>`).join('')}</div>
         <p class="section-label">Effort</p><div class="seg" role="group" aria-label="Effort">${efforts().map(e => `<button type="button" data-a="te" data-v="${e}" aria-pressed="${t.effort === e}">${e}</button>`).join('')}</div>
         <p class="hint">Applies from the console's next model request. Its work keeps its context.</p>
         <button class="primary" type="button" data-a="applytune">Retune to ${esc(t.model)} · ${esc(t.effort)}</button>`
     } else if (S.sheet === 'standdown') {
-      head = `Stand down <span class="call">${esc(S.sel)}</span>?`
+      head = `Stand down ${call(S.sel)}?`
       body = `<p>The console writes a dated handoff to its front's progress.md, then ends. <b>Dismiss</b> ends it with nothing written.</p>
         <div class="btnrow"><button class="ghost" type="button" data-a="back">Keep</button><button class="ghost" type="button" data-a="dismiss">Dismiss</button><button class="danger" type="button" data-a="sdyes">Stand down</button></div>`
     } else if (S.sheet === 'profiles') {

@@ -1,4 +1,4 @@
-import type { PendingAdvisory, PollItem } from '../types'
+import type { PendingAdvisory, PollItem, Slots } from '../types'
 
 export type StatusCheck = {
   state?: string
@@ -132,6 +132,64 @@ export function undeliveredAdvice(item: Pick<PollItem, 'id' | 'from' | 'state'>,
 /** A poll item as the app draws it: an undelivered decision carries its plain reason and where its Controller stands. */
 export function cardFacts(item: PollItem, seats: readonly Seat[]): PollItem & { why?: string; seat?: SeatState } {
   return isUndelivered(item) ? { ...item, why: plainReason(item.undelivered ?? ''), seat: seatState(item, seats) } : item
+}
+
+/** How many colours the app gives call signs: the tokens --slot-1 to --slot-8. */
+export const SLOT_COUNT = 8
+
+/** The slot map as the store holds it, keeping only entries whose slot is a whole number in range. */
+export function asSlots(value: unknown): Slots {
+  const out: Slots = {}
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return out
+  for (const [sign, slot] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof slot === 'number' && Number.isInteger(slot) && slot >= 0 && slot < SLOT_COUNT) out[sign] = slot
+  }
+  return out
+}
+
+/** A console as slot placing reads it. */
+export type Staffed = { callSign: string; status: string; staffedAt?: string }
+
+/**
+ * Gives every live console (staffed, or being staffed) a colour slot no other live console holds.
+ * In staffing order, each keeps its remembered slot unless a console staffed before it holds that
+ * slot. One with no slot, or whose slot is held, takes the lowest free slot no other call sign
+ * remembers, else the lowest free slot; with every slot held it has none, and the app draws its chip
+ * plain. A stood-down call sign keeps its entry. Returns the same map when nothing changes.
+ */
+export function placeSlots(map: Slots, seats: readonly Staffed[]): Slots {
+  // One seat per call sign, as staffing writes them; a second record under one call sign is ignored.
+  const live: Staffed[] = []
+  for (const s of seats) if ((s.status === 'staffed' || s.status === 'staffing') && !live.some(l => l.callSign === s.callSign)) live.push(s)
+  live.sort((a, b) => (a.staffedAt ?? '').localeCompare(b.staffedAt ?? ''))
+  const held = new Set<number>()
+  const unplaced: string[] = []
+  for (const s of live) {
+    const slot = map[s.callSign]
+    if (slot !== undefined && !held.has(slot)) held.add(slot)
+    else unplaced.push(s.callSign)
+  }
+  if (unplaced.length === 0) return map
+  const out: Slots = { ...map }
+  let changed = false
+  for (const sign of unplaced) {
+    const remembered = new Set(Object.entries(out).filter(([other]) => other !== sign).map(([, slot]) => slot))
+    const free = Array.from({ length: SLOT_COUNT }, (_, n) => n).filter(n => !held.has(n))
+    const slot = free.find(n => !remembered.has(n)) ?? free[0]
+    if (slot === undefined) {
+      if (sign in out) {
+        delete out[sign]
+        changed = true
+      }
+      continue
+    }
+    held.add(slot)
+    if (out[sign] !== slot) {
+      out[sign] = slot
+      changed = true
+    }
+  }
+  return changed ? out : map
 }
 
 /** How many closed items the app keeps as recent history. */

@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import type { PollItem } from '../types'
-import { APP_HISTORY, appPoll, cardFacts, dependentsOf, heldText, isHeld, isNothing, isUndelivered, liveSeat, parseStatus, plainReason, pollId, prSignature, prsIn, seatState } from './loops'
+import { APP_HISTORY, appPoll, asSlots, cardFacts, dependentsOf, heldText, isHeld, isNothing, isUndelivered, liveSeat, parseStatus, placeSlots, plainReason, pollId, prSignature, prsIn, seatState, SLOT_COUNT } from './loops'
 
 // The refusal MI1's GO met on 2026-10-16, in part: written for the model, not for the founder.
 const AUTO_MODE = 'The server-side auto mode classifier gave no verdict for SendMessage: the request that produced this action did not ask for one. Issue the action again once, as-is; if it is denied again, continue with other tasks and tell the user.'
@@ -130,4 +130,49 @@ test('the next Controller is told each held decision with the report it answers,
   expect(text).toContain('KARNAK reports a contract change: /v1 ids.')
   expect(heldText('MISSION-CONTROL', [go], [])).not.toContain('Advisor')
   expect(heldText('MISSION-CONTROL', [], [])).toBe('')
+})
+
+// ---- Call-sign colours (MC-129) ----
+
+const T0 = '2026-10-16T08:00:00.000Z'
+const T1 = '2026-10-16T09:00:00.000Z'
+const T2 = '2026-10-16T09:05:00.000Z'
+const seat = (callSign: string, staffedAt: string, status = 'staffed') => ({ callSign, staffedAt, status })
+
+test('two Controllers staffed together never share a colour, the first staffed taking the lowest', () => {
+  expect(placeSlots({}, [seat('SHELF', T2), seat('FIELDKIT', T1)])).toEqual({ FIELDKIT: 0, SHELF: 1 })
+  // A console still being staffed holds its colour as well.
+  expect(placeSlots({ FIELDKIT: 0 }, [seat('FIELDKIT', T1), seat('SHELF', T2, 'staffing')])).toEqual({ FIELDKIT: 0, SHELF: 1 })
+})
+
+test('a call sign staffed again keeps its colour, and the same map comes back when nothing moves', () => {
+  const map = { FIELDKIT: 3, SHELF: 5 }
+  expect(placeSlots(map, [seat('FIELDKIT', T1), seat('SHELF', T2)])).toBe(map)
+  // A second record under one call sign is not a second console.
+  expect(placeSlots(map, [seat('FIELDKIT', T1), seat('FIELDKIT', T2, 'staffing'), seat('SHELF', T2)])).toBe(map)
+})
+
+test('when a console staffed earlier holds the colour a call sign remembers, the later one moves to a colour no other call sign remembers', () => {
+  const map = { FIELDKIT: 2, SHELF: 2, 'MISSION-CONTROL': 0 }
+  expect(placeSlots(map, [seat('SHELF', T2), seat('FIELDKIT', T1), seat('MISSION-CONTROL', T0, 'stood-down')])).toEqual({ FIELDKIT: 2, SHELF: 1, 'MISSION-CONTROL': 0 })
+})
+
+test('a stood-down Controller keeps its colour, and one staffed after it takes another while one is free', () => {
+  expect(placeSlots({ 'MISSION-CONTROL': 0 }, [seat('MISSION-CONTROL', T0, 'stood-down'), seat('FIELDKIT', T1)])).toEqual({ 'MISSION-CONTROL': 0, FIELDKIT: 1 })
+  // Every free colour remembered by another call sign: the lowest free one is taken.
+  const all = Object.fromEntries(Array.from({ length: SLOT_COUNT }, (_, n) => [`OLD-${n}`, n]))
+  expect(placeSlots(all, [seat('FIELDKIT', T1)]).FIELDKIT).toBe(0)
+})
+
+test('a ninth Controller staffed beside eight has no colour, so the app draws its chip plain', () => {
+  const eight = Array.from({ length: SLOT_COUNT }, (_, n) => seat(`FRONT-${n}`, `2026-10-16T09:0${n}:00.000Z`))
+  const map = { ...Object.fromEntries(eight.map((s, n) => [s.callSign, n])), NINTH: 3 }
+  const placed = placeSlots(map, [...eight, seat('NINTH', '2026-10-16T09:30:00.000Z')])
+  expect(placed.NINTH).toBeUndefined()
+  expect(eight.map(s => placed[s.callSign])).toEqual([0, 1, 2, 3, 4, 5, 6, 7])
+})
+
+test('a stored slot map keeps only whole slot numbers in range', () => {
+  expect(asSlots({ FIELDKIT: 1, SHELF: SLOT_COUNT, A: -1, B: 1.5, C: '2', D: null })).toEqual({ FIELDKIT: 1 })
+  for (const bad of [undefined, null, 'x', 3, [1, 2]]) expect(asSlots(bad)).toEqual({})
 })

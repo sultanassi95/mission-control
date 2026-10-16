@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { AuditEntry, Console, Lineage, LoopEntry, PendingAdvisory, PollItem, PrWatch, Reservation } from '../types'
+import type { AuditEntry, Console, Lineage, LoopEntry, PendingAdvisory, PollItem, PrWatch, Reservation, Slots } from '../types'
 
 import { commonDir, CONTROLLER_PROMPT, CONTROLLER_TYPE, DEFAULT_BUDGET, EFFORTS, isInsideRelative, MODEL_IDS, remoteOwner, spokeField, spokePath, staffingOrder } from './controller'
 
@@ -9,7 +9,7 @@ const APP_PORT = 4777
 const MODEL_LIST = Object.keys(MODEL_IDS).join(', ')
 import { awaitingFlight, fleetSelfApproval, isRelayedVerb, protectedFromSpoke, RELAY_TTL, relayHold, splitRelayCode, spendRelayCode, toolRefusal } from './guards'
 import type { RelayCodes } from './guards'
-import { appPoll, cardFacts, dependentsOf, heldText, isHeld, isNothing, isUndelivered, liveSeat, parseStatus, plainReason, pollId, prSignature, prsIn, seatState, undeliveredAdvice } from './loops'
+import { appPoll, asSlots, cardFacts, dependentsOf, heldText, isHeld, isNothing, isUndelivered, liveSeat, parseStatus, placeSlots, plainReason, pollId, prSignature, prsIn, seatState, undeliveredAdvice } from './loops'
 import type { Role as GuardRole } from './guards'
 
 const consoles = atom({ plugin: 'mission-fleet', key: 'consoles' } as const, [] as Console[])
@@ -28,6 +28,10 @@ let watching = false
 // after a plugin reload, and restarting it when the server dies. /console app stop turns it off.
 const APP_ALWAYS = 'appAlways'
 let supervising = false
+// Each call sign's colour in the app, also kept in $.store, so a Controller keeps its colour after a
+// reload and in the next session. Placings run one at a time, so two staffings cannot take one colour.
+const SLOTS_KEY = 'callSignSlots'
+let slotChain: Promise<unknown> = Promise.resolve()
 
 // The app bridge: one server per session, started by /console app.
 type App = { port?: number; token: string; key: string; stop: () => Promise<unknown>; stateFile: string; httpOk?: boolean; profile?: string; tokenFile?: string; ended?: Promise<void> }
@@ -91,6 +95,10 @@ const USAGE = [
   '  /console dismiss-gate <id>          (closes a poll item that no longer matters, or clears an undelivered or held decision; nothing is sent)',
   '  /console retry <id>                 (sends an undelivered go or no-go again to the Controller that raised it)',
 ].join('\n')
+
+// How Flight marks a message to the founder that is about Controllers: the app reads the marker
+// (tools/app/public/badge.js) and badges the message in each Controller's colour.
+const MARKER_RULE = 'When a message to the founder is about one or more Controllers, open it with their call signs in bold, spelled as /console list shows them, on a line of their own and joined by a middle dot: **<CALL-SIGN>**, or **<CALL-SIGN> · <CALL-SIGN>** for several. The app badges the message with each one in its colour. Write no marker when you speak for yourself.'
 
 const callSignOf = (scope: string) => scope.toUpperCase().replace(/[^A-Z0-9]+/g, '-')
 const nameOf = (scope: string) => `console-${scope.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
@@ -195,7 +203,7 @@ export const register: Register = on => {
     })
     await step('tool.register', () => $.tool.register({
       name: TOOL,
-      description: `Flight's console fleet. Pass the same arguments as the /console command.\n${USAGE}`,
+      description: `Flight's console fleet. Pass the same arguments as the /console command.\n${USAGE}\n${MARKER_RULE}`,
       inputSchema: { type: 'object', properties: { args: { type: 'string', description: 'e.g. "staff fieldkit --model sonnet"' } }, required: ['args'] },
       isDeferred: false,
     }))
@@ -635,6 +643,21 @@ async function spokesOf($: EngineInterface, frontDir: string, project: string | 
   return found
 }
 
+/**
+ * Places every live console in a colour slot and keeps the map in the store, writing only when it
+ * changed. A map the store cannot read is never written over: the call fails instead.
+ */
+function keepSlots($: EngineInterface): Promise<Slots> {
+  const run = slotChain.then(async () => {
+    const map = asSlots(await $.store.get(SLOTS_KEY))
+    const next = placeSlots(map, await read($, consoles))
+    if (next !== map) await $.store.set(SLOTS_KEY, next)
+    return next
+  })
+  slotChain = run.catch(() => undefined)
+  return run
+}
+
 async function staff($: EngineInterface, front: string | undefined, flags: Record<string, string>): Promise<string> {
   if (!front) return USAGE
   const project = flags.project
@@ -678,6 +701,8 @@ async function staff($: EngineInterface, front: string | undefined, flags: Recor
     return [...list.filter(c => c.callSign !== callSign), reserved]
   })
   if (holder) return `${callSign} is already ${holder.status} (agent ${holder.agentId || 'starting'}). Use /console call ${callSign} <message>.`
+  // Its colour in the app: the one it had before, unless a console staffed earlier holds it.
+  await keepSlots($).catch((err: unknown) => log($, 'slots', callSign, `not kept: ${String(err).slice(0, 120)}`))
 
   const release = () => update($, consoles, list => list.filter(c => !(c.callSign === callSign && c.status === 'staffing')))
   let spawned: Awaited<ReturnType<EngineInterface['agent']['spawn']>>
@@ -1178,8 +1203,9 @@ function withSpoken(messages: { role: string; text: string }[]) {
 
 /** What the app shows: the fleet, the poll, the loops and the commands the session can run. */
 async function snapshot($: EngineInterface) {
-  const [fleet, items, traffic, agents, commands, messages] = await Promise.all([
-    read($, consoles), read($, poll), read($, loops), $.agent.list(), $.command.list().catch(() => []), $.session.messages().catch(() => []),
+  // Placing slots here too gives a colour to a console staffed before slots were kept.
+  const [fleet, items, traffic, agents, commands, messages, kept] = await Promise.all([
+    read($, consoles), read($, poll), read($, loops), $.agent.list(), $.command.list().catch(() => []), $.session.messages().catch(() => []), keepSlots($).catch(() => undefined),
   ])
   // The app link carries its token: never send it back into the page or the state file.
   const secret = app?.token
@@ -1210,6 +1236,8 @@ async function snapshot($: EngineInterface) {
     // An undelivered decision also carries its plain reason and where its Controller stands, which
     // decide the card's text and buttons.
     poll: appPoll(items).map(p => cardFacts(p, fleet)),
+    // Each call sign's colour slot; while the store cannot be read, the live consoles still get distinct ones.
+    slots: kept ?? placeSlots({}, fleet),
     loops: traffic.slice(-80),
     lastOp: lastOp ?? null,
     models: Object.keys(MODEL_IDS),

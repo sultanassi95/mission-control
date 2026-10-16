@@ -63,6 +63,13 @@ export type PendingAdvisory = { id: string; front: string; text: string; at: str
 
 export type AuditEntry = { at: string; op: string; target: string; result: string }
 
+/**
+ * Each call sign's colour slot in the app, 0 to 7 for the tokens --slot-1 to --slot-8. Kept in the
+ * plugin's store, so a Controller keeps its colour after a reload and in the next session; a
+ * stood-down call sign keeps its entry, so the messages about it keep their colour.
+ */
+export type Slots = Record<string, number>
+
 declare module 'claude-code' {
   interface PluginState {
     'mission-fleet': { consoles: Console[]; audit: AuditEntry[]; reserving: Reservation[]; lineage: Lineage[]; loops: LoopEntry[]; poll: PollItem[]; pending: PendingAdvisory[]; pollSeq: number; watches: PrWatch[] }

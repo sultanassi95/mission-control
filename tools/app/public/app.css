@@ -34,7 +34,7 @@ button { cursor: pointer; }
 .msg { max-width: var(--bubble); padding: var(--s3) var(--s4); border-radius: var(--r-card); overflow-wrap: anywhere; white-space: pre-wrap; }
 .msg.user { align-self: flex-end; background: var(--accent); color: var(--accent-ink); }
 .msg.assistant { align-self: flex-start; background: var(--surface); }
-.msg .who { font-size: var(--t-xs); line-height: var(--lh-xs); color: var(--ink-faint); font-weight: 600; margin-bottom: var(--s1); }
+.msg .who { font-size: var(--t-xs); line-height: var(--lh-xs); color: var(--ink-faint); font-weight: 600; margin-bottom: var(--s1); display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); }
 .msg.user .who { color: var(--accent-ink); }
 .notice { align-self: stretch; background: var(--wait-tint); color: var(--wait); border-radius: var(--r-card); padding: var(--s3) var(--s4); font-size: var(--t-sm); line-height: var(--lh-sm); }
 .sys { align-self: center; text-align: center; font-size: var(--t-xs); line-height: var(--lh-xs); color: var(--ink-faint); max-width: 90%; }
@@ -81,7 +81,10 @@ button { cursor: pointer; }
 .stripe-running::before { background: var(--run); } .stripe-waiting::before { background: var(--wait); } .stripe-failed::before { background: var(--fail); } .stripe-done::before { background: var(--done); }
 .card .head { display: flex; align-items: center; gap: var(--s2); }
 .card .head .pill { margin-left: auto; }
-.call { font-family: var(--mono); font-weight: 700; letter-spacing: var(--ls-2); overflow-wrap: anywhere; }
+/* A call sign: a chip in its Controller's colour wherever the app names it (DESIGN.md, Call-sign chip); with no slot, the idle fill. */
+.call { display: inline-block; max-width: 100%; padding: 0 var(--s2); border-radius: var(--r-field); background: var(--slot, var(--idle)); color: var(--bg); font-family: var(--mono); font-weight: 700; letter-spacing: var(--ls-2); overflow-wrap: anywhere; }
+.slot-1 { --slot: var(--slot-1); } .slot-2 { --slot: var(--slot-2); } .slot-3 { --slot: var(--slot-3); } .slot-4 { --slot: var(--slot-4); }
+.slot-5 { --slot: var(--slot-5); } .slot-6 { --slot: var(--slot-6); } .slot-7 { --slot: var(--slot-7); } .slot-8 { --slot: var(--slot-8); }
 .task { color: var(--ink-soft); font-size: var(--t-sm); line-height: var(--lh-sm); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .meta { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; font-size: var(--t-xs); line-height: var(--lh-xs); color: var(--ink-faint); }
 .empty { text-align: center; color: var(--ink-faint); padding: var(--s6) var(--s4); }
@@ -110,6 +113,8 @@ button { cursor: pointer; }
 .filters { display: flex; gap: var(--s2); overflow-x: auto; scrollbar-width: none; padding-bottom: var(--s1); }
 .filters button { flex: none; border: 1px solid var(--line); background: var(--surface); border-radius: var(--r-chip); padding: var(--s1) var(--s3); font-size: var(--t-xs); line-height: var(--lh-xs); font-family: var(--mono); min-height: var(--target); }
 .filters button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.filters button.signed { color: var(--slot, var(--idle)); border-color: var(--slot, var(--idle)); font-weight: 700; }
+.filters button.signed[aria-pressed="true"] { background: var(--slot, var(--idle)); color: var(--bg); border-color: var(--slot, var(--idle)); }
 .loop { display: grid; grid-template-columns: 1fr auto; gap: var(--s1) var(--s2); padding: var(--s3) 0; border-bottom: 1px solid var(--line); width: 100%; text-align: left; background: none; border-inline: 0; border-top: 0; }
 .loop .route { font-family: var(--mono); font-size: var(--t-xs); line-height: var(--lh-xs); font-weight: 700; display: flex; gap: var(--s2); flex-wrap: wrap; align-items: center; }
 .loop time { font-size: var(--t-xs); line-height: var(--lh-xs); color: var(--ink-faint); font-variant-numeric: tabular-nums; }

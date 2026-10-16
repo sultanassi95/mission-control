@@ -63,6 +63,7 @@ flowchart LR
 - **Single writer.** Only Flight writes `_command/trackers/fronts.md`, `_command/daily/today.md` and `_command/fleet/`; Controllers propose, Flight writes.
 - **The day's edges read the fleet.** `/briefing` and `/debrief` read each staffed console's last status (`/console list`, `/console loops <sign>`) and the open go/no-go items (`/console poll`), and put a Controller blocked on the founder first. `/standup` and `/retro` read git, the tracker and the boards only. Between them, use `/console list`, `/console poll` and `/console call <sign> <message>`.
 - **Verify before relaying.** A Controller's state is only as fresh as its front's files; check a PR's real state (`gh pr view`) before reporting it to the founder.
+- **Mark a message about Controllers.** When a message to the founder is about one or more Controllers, its first line is their call signs in bold, spelled as `/console list` shows them, on a line of their own and joined by a middle dot: `**MISSION-CONTROL**`, or `**<CALL-SIGN> · <CALL-SIGN>**` for several. The Front Room badges the message with each one in its Controller's colour, the colour it also wears on Consoles, Poll and Loops; the terminal shows the line as a bold header. A message in which Flight speaks for itself carries no marker. A name the fleet does not know, or a bold first word, stays text and badges nothing. The console tool's description carries the same rule.
 - **Never answer a gate.** Go and no-go are typed by the founder or sent from the app.
 
 ## Alerts and watches

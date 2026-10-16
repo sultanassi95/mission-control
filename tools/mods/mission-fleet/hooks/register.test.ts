@@ -1,4 +1,4 @@
-import { expect, test } from 'claude-code/testing'
+import { expect, mock, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 
 import type { Console, PendingAdvisory, PollItem } from '../types'
@@ -681,4 +681,131 @@ test('a GO or NO-GO note is taken whole, double-dash words included', async ($, 
   expect(sent[0]).toContain('GO from the founder on MI2: ship it, clone with --depth 1 --no-tags')
   expect((await person($, 'no-go MI3 not yet: --single-branch first')).text).toContain('MI3: NO-GO recorded, told MISSION-CONTROL.')
   expect(sent[1]).toContain('NO-GO from the founder on MI3: not yet: --single-branch first')
+})
+
+// ---- Call-sign colours (MC-129) ----
+
+// The plugin's store, answered from memory beneath the plugin, with each value the plugin sets, in order.
+// deno-lint-ignore no-explicit-any
+const storeOf = (on: any, initial: Record<string, unknown> = {}) => {
+  const held: Record<string, unknown> = { ...initial }
+  const sets: { key: string; value: unknown }[] = []
+  on('store.get', (_$: unknown, e: { key: string }) => ({ value: held[e.key] }))
+  on('store.set', (_$: unknown, e: { key: string; value: unknown }) => {
+    held[e.key] = e.value
+    sets.push({ key: e.key, value: e.value })
+    return { value: undefined }
+  })
+  return sets
+}
+// The colour maps the plugin keeps, in order.
+const slotWrites = (sets: { key: string; value: unknown }[]) => sets.filter(s => s.key === 'callSignSlots').map(s => s.value as Record<string, number>)
+// Staffed long before any staffing a test runs, so the reservation it writes comes after.
+const EARLY = '2026-01-01T00:00:00.000Z'
+const SH: Console = { ...FK, callSign: 'SHELF', front: 'shelf', name: 'console-shelf', agentId: 's1', cwd: '/p/fronts/shelf/shelf', cloneOwners: ['shelf-co'], cloneHome: '/p/fronts/shelf', staffedAt: EARLY }
+
+test('staffing gives the new console a colour no staffed console holds, and keeps it in the plugin store', async ($, on) => {
+  portfolio(on)
+  seed(on, { consoles: [FK] })
+  const sets = storeOf(on, { callSignSlots: { FIELDKIT: 0 } })
+  on('agent.spawn', () => ({ deny: 'stop here' }))
+  expect((await run($, 'staff shelf')).text).toContain('Could not staff SHELF: stop here')
+  // The kit strips a spawn's agentId, so the colour is the one the staffing's reservation was given.
+  const kept = slotWrites(sets).at(-1)
+  expect(kept?.FIELDKIT).toBe(0)
+  expect(kept?.SHELF).toBe(1)
+})
+
+test('a call sign staffed again keeps its colour, and a staffed console that had none is given one', async ($, on) => {
+  portfolio(on)
+  // SHELF was staffed before colours were kept; FIELDKIT stood down remembering 3.
+  seed(on, { consoles: [SH, { ...FK, status: 'stood-down' }] })
+  const sets = storeOf(on, { callSignSlots: { FIELDKIT: 3 } })
+  on('agent.spawn', () => ({ deny: 'stop here' }))
+  expect((await run($, 'staff fieldkit')).text).toContain('Could not staff FIELDKIT: stop here')
+  expect(slotWrites(sets).at(-1)).toEqual({ FIELDKIT: 3, SHELF: 0 })
+})
+
+test('a call sign whose remembered colour a console staffed earlier holds is given a free one', async ($, on) => {
+  portfolio(on)
+  seed(on, { consoles: [{ ...FK, staffedAt: EARLY }] })
+  const sets = storeOf(on, { callSignSlots: { FIELDKIT: 2, SHELF: 2 } })
+  on('agent.spawn', () => ({ deny: 'stop here' }))
+  expect((await run($, 'staff shelf')).text).toContain('Could not staff SHELF: stop here')
+  expect(slotWrites(sets).at(-1)).toEqual({ FIELDKIT: 2, SHELF: 0 })
+})
+
+test('the console tool tells Flight the marker that badges a message with its Controllers', async ($, on) => {
+  let description = ''
+  on('command.register', (_$, e) => ({ value: { command: e.name } }))
+  on('agent.register', (_$, e) => ({ value: { agent: e.name } }))
+  on('tool.register', (_$, e) => {
+    if (e.name === 'console') description = e.description
+    return { value: { tool: e.name } }
+  })
+  on('session.start', () => ({ cwd: '/p' }))
+  on('session.root', () => ({ value: '/p' }))
+  on('fs.read', (_$, e) => (e.path === '/p/_command/trackers/fronts.md' ? { value: '# Fronts' } : { deny: `ENOENT ${e.path}` }))
+  on('fs.write', () => ({ value: undefined }))
+  await $.session.start({ cwd: '/p' } as Parameters<Engine['session']['start']>[0])
+  expect(description).toContain('/console staff <front>')
+  expect(description).toContain('**<CALL-SIGN>**, or **<CALL-SIGN> · <CALL-SIGN>** for several')
+  expect(description).toContain('Write no marker when you speak for yourself.')
+})
+
+test('a colour map the store cannot read is never written over, and the staffing goes on', async ($, on) => {
+  portfolio(on)
+  seed(on, { consoles: [FK] })
+  const keys: string[] = []
+  on('store.get', () => ({ deny: 'store offline' }))
+  on('store.set', (_$, e) => {
+    keys.push(e.key)
+    return { value: undefined }
+  })
+  const audit = auditLines(on)
+  on('agent.spawn', () => ({ deny: 'stop here' }))
+  expect((await run($, 'staff shelf')).text).toContain('Could not staff SHELF: stop here')
+  expect(keys).not.toContain('callSignSlots')
+  expect(audit.join('\n')).toContain('\tslots\tSHELF\tnot kept: ')
+})
+
+test('the app is sent each call sign\'s colour with the fleet, as the store keeps it', async ($, on) => {
+  portfolio(on)
+  const clock = mock.clock(on, { now: Date.parse('2026-10-16T10:00:00.000Z') })
+  // FIELDKIT was staffed before colours were kept; SHELF, staffed after it, remembers 4.
+  seed(on, { consoles: [{ ...FK, staffedAt: EARLY }, { ...SH, staffedAt: '2026-01-02T00:00:00.000Z' }] })
+  const held: Record<string, unknown> = { callSignSlots: { SHELF: 4 } }
+  // The standing app setting reads as off, so no supervisor restarts the server the test stops.
+  on('store.get', (_$, e) => ({ value: e.key === 'appAlways' ? false : held[e.key] }))
+  on('store.set', (_$, e) => {
+    held[e.key] = e.value
+    return { value: undefined }
+  })
+  on('agent.list', () => ({ value: [] }))
+  on('process.run', () => ({ value: { exitCode: 0, stdout: '/p/tools/mods/mission-fleet\n', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+  // The app server as the plugin starts it: ready at once, then running until the test ends it.
+  let end: () => void = () => undefined
+  const ended = new Promise<void>(resolve => (end = resolve))
+  on('process.spawn', async function* () {
+    yield { stream: 'stdout' as const, text: '{"type":"ready","port":4999,"profile":"demo"}\n' }
+    await ended
+    return { value: { code: 0, signal: null } }
+  })
+  const pushed: string[] = []
+  on('http.fetch', (_$, e) => {
+    if (e.url.endsWith('/bridge/state')) pushed.push(String(e.init?.body ?? ''))
+    return { value: { status: 204, ok: true, headers: {}, text: '' } }
+  })
+  try {
+    expect((await person($, 'app')).text).toContain('Mission Control App')
+    await clock.settle()
+    expect(pushed.length).toBeGreaterThan(0)
+    expect(JSON.parse(pushed[0]!).slots).toEqual({ FIELDKIT: 0, SHELF: 4 })
+    expect(held.callSignSlots).toEqual({ FIELDKIT: 0, SHELF: 4 })
+  } finally {
+    end()
+    await person($, 'app stop')
+    // Lets the push loop's wait and the start's timeout run out, so nothing outlives the test.
+    await clock.advance(10_000)
+  }
 })

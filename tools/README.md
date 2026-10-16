@@ -292,3 +292,7 @@ step. You do not run it by hand: `/console app` starts it from the mod, and
   `tailscale serve`, never a public tunnel: `framework/remote-access.md`.
 - The design, tokens and states: `app/DESIGN.md`. The token ratchet is held at
   zero: `tools/token-lint.sh tools/app`.
+
+Tests: `node --test tools/tests/app-badge.tests.mjs` (the call-sign marker that
+badges a Flight message and the call-sign chip, `app/public/badge.js`; 22
+tests at the time of writing).
