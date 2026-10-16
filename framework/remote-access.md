@@ -10,7 +10,7 @@ flowchart LR
   M --> D["127.0.0.1:4777<br/>front door"]
   D -->|"/p/work/*"| A["one app server<br/>per Claude profile"]
   D -->|"/p/personal/*"| A2["another profile's server"]
-  A <--> F["Flight<br/>via the mission-fleet mod"]
+  A <-->|state, relayed taps| F["Flight<br/>via the mission-fleet mod"]
 ```
 
 ## What this protects and what it does not
@@ -47,8 +47,10 @@ the page's own origin.
 Each Claude profile (work, personal, and so on) runs its own app server. They all
 try to hold port 4777; whichever holds it is the front door, serves the page and
 routes `/p/<profile>/*` to that profile's server, so the door survives any one
-session closing. Switch profiles from the app header. All of them share the one
-token.
+session closing. The app opens on a profile whose session is running: the one
+this browser showed last, else the profile whose server holds the front door,
+else the first by name. The header's profile switcher shows while two or more
+run. All of them share the one token.
 
 Once `/console app` has run, the app is a standing setting for the profile: every
 session starts it and a supervisor restarts it when the server dies.
@@ -56,8 +58,27 @@ session starts it and a supervisor restarts it when the server dies.
 
 ## What the app does
 
-- Shows the fleet, the Poll gates and the loops, and sends prompts, commands and
-  console operations to Flight.
+- Shows the fleet, the Poll and the loops, and sends prompts and commands to
+  Flight. A Flight reply that opens with call signs in bold shows each one as a
+  chip in its Controller's colour.
+- **Decides from the phone.** Each of these reaches Flight as a prompt in the
+  founder's name with a one-time code (one try, those exact arguments, 10
+  minutes, lost on a plugin reload): a GO, NO-GO or Retry, a dismissal or
+  stand-down, and a `/console staff` or `/console call` typed in the app.
+  Flight runs it with the console tool once its current turn ends, and auto
+  mode allows it because the fleet approves its own staffing and messages.
+  Until then a GO, NO-GO or Retry card says it was sent to Flight and runs
+  once Flight is free, and takes no second tap. If Flight never runs it (a
+  plugin reload drops the code), the card opens again 10 minutes after the
+  tap; send it again then. Dismissing a gate, retuning and stopping the app
+  run at once.
+- **Undelivered and held decisions.** A decision that did not reach its
+  Controller stays on the Poll with the reason in plain words (the engine's
+  text under "Technical details"), with Retry while the Controller that raised
+  it is staffed, and Dismiss. A decision for a Controller that has stood down
+  is held for the next Controller staffed under that call sign; Dismiss clears
+  it with nothing sent. The fleet skill (`.claude/skills/fleet/SKILL.md`)
+  has the details.
 - **Answers Flight's questions.** While the app runs, a question Flight would ask
   at the terminal goes to the app instead (and raises a phone alert). Answer it
   there, or at the Mac with `/console answer`. Without the app the terminal
@@ -114,7 +135,7 @@ terminal. The audit log records which (`alert ... -> Mobile push not sent
 | From | Do | Effect |
 |---|---|---|
 | The app | menu, then "Stop the app server" | the server stops; the link dies |
-| The app | menu, then "Dismiss every console" | every Controller ends, nothing written |
+| The app | menu, then "Dismiss every console" | every Controller ends, nothing written; each dismissal goes to Flight and runs once its current turn ends |
 | The terminal | `/console app stop` | the server stops |
 | The phone, without the app | turn the Tailscale VPN off, or remove the device in the admin console | remote access ends at once |
 | The machine | `tailscale serve reset` | the tailnet route is removed |
