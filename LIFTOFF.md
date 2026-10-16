@@ -130,15 +130,19 @@ fronts first; the rest can join later via `/new-front` - say so):
    pre-filled spoke draft: "here is what I found - correct anything."
    Confirming beats answering; only ask what a repo cannot tell you.
    **No repo yet / not a code project:** skip the scan and the
-   move-in-or-register gate entirely - the front's folder is created at
-   the portfolio root when it has files (or later, when it does), the
-   spoke's git-memory reads `N/A`, and the next action is asked, not
-   drafted from evidence.
-3. **The move-in-or-register gate:** offer the move into the portfolio
-   root with the exact `mv` command visible (the repo stays its own git,
+   move-in-or-register gate entirely - the front's folder,
+   `fronts/<front>/`, is created when it has files (or later, when it
+   does) and holds them directly, the spoke's git-memory reads `N/A`, and
+   the next action is asked, not drafted from evidence.
+3. **The move-in-or-register gate:** offer the move into the front's
+   folder with the exact command visible,
+   `mkdir -p ./fronts/<front> && mv <current-path> ./fronts/<front>/<repo>`
+   (every front is a folder holding its repos, even a single one, so a
+   second repo lands beside the first; the repo stays its own git,
    invisible to this repo's git via the allowlist .gitignore); move only
-   on an explicit yes. Register-in-place records the external path in the
-   spoke + a note in the operating CLAUDE.md. Non-git fronts are
+   on an explicit yes, and the spoke's `path:` reads
+   `fronts/<front>/<repo>`. Register-in-place records the external path in
+   the spoke + a note in the operating CLAUDE.md. Non-git fronts are
    first-class (git-memory `N/A`).
 4. **The human questions:** trust (yours / partnered / employer + the IP
    boundary written into the hub; confidential fronts' spokes carry

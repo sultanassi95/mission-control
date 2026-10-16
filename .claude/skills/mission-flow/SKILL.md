@@ -736,7 +736,11 @@ branch** off the ticket branch, whether one unit runs or several. Uniform on
 purpose: git refuses to check out one branch in two worktrees
 (`fatal: ... is already used by worktree at ...`), so per-unit branches are what
 makes more than one agent possible at all, and a single unit taking the same
-route means the common case is not the unprotected one.
+route means the common case is not the unprotected one. Each worktree stays
+inside the front's folder: inside the repo where the CLI's worktree tool puts
+it (`.claude/worktrees/`), or beside the repo as `fronts/<front>/<repo>-<slug>`,
+never at the top of `fronts/`, where `/preflight` reports it as a front of its
+own (`framework/task-board.md`, front placement).
 
 The orchestrator merges each unit's branch back into the ticket branch as its
 record arrives - fast-forward when one unit ran - because Phase 5's diff and

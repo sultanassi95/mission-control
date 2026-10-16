@@ -14,6 +14,9 @@ flowchart LR
   subgraph PLAN[plan and design gates]
     EC[epic-coverage] --- TL[token-lint]
   end
+  subgraph INST[instance checks]
+    CF[check-fronts]
+  end
   subgraph FLEET[console fleet]
     MF[mods/mission-fleet] --> APP[app]
   end
@@ -28,6 +31,7 @@ flowchart LR
 | `leak-guard` | hook: blocks process vocabulary in commits, PRs and tracker writes | `.sh`, `.ps1` |
 | `check-refs` | every repo path and link a doc names must exist | `.sh` (with `.py`), `.ps1` |
 | `check-ignores` | the paths that must be gitignored are, and the ones that ship still can | `.sh` + `.py`, `.ps1` |
+| `check-fronts` | each front's folder holds its repos, and no worktree sits at the top of `fronts/` | `.sh` + `.py` |
 | `epic-coverage` | the E4 gate of epic-flow | `.sh`, `.py` |
 | `status-after-pipe-guard`, `front-context` | settings hooks | `.sh` |
 | `token-lint` | the design-token ratchet | `.sh`, `.py` |
@@ -116,6 +120,35 @@ gitignored are, and the paths that must ship still can be (exit 0 clean /
 1 listing each problem). Where the sweep reads file contents, this one
 reads the rules, because a doc claiming a path is ignored proves nothing
 about what git will do. `/preflight` step 6 runs it at every spend tier.
+
+## check-fronts
+
+An instance check, run by `/preflight` step 2. Every front is a folder under
+`fronts/` holding that front's repos, `fronts/<front>/<repo>`
+(`framework/task-board.md`, front placement). `bash tools/check-fronts.sh
+[root]` (with `check-fronts.py`, Python 3; the root defaults to the folder
+above `tools/`) reads the folders directly under `fronts/` and prints one line
+per problem, with the commands that fix it, run from the root (a path after
+`git -C <repo>` is relative to that repo, because git reads it from there):
+
+- a repo: a `.git` folder, a `.git` file naming a separate git directory, or a
+  bare repo (`HEAD`, `objects/` and `refs/` in the folder itself). The front's
+  folder is itself a repo, so a second repo for that front has nowhere to go.
+  The fix houses it at `fronts/<front>/<front>` (a bare `fronts/<name>.git` at
+  `fronts/<name>/<name>.git`) and names the `git worktree repair` its linked
+  worktrees need afterwards, with the new path of each one that moves with it.
+- a `.git` file naming a linked worktree: a worktree at the top of `fronts/`,
+  outside its front's folder. The fix is a `git worktree move` beside its repo,
+  after that repo's own fix when the repo is at the top of `fronts/` too.
+- a worktree whose repo has moved (its `.git` file names a git directory that
+  is gone, as after a repo's fix and before the repair): the fix is the
+  `git worktree repair` in the repo's new home, then the move.
+
+It reads only and moves nothing. Exit 0 is clean (also when there is no
+`fronts/`, as in this clone), 1 lists the problems, and 2 means it could not
+check: the root does not exist, `fronts/` is not a folder, or a folder cannot
+be read. Tests: `tests/check-fronts.tests.sh`. A `.ps1` twin is deferred
+until a Windows operator exists; there, run the `.py` with Python 3.
 
 ## epic-coverage (`epic-coverage.sh` / `epic-coverage.py`)
 

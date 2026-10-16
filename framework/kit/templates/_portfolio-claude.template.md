@@ -24,8 +24,13 @@ when several fronts run at once. Where a front declares standards via
 declaring nothing pay nothing.
 
 ## The fronts
-<PLACEHOLDER-FRONTS: one bullet per front - name, posture, one line;
-mark any registered-in-place front with its external path note>
+> Every front is a folder in the gitignored `fronts/` container, with its
+> repos inside it: `fronts/<front>/<repo>`, even for a single repo
+> (`framework/task-board.md`, front placement).
+
+<PLACEHOLDER-FRONTS: one bullet per front - name, posture, one line, and its
+folder `fronts/<front>/`; mark any registered-in-place front with its
+external path note>
 
 Within a project, that project's own CLAUDE.md is more specific and wins
 (precedence: framework/CONSTITUTION.md, section 3).

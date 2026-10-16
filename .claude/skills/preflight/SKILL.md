@@ -45,10 +45,17 @@ the universal grammar - PASS/FAIL evidence is discipline at every tier.
    hub has a spoke (housed per the structure rule in
    `framework/task-board.md`); every spoke has git-memory (base branch,
    convention, remote) or an explicit `N/A`, plus a `tracker:` field.
-   Registered-in-place fronts: the external path still exists.
-   Multi-project fronts: `_map.md` exists, and its `mapped:` date is
-   fresh (older than ~30 days, or older than the front's last structural
-   change = flagged for a `/map-front` re-run, not failed).
+   Every spoke's `path:` exists: `fronts/<front>/<repo>` for a moved-in
+   repo, the external path for a registered-in-place one. Every front's
+   folder holds its repos: run `bash tools/check-fronts.sh` (on Windows,
+   `python tools\check-fronts.py`; it has no PowerShell twin yet). Exit 0
+   required; paste the output. It reports a front folder that is itself a
+   repo and a worktree at the top of `fronts/`, each with the commands that
+   fix it; preflight proposes those moves and never makes them (scoped with
+   `--front`, only the lines naming that front count). Multi-project
+   fronts: `_map.md` exists, and its `mapped:` date is fresh (older than
+   ~30 days, or older than the front's last structural change = flagged
+   for a `/map-front` re-run, not failed).
 3. **Boards and caps are truthful.** For every native-tracker project:
    each `tasks/T-*.md` file appears in its `_board.md` under its actual
    state; no orphan board rows; no task stuck `in-progress` with no

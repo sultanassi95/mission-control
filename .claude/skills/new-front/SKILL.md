@@ -22,7 +22,10 @@ repo cannot answer, and stop for approval before the front goes live.
   `_command/daily/today.md` first, so the new front lands in the real
   current picture.
 - Adding a project to an EXISTING front? Same skill: the intake runs per
-  project, and Step 4's promotion rule handles the restructure.
+  project, the repo moves in beside the front's others
+  (`fronts/<front>/<repo>`), and Step 4's promotion rule handles the
+  restructure. If `fronts/<front>` is itself the first repo (the older
+  layout), house it first: `/preflight`'s layout check prints the commands.
 
 ## Step 1 - Intake (ask only the path)
 
@@ -44,19 +47,27 @@ anything."* Confirming beats answering.
 
 ## Step 2 - The move-in-or-register choice (approval gate)
 
-Offer, with the exact command shown:
+Every front is a folder in the portfolio's `fronts/` container, and its
+repos live inside that folder, even when there is only one: the front's
+folder is never the repo itself, so a second repo lands beside the first
+instead of inside it. Offer, with the exact command shown:
 
 > I'd bring it into the portfolio's `fronts/` container so every session
-> sees it: `mv <current-path> ./fronts/<front-name>` - it stays its own git
-> repo, untouched; the portfolio repo cannot even see its files (the
-> allowlist .gitignore). Move it, or register it where it is?
+> sees it: `mkdir -p ./fronts/<front> && mv <current-path> ./fronts/<front>/<repo>`.
+> It stays its own git repo, untouched; the portfolio repo cannot even see
+> its files (the allowlist .gitignore). Move it, or register it where it is?
 
-- **Move-in (recommended):** run the move only after an explicit yes.
+- **Move-in (recommended):** run the move only after an explicit yes. The
+  spoke's `path:` is `fronts/<front>/<repo>`, where `<repo>` is the repo's
+  own folder name, so a front named after its only repo reads
+  `fronts/<front>/<front>`.
 - **Register-in-place:** the spoke records the external absolute path,
   and the root `CLAUDE.md` gains a note that this front's directory must
   be added to sessions that work on it.
 - **Non-git fronts** (a design folder, a course, a consulting gig) are
-  first-class: hub without git-memory, spoke fields marked `N/A`.
+  first-class: their folder is `fronts/<front>/`, made when there are
+  files and holding them directly, with no repo inside; hub without
+  git-memory, spoke fields marked `N/A`.
 
 ## Step 3 - Ask only what a repo cannot answer
 

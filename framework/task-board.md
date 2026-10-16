@@ -46,18 +46,41 @@ _command/portfolio/<front>/
 
 ## Front placement - register, move, or copy
 
-How a front's repo relates to the portfolio root is the founder's choice per
-front; each keeps its own git, invisible to the portfolio via the allowlist:
+Every front is a folder in a single gitignored `fronts/` container at the
+portfolio root, and its repos live inside that folder: `fronts/<front>/<repo>`,
+even when there is only one. The front's folder is never itself a repo, so a
+second repo for the same front lands beside the first instead of inside it. A
+front with no repo is just its folder, `fronts/<front>/`, holding its files.
+
+```
+fronts/
+├─ acme/              <- the front's folder, never a repo
+│  ├─ acme/           <- its one repo (path: fronts/acme/acme)
+│  └─ acme-fix-login/ <- a worktree of it, beside it
+├─ shop/
+│  ├─ api/
+│  └─ web/
+└─ course/            <- a front with no repo: its files, directly
+```
+
+How each repo relates to the portfolio is the founder's choice per repo; each
+keeps its own git, invisible to the portfolio via the allowlist:
 - **register-in-place** - the repo stays where it is; the spoke records its path.
-- **move-in** - relocate the repo under the portfolio (instant, same-drive).
-- **copy-in** - duplicate it under the portfolio, leaving the original live for
-  parallel work. Copy read-only, excluding regenerable / lock-prone dirs
+- **move-in** - relocate the repo into its front's folder,
+  `mkdir -p fronts/<front> && mv <path> fronts/<front>/<repo>` (instant,
+  same-drive).
+- **copy-in** - duplicate it into its front's folder, leaving the original live
+  for parallel work. Copy read-only, excluding regenerable / lock-prone dirs
   (`node_modules .next dist build .venv __pycache__ ...`) so a running dev
   server is never disturbed, then reinstall deps in the copy.
 
-Host the front repos in a single gitignored `fronts/` container at the portfolio
-root rather than scattering them; the allowlist ignores it and `.gitignore`
-names it explicitly. The spoke's `path:` records where the repo actually lives.
+The allowlist ignores `fronts/` and `.gitignore` names it explicitly. The
+spoke's `path:` records where the repo actually lives (`fronts/<front>/<repo>`,
+or the external path). A worktree for work on a front's repo stays inside the
+front's folder as well: beside the repo (`fronts/<front>/<repo>-<slug>`), or
+inside the repo where the CLI's worktree tool puts it (`.claude/worktrees/`),
+never at the top of `fronts/`, where it reads as a front of its own.
+`/preflight` reports either drift with its fix (`tools/check-fronts.sh`).
 
 ## The ticket - a folder (the truth)
 

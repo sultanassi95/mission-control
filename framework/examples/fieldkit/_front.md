@@ -20,4 +20,4 @@ survives a day with no bars.
 ## Repo map
 | Repo | Role | Spoke |
 |---|---|---|
-| fieldkit-app (at the portfolio root, moved in at liftoff) | the app: local-first storage, offline sync, the REST client | [fieldkit-app.md](./fieldkit-app.md) |
+| fieldkit-app (at `fronts/fieldkit/fieldkit-app`, moved in at liftoff) | the app: local-first storage, offline sync, the REST client | [fieldkit-app.md](./fieldkit-app.md) |

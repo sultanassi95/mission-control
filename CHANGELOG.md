@@ -6,6 +6,19 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-10-16: every front is a folder holding its repos, `fronts/<front>/<repo>`,
+  even when it has only one (MC-130). `/new-front` and LIFTOFF used to move a
+  repo so that it became the front's folder (`mv <path> ./fronts/<front>`),
+  which left a second repo for that front nowhere to go; they now offer
+  `mkdir -p ./fronts/<front> && mv <path> ./fronts/<front>/<repo>`, and the
+  spoke's `path:` reads `fronts/<front>/<repo>`. A front with no repo is its
+  folder alone. Worktrees for front work stay inside the front's folder.
+  `/preflight` step 2 runs the new `tools/check-fronts.sh`, which reports a
+  front folder that is itself a repo and a worktree at the top of `fronts/`,
+  with the commands that fix each. If you onboarded fronts before this, run
+  `/preflight`: moving them is yours to do, and a moved repo's linked
+  worktrees need `git worktree repair`.
+
 - 2026-10-16: the console skill is now `fleet` (`.claude/skills/fleet/SKILL.md`,
   MC-121). The skill and the mission-fleet mod's `/console` command shared one
   name, so the engine refused the mod's command at every session start, and a
