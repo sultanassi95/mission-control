@@ -98,6 +98,7 @@ button { cursor: pointer; }
 .gate summary::before { content: "▸"; color: var(--ink-faint); }
 .gate details[open] > summary::before { content: "▾"; }
 .gate.undelivered { border-color: var(--fail); background: var(--fail-tint); }
+.gate.held { border-color: var(--idle); background: var(--idle-tint); }
 .go.secondary { background: transparent; color: var(--done); border: 1px solid var(--done); }
 .go { border: 0; background: var(--done); color: var(--bg); border-radius: var(--r-field); min-height: calc(var(--target) + var(--s1)); font-weight: 700; letter-spacing: var(--ls-1); }
 .nogo { border: 1px solid var(--fail); background: transparent; color: var(--fail); border-radius: var(--r-field); min-height: calc(var(--target) + var(--s1)); font-weight: 700; letter-spacing: var(--ls-1); }

@@ -337,6 +337,15 @@ test('the fleet approves its own send only to an agent it has on record', () => 
   expect(fleetSelfApproval('SendMessage', { to: 'a1' }, [])).toBeUndefined()
 })
 
+test('the fleet never approves its own send to a console that is stood down', () => {
+  const seats = [
+    { callSign: 'MISSION-CONTROL', agentId: 'a1', name: 'console-mission-control', status: 'stood-down' },
+    { callSign: 'KARNAK', agentId: 'k1', name: 'console-karnak', status: 'staffed' },
+  ]
+  expect(fleetSelfApproval('SendMessage', { to: 'a1', message: 'go' }, seats)).toBeUndefined()
+  expect(fleetSelfApproval('SendMessage', { to: 'k1', message: 'go' }, seats)).toBe('KARNAK')
+})
+
 test('the fleet approves its own spawn only of a Controller under a reserved console name', () => {
   const seats = [{ callSign: 'KARNAK', agentId: '', name: 'console-karnak', status: 'staffing' }]
   expect(fleetSelfApproval('Agent', { subagent_type: 'mission-fleet:controller', name: 'console-karnak' }, seats)).toBe('KARNAK')

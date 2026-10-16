@@ -547,14 +547,15 @@ export type FleetSeat = { callSign: string; agentId: string; name: string; statu
 /**
  * Whether one of the fleet's own sends or spawns may skip the mode's decider, and for which
  * console. Only the founder's console actions raise these, and the auto mode classifier
- * cannot judge a call a plugin raised. Anything else returns undefined and is decided as usual.
+ * cannot judge a call a plugin raised. A send qualifies only to a staffed console, so the fleet
+ * never wakes a Controller it stood down. Anything else returns undefined and is decided as usual.
  */
 export function fleetSelfApproval(tool: string, input: unknown, seats: FleetSeat[]): string | undefined {
   const i = (input ?? {}) as Record<string, unknown>
   if (tool === 'SendMessage') {
     const to = i.to
     if (typeof to !== 'string' || to === '') return undefined
-    return seats.find(s => s.agentId !== '' && s.agentId === to)?.callSign
+    return seats.find(s => s.agentId !== '' && s.agentId === to && s.status === 'staffed')?.callSign
   }
   if (tool === 'Agent') {
     if (i.subagent_type !== 'mission-fleet:controller' || typeof i.name !== 'string') return undefined

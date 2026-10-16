@@ -86,6 +86,8 @@
   const openGates = () => pollItems().filter(p => p.state === 'open' && !sentToFlight(p))
   // A go or no-go that never reached its Controller (isUndelivered in the mod's hooks/loops.ts).
   const undelivered = p => Boolean(p.undelivered) && (p.state === 'go' || p.state === 'no-go')
+  // A go or no-go kept for the next Controller under its call sign (isHeld in the mod's hooks/loops.ts).
+  const held = p => Boolean(p.held) && (p.state === 'go' || p.state === 'no-go') && !undelivered(p)
 
   function statusOf(c) {
     if (c.status === 'stood-down') return ['idle', 'Stood down']
@@ -163,7 +165,7 @@
       h += `<article class="gate">
         <div class="kind"><span class="call">${esc(p.from)}</span><span>· ${esc(p.kind)} · ${esc(p.id)} · ${esc(time(p.at))}</span></div>
         <h3>${esc(p.title)}</h3>
-        ${orphan ? `<p class="hint">${esc(p.from)} is stood down: your answer is kept for the next Controller on this front.</p>` : ''}
+        ${orphan ? `<p class="hint">${esc(p.from)} is stood down: your answer is held for the next ${esc(p.from)} Controller.</p>` : ''}
         ${p.targets?.length ? `<p class="hint">Tells: ${esc(p.targets.join(', '))}</p>` : ''}
         <details data-id="${esc(p.id)}"${S.details.has(p.id) ? ' open' : ''}><summary>The report it came from</summary><pre>${esc(p.detail)}</pre></details>
         <label class="visually-hidden" for="note-${esc(p.id)}">Note for ${esc(p.id)}</label>
@@ -172,7 +174,10 @@
         <div class="btnrow ${orphan ? 'two' : 'one'}"><button class="ghost" type="button" data-a="ask" data-v="${esc(p.id)}">Ask Flight first</button>${orphan ? `<button class="warn" type="button" data-a="gatedismiss" data-v="${esc(p.id)}">Dismiss</button>` : ''}</div>
       </article>`
     })
-    const decided = items.filter(p => (p.state === 'go' || p.state === 'no-go' || p.state === 'dismissed') && !undelivered(p)).slice(-6).reverse()
+    // Held decisions wait on a staffing, not on the founder, so they sit below the open gates.
+    const kept = items.filter(held).reverse()
+    if (kept.length) h += '<p class="section-label">Held for the next Controller</p>' + kept.map(heldCard).join('')
+    const decided = items.filter(p => (p.state === 'go' || p.state === 'no-go' || p.state === 'dismissed') && !undelivered(p) && !held(p)).slice(-6).reverse()
     const replaced = items.filter(p => p.state === 'superseded').slice(-3).reverse()
     if (decided.length) h += '<p class="section-label">Decided</p>' + decided.map(p => `<p class="resolved">${pill(p.state === 'go' ? ['done', 'Go'] : p.state === 'dismissed' ? ['idle', 'Dismissed'] : ['failed', 'No-go'])}<span>${esc(p.id)} · ${esc(p.from)}</span></p>`).join('')
     if (replaced.length) h += '<p class="section-label">Replaced by a newer report</p>' + replaced.map(p => `<p class="resolved">${pill(['idle', 'Replaced'])}<span>${esc(p.id)} · ${esc(str(p.title).slice(0, 90))}</span></p>`).join('')
@@ -195,6 +200,14 @@
     else if (p.seat === 'replaced') body = `<p class="hint">${why} The ${esc(p.from)} Controller that raised it has been replaced. Tell the new one from Flight, or dismiss this.</p>${raw}<div class="btnrow one">${dismiss('warn')}</div>`
     else body = `<p class="hint">${why} ${esc(p.from)} is no longer staffed. Staff the console again from Flight, then tell it the decision, or dismiss this.</p>${raw}<div class="btnrow one">${dismiss('warn')}</div>`
     return `<article class="gate undelivered"><div class="kind"><span class="call">${esc(p.from)}</span><span>· ${esc(p.id)}</span></div><h3>Your ${verdict} did not reach ${esc(p.from)}</h3>${body}</article>`
+  }
+
+  // A decision made after the Controller that raised it stood down: kept until the next Controller
+  // staffed under that call sign gets it with its staffing, or until it is dismissed.
+  function heldCard(p) {
+    const verdict = p.state === 'go' ? 'GO' : 'NO-GO'
+    const key = `${p.id}:held`
+    return `<article class="gate held"><div class="kind"><span class="call">${esc(p.from)}</span><span>· ${esc(p.id)} · ${esc(time(p.held))}</span></div><h3>Your ${verdict} is held for the next ${esc(p.from)} Controller</h3><p class="hint">The ${esc(p.from)} Controller that raised it had stood down when you decided. The next Controller staffed under ${esc(p.from)} gets it with its staffing. Dismiss clears it and nothing is sent.</p><details data-id="${esc(key)}"${S.details.has(key) ? ' open' : ''}><summary>The report it answers</summary><pre>${esc(p.detail)}</pre></details><div class="btnrow one"><button class="warn" type="button" data-a="gatedismiss" data-v="${esc(p.id)}">Dismiss</button></div></article>`
   }
 
   function viewLoops() {

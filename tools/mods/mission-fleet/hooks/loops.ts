@@ -1,4 +1,4 @@
-import type { PollItem } from '../types'
+import type { PendingAdvisory, PollItem } from '../types'
 
 export type StatusCheck = {
   state?: string
@@ -90,6 +90,26 @@ export function isUndelivered(item: Pick<PollItem, 'state' | 'undelivered'>): bo
   return Boolean(item.undelivered) && (item.state === 'go' || item.state === 'no-go')
 }
 
+/** A go or no-go decided after the Controller that raised it stood down, kept for the next Controller under its call sign. */
+export function isHeld(item: Pick<PollItem, 'state' | 'held'>): boolean {
+  return Boolean(item.held) && (item.state === 'go' || item.state === 'no-go')
+}
+
+/**
+ * What the next Controller under a call sign is told when it is staffed: each decision the founder
+ * made while no Controller held that call sign, with the report it answers, and each advisory held
+ * for its front. One message, so nothing arrives in part; empty when nothing waits.
+ */
+export function heldText(callSign: string, verdicts: readonly PollItem[], advisories: readonly PendingAdvisory[]): string {
+  if (verdicts.length === 0 && advisories.length === 0) return ''
+  const lines = [`Held for the next ${callSign} Controller, which is you. Say in your next status check what you will do with each.`]
+  for (const v of verdicts) {
+    lines.push('', `${v.state === 'no-go' ? 'NO-GO' : 'GO'} on ${v.id}${v.note ? `: ${v.note}` : '.'}`, `It answers a report an earlier ${callSign} Controller sent at ${v.at.slice(0, 16)}, decided after that Controller stood down:`, v.detail)
+  }
+  if (advisories.length) lines.push('', 'Advisories Flight held for your front:', ...advisories.map(a => `- ${a.at.slice(0, 16)} ${a.text}`))
+  return lines.join('\n')
+}
+
 /**
  * One plain sentence for the founder in place of an engine refusal, which is often written for the
  * model ("Issue the action again once..."). The raw text stays on the item and in the audit log.
@@ -119,8 +139,15 @@ export const APP_HISTORY = 30
 
 /**
  * The poll items the app draws: the last APP_HISTORY closed items as history, then every undelivered
- * decision however old (each waits on the founder until a retry or a dismiss), then every open item.
+ * decision however old (each waits on the founder until a retry or a dismiss), then every held
+ * decision however old (each waits for a staffing or a dismiss), then every open item.
  */
 export function appPoll(items: readonly PollItem[]): PollItem[] {
-  return [...items.filter(p => p.state !== 'open' && !isUndelivered(p)).slice(-APP_HISTORY), ...items.filter(isUndelivered), ...items.filter(p => p.state === 'open')]
+  const held = (p: PollItem) => isHeld(p) && !isUndelivered(p)
+  return [
+    ...items.filter(p => p.state !== 'open' && !isUndelivered(p) && !held(p)).slice(-APP_HISTORY),
+    ...items.filter(isUndelivered),
+    ...items.filter(held),
+    ...items.filter(p => p.state === 'open'),
+  ]
 }

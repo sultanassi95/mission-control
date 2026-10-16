@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import type { PollItem } from '../types'
-import { APP_HISTORY, appPoll, cardFacts, dependentsOf, isNothing, isUndelivered, liveSeat, parseStatus, plainReason, pollId, prSignature, prsIn, seatState } from './loops'
+import { APP_HISTORY, appPoll, cardFacts, dependentsOf, heldText, isHeld, isNothing, isUndelivered, liveSeat, parseStatus, plainReason, pollId, prSignature, prsIn, seatState } from './loops'
 
 // The refusal MI1's GO met on 2026-10-16, in part: written for the model, not for the founder.
 const AUTO_MODE = 'The server-side auto mode classifier gave no verdict for SendMessage: the request that produced this action did not ask for one. Issue the action again once, as-is; if it is denied again, continue with other tasks and tell the user.'
@@ -92,4 +92,42 @@ test('the app keeps every undelivered decision and every open item, however much
   const open = item({ id: 'MI2', state: 'open' })
   const ids = appPoll([stuck, open, ...closed]).map(p => p.id)
   expect(ids).toEqual([...closed.slice(-APP_HISTORY).map(p => p.id), 'MI1', 'MI2'])
+})
+
+// ---- Held decisions (MC-122) ----
+
+const HELD_AT = '2026-10-16T01:00:00.000Z'
+
+test('a held decision is a go or no-go decided after its Controller stood down', () => {
+  expect(isHeld(item({ state: 'go', held: HELD_AT }))).toBe(true)
+  expect(isHeld(item({ state: 'no-go', held: HELD_AT }))).toBe(true)
+  expect(isHeld(item({ state: 'go' }))).toBe(false)
+  expect(isHeld(item({ state: 'go', held: '' }))).toBe(false)
+  // A dismissed one keeps its time as the record, and is no longer held.
+  expect(isHeld(item({ state: 'dismissed', held: HELD_AT }))).toBe(false)
+  expect(isHeld(item({ state: 'open', held: HELD_AT }))).toBe(false)
+})
+
+test('the app keeps every held decision, however much history follows it', () => {
+  const held = item({ id: 'MI3', held: HELD_AT })
+  const stuck = item({ id: 'MI1', undelivered: AUTO_MODE })
+  const closed = Array.from({ length: APP_HISTORY + 5 }, (_, k) => item({ id: `MI${k + 10}`, state: k % 2 ? 'dismissed' : 'go' }))
+  const open = item({ id: 'MI2', state: 'open' })
+  const ids = appPoll([held, stuck, open, ...closed]).map(p => p.id)
+  expect(ids).toEqual([...closed.slice(-APP_HISTORY).map(p => p.id), 'MI1', 'MI3', 'MI2'])
+})
+
+test('the next Controller is told each held decision with the report it answers, and each held advisory, in one message', () => {
+  const go = item({ id: 'MI2', state: 'go', note: 'ship it', held: HELD_AT, detail: 'state: built\nblocked on you: merge the fix' })
+  const nogo = item({ id: 'MI4', state: 'no-go', held: HELD_AT, title: 'drop the cache', detail: 'blocked on you: drop the cache' })
+  const advisory = { id: 'p1', front: 'mission-control', text: 'Advisory from Flight: KARNAK reports a contract change: /v1 ids.', at: '2026-10-16T00:40:00.000Z' }
+  const text = heldText('MISSION-CONTROL', [go, nogo], [advisory])
+  expect(text).toContain('MISSION-CONTROL')
+  expect(text).toContain('GO on MI2: ship it')
+  expect(text).toContain('blocked on you: merge the fix')
+  expect(text).toContain('NO-GO on MI4.')
+  expect(text).toContain('blocked on you: drop the cache')
+  expect(text).toContain('KARNAK reports a contract change: /v1 ids.')
+  expect(heldText('MISSION-CONTROL', [go], [])).not.toContain('Advisor')
+  expect(heldText('MISSION-CONTROL', [], [])).toBe('')
 })

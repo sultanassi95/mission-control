@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 
-import type { Console, PollItem } from '../types'
+import type { Console, PendingAdvisory, PollItem } from '../types'
 import { parseArgs } from './register'
 
 // The kit stamps origin and presentation on a command run, as a session does.
@@ -212,7 +212,7 @@ const OPEN: PollItem = { id: 'MI2', at: '2026-10-16T00:50:00.000Z', from: 'MISSI
 
 // The fleet as a live session holds it, answered beneath the plugin until the plugin writes its own.
 // deno-lint-ignore no-explicit-any
-const seed = (on: any, values: { poll?: PollItem[]; consoles?: Console[] }) => {
+const seed = (on: any, values: { poll?: PollItem[]; consoles?: Console[]; pending?: PendingAdvisory[] }) => {
   on('state.get', async (_$: unknown, e: { plugin: string; key: string }, next: (e: unknown) => Promise<{ value?: { version: number } }>) => {
     const got = await next(e)
     const held = e.plugin === 'mission-fleet' ? values[e.key as keyof typeof values] : undefined
@@ -393,4 +393,181 @@ test('every undelivered decision is listed, not only the newest three', async ($
   seed(on, { poll: ids.map((id, k) => ({ ...MI1, id, at: `2026-10-16T00:3${k}:00.000Z` })), consoles: [MC] })
   const listed = (await person($, 'poll')).text ?? ''
   for (const id of ids) expect(listed).toContain(`  ${id}  MISSION-CONTROL: GO not delivered.`)
+})
+
+// ---- Held decisions (MC-122) ----
+
+// MI2's Controller, a1, after it was dismissed.
+const DOWN: Console = { ...MC, status: 'stood-down' }
+// The call sign staffed again: a2 is the next MISSION-CONTROL Controller.
+const NEXT: Console = { ...MC, agentId: 'a2', staffedAt: '2026-10-16T01:00:00.000Z' }
+const HELD: PollItem = { ...OPEN, state: 'go', decidedAt: '2026-10-16T00:58:00.000Z', held: '2026-10-16T00:58:00.000Z' }
+const ADVISORY: PendingAdvisory = { id: 'p1', front: 'mission-control', text: 'Advisory from Flight: KARNAK reports a contract change: /v1 ids.', at: '2026-10-16T00:40:00.000Z' }
+
+// Every value the plugin writes under each given state key, in order. One handler records them all:
+// the kit loads a test's hooks only when each event has a single handler, so this never runs beside pollWrites.
+// deno-lint-ignore no-explicit-any
+const writes = (on: any, ...keys: string[]) => {
+  const seen = new Map<string, unknown[]>(keys.map(k => [k, []]))
+  on('state.set', (_$: unknown, e: { plugin: string; key: string; value: unknown }, next: (e: unknown) => unknown) => {
+    if (e.plugin === 'mission-fleet') seen.get(e.key)?.push(e.value)
+    return next(e)
+  })
+  return seen
+}
+
+test('a GO for the Controller that raised the gate, still staffed, goes to it and is not held', async ($, on) => {
+  portfolio(on)
+  const polls = pollWrites(on)
+  seed(on, { poll: [OPEN], consoles: [MC] })
+  const to: string[] = []
+  on('session.send', (_$, e) => {
+    to.push(JSON.stringify(e.to))
+    return { isDelivered: true }
+  })
+  const r = await person($, 'go MI2')
+  expect(to).toHaveLength(1)
+  expect(to[0]).toContain('a1')
+  expect(r.text).toContain('MI2: GO recorded, told MISSION-CONTROL.')
+  expect(polls.at(-1)?.find(p => p.id === 'MI2')?.held).toBeUndefined()
+})
+
+test('a GO for a Controller that is stood down is held, nothing is sent, and the poll says so', async ($, on) => {
+  portfolio(on)
+  const audit = auditLines(on)
+  const polls = pollWrites(on)
+  seed(on, { poll: [OPEN], consoles: [DOWN] })
+  let sends = 0
+  on('session.send', () => {
+    sends++
+    return { isDelivered: true }
+  })
+  const r = await person($, 'go MI2')
+  expect(sends).toBe(0)
+  expect(r.text).toContain('MI2: GO recorded and held for the next MISSION-CONTROL Controller')
+  const after = polls.at(-1)?.find(p => p.id === 'MI2')
+  expect(after?.state).toBe('go')
+  expect(after?.held).toBeTruthy()
+  expect(after?.undelivered).toBeUndefined()
+  expect(audit.join('\n')).toContain('\theld\tMI2\tfor MISSION-CONTROL')
+  const listed = (await person($, 'poll')).text ?? ''
+  expect(listed).toContain('Held for the next Controller')
+  expect(listed).toContain('  MI2  MISSION-CONTROL: GO held')
+})
+
+test('a held GO goes once to the Controller staffed now under that call sign, with its report and the held advisories', async ($, on) => {
+  portfolio(on)
+  const audit = auditLines(on)
+  const seen = writes(on, 'poll', 'pending')
+  const polls = seen.get('poll') as PollItem[][]
+  const pendings = seen.get('pending') as PendingAdvisory[][]
+  seed(on, { poll: [OPEN], consoles: [NEXT], pending: [ADVISORY] })
+  const sent: { to: string; text: string }[] = []
+  on('session.send', (_$, e) => {
+    sent.push({ to: JSON.stringify(e.to), text: e.text })
+    return { isDelivered: true }
+  })
+  const r = await person($, 'go MI2 ship it')
+  expect(sent).toHaveLength(1)
+  expect(sent[0]?.to).toContain('a2')
+  expect(sent[0]?.to).not.toContain('a1')
+  expect(sent[0]?.text).toContain('GO on MI2: ship it')
+  expect(sent[0]?.text).toContain('blocked on you: merge the fix')
+  expect(sent[0]?.text).toContain('KARNAK reports a contract change: /v1 ids.')
+  expect(r.text).toContain('MI2: GO recorded and handed to the MISSION-CONTROL Controller staffed now')
+  const after = polls.at(-1)?.find(p => p.id === 'MI2')
+  expect(after?.state).toBe('go')
+  expect(after?.held).toBeUndefined()
+  expect(after?.undelivered).toBeUndefined()
+  expect(pendings.at(-1)).toEqual([])
+  const lines = audit.join('\n')
+  expect(lines).toContain('\theld\tMI2\tfor MISSION-CONTROL')
+  expect(lines).toContain('\theld\tMI2\tdelivered to MISSION-CONTROL')
+})
+
+test('a GO decided while another hand-over is still sending reaches the Controller staffed now once, and so does that one', async ($, on) => {
+  portfolio(on)
+  const polls = pollWrites(on)
+  const MI3: PollItem = { ...OPEN, id: 'MI3', at: '2026-10-16T00:51:00.000Z', title: 'tag the release', detail: 'blocked on you: tag the release' }
+  seed(on, { poll: [OPEN, MI3], consoles: [NEXT] })
+  const sent: string[] = []
+  let second: ReturnType<typeof person> | undefined
+  on('session.send', async (_$, e) => {
+    sent.push(e.text)
+    // The second GO is decided while the first hand-over's message is still on its way.
+    if (!second) {
+      second = person($, 'go MI3')
+      await second
+    }
+    return { isDelivered: true }
+  })
+  const first = await person($, 'go MI2')
+  const other = await second
+  expect(sent.filter(t => t.includes('GO on MI2')).length).toBe(1)
+  expect(sent.filter(t => t.includes('GO on MI3')).length).toBe(1)
+  expect(first.text).toContain('MI2: GO recorded and handed to the MISSION-CONTROL Controller staffed now')
+  expect(other?.text).toContain('MI3: GO recorded and handed to the MISSION-CONTROL Controller staffed now')
+  for (const id of ['MI2', 'MI3']) {
+    const after = polls.at(-1)?.find(p => p.id === id)
+    expect(after?.state).toBe('go')
+    expect(after?.held).toBeUndefined()
+  }
+})
+
+test('a held GO the Controller staffed now cannot receive becomes undelivered, and the poll says it was replaced', async ($, on) => {
+  portfolio(on)
+  const polls = pollWrites(on)
+  seed(on, { poll: [OPEN], consoles: [NEXT] })
+  const to: string[] = []
+  on('session.send', (_$, e) => {
+    to.push(JSON.stringify(e.to))
+    return { isDelivered: false, reason: AUTO_MODE }
+  })
+  const r = await person($, 'go MI2')
+  expect(to).toHaveLength(1)
+  expect(to[0]).toContain('a2')
+  expect(r.text).toContain('NOT delivered')
+  expect(r.text).toContain('Auto mode blocked the message.')
+  const after = polls.at(-1)?.find(p => p.id === 'MI2')
+  expect(after?.state).toBe('go')
+  expect(after?.held).toBeUndefined()
+  expect(after?.undelivered).toBe(AUTO_MODE)
+  const listed = (await person($, 'poll')).text ?? ''
+  expect(listed).toContain('  MI2  MISSION-CONTROL: GO not delivered.')
+  expect(listed).toContain('has been replaced')
+})
+
+test('dismiss-gate clears a held decision with nothing sent, and the audit says so', async ($, on) => {
+  portfolio(on)
+  const audit = auditLines(on)
+  const polls = pollWrites(on)
+  seed(on, { poll: [HELD], consoles: [DOWN] })
+  let sends = 0
+  on('session.send', () => {
+    sends++
+    return { isDelivered: true }
+  })
+  const r = await person($, 'dismiss-gate MI2')
+  expect(r.text).toContain('MI2 dismissed: the held GO is cleared.')
+  expect(sends).toBe(0)
+  expect(polls.at(-1)?.find(p => p.id === 'MI2')?.state).toBe('dismissed')
+  expect(audit.join('\n')).toContain('\tdismissed\tMI2\theld decision cleared, nothing sent')
+  expect((await person($, 'poll')).text).not.toContain('MI2')
+})
+
+test('an item raised before agent ids were recorded is held when nothing is staffed under its call sign', async ($, on) => {
+  portfolio(on)
+  const polls = pollWrites(on)
+  seed(on, { poll: [{ ...OPEN, agentId: '' }], consoles: [DOWN] })
+  let sends = 0
+  on('session.send', () => {
+    sends++
+    return { isDelivered: true }
+  })
+  const r = await person($, 'go MI2')
+  expect(sends).toBe(0)
+  expect(r.text).toContain('held for the next MISSION-CONTROL Controller')
+  const after = polls.at(-1)?.find(p => p.id === 'MI2')
+  expect(after?.held).toBeTruthy()
+  expect(after?.undelivered).toBeUndefined()
 })

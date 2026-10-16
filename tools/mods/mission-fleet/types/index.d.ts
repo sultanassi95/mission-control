@@ -37,6 +37,11 @@ export type PollItem = {
   agentId: string
   /** Set when a decision could not be delivered. */
   undelivered?: string
+  /**
+   * Set when a go or no-go was decided after the Controller that raised it stood down: the time it was
+   * held for the next Controller staffed under the same call sign. Cleared once that Controller has it.
+   */
+  held?: string
   /** When the app sent a decision on it to Flight; the gate takes no other tap until Flight runs it or the code expires. */
   sentAt?: string
   decidedAt?: string
