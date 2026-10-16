@@ -148,32 +148,45 @@ const FAILED = 'The console command failed partway. /console list shows what the
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
-    await $.command.register({
+    // Each step stands alone: the engine refuses /console when a user command has that name, and that must not skip the rest.
+    const step = async (name: string, run: () => unknown) => {
+      try {
+        await run()
+      } catch (err) {
+        await log($, 'session.start', name, `failed: ${String(err).slice(0, 160)}`).catch(() => undefined)
+        if (name !== 'command.register') try { $.ui.toast(`mission-fleet: ${name} failed at session start; see _command/fleet/audit.log`) } catch { /* no UI */ }
+      }
+    }
+    await step('command.register', () => $.command.register({
       name: 'console',
       description: 'Staff, list, call or stand down a front Controller (Flight\'s console fleet)',
-    })
-    await $.agent.register({
+    }))
+    await step('agent.register', () => $.agent.register({
       name: CONTROLLER_TYPE,
       description: 'A front or project Controller. Staff it only through the mission-fleet console tool (/console staff), never with a direct Agent call.',
       prompt: CONTROLLER_PROMPT,
       background: true,
       autoCompactWindow: 400000,
-    })
+    }))
     // One watch loop per module environment; a reload starts a fresh one and drops the old one's timers.
-    if (!watching) {
-      watching = true
-      void watchLoop($).catch((err: unknown) => {
-        watching = false
-        return log($, 'watch', 'loop', `stopped: ${String(err).slice(0, 120)}`)
-      })
-    }
-    if ((await $.store.get(APP_ALWAYS).catch(() => false)) === true) void superviseApp($)
-    await $.tool.register({
+    await step('watch.start', () => {
+      if (!watching) {
+        watching = true
+        void watchLoop($).catch((err: unknown) => {
+          watching = false
+          return log($, 'watch', 'loop', `stopped: ${String(err).slice(0, 120)}`)
+        })
+      }
+    })
+    await step('app.supervise', async () => {
+      if ((await $.store.get(APP_ALWAYS).catch(() => false)) === true) void superviseApp($)
+    })
+    await step('tool.register', () => $.tool.register({
       name: TOOL,
       description: `Flight's console fleet. Pass the same arguments as the /console command.\n${USAGE}`,
       inputSchema: { type: 'object', properties: { args: { type: 'string', description: 'e.g. "staff fieldkit --model sonnet"' } }, required: ['args'] },
       isDeferred: false,
-    })
+    }))
     return next(e)
   })
 

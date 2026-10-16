@@ -49,6 +49,7 @@ flowchart LR
 2. **Cheapest model that holds the bar**, retuned on evidence: a Controller doing mechanical work runs on haiku; retune up when its reports show it struggling, down when the hard part is done.
 3. **One console per scope.** A multi-project front gets one console per project that has work, or one front console that runs in the directory its projects share.
 4. **Stand down when the work ends.** A console left staffed costs nothing while idle but its context grows; the progress log is its memory, so a new console starts cold without loss.
+5. **Staff outside auto mode.** Under auto mode `/console staff` can be denied with "The server-side auto mode classifier gave no verdict for Agent" (seen twice on 2026-10-16; the cause is not established). Switch to the default mode (Shift+Tab), run `/console staff`, then switch back to auto.
 
 ## Flight's duties while consoles run
 
