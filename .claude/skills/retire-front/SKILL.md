@@ -23,7 +23,8 @@ Name the front and show exactly what will move:
 - `_command/portfolio/<front>/` - the hub, every spoke, every `tasks/`
   board and task file (done and dropped included - they are the record).
 - Its row in `trackers/fronts.md`, its line(s) in `daily/today.md`, any
-  registered-in-place note in the root `CLAUDE.md`.
+  registered-in-place note in the operating file
+  `_command/CLAUDE.operating.md`.
 
 State what does NOT move: the project repos themselves (the founder's
 code stays wherever it lives - retiring a front never touches a repo),
@@ -48,8 +49,8 @@ with `/console stand-down <sign>`, so its handoff lands in the front's
 3. Remove the front's line(s) from `daily/today.md`; lift any of its
    founder-gated items into the closing report instead (they do not
    silently vanish).
-4. If registered in place: remove the added-directory note from the root
-   `CLAUDE.md`.
+4. If registered in place: remove the added-directory note from
+   `_command/CLAUDE.operating.md`.
 5. Update `_command/mental-model.md`'s fronts branch.
 
 ## Step 3 - Close the record
@@ -63,5 +64,5 @@ with `/console stand-down <sign>`, so its handoff lands in the front's
 
 Move `_archive/<front>/` back to `portfolio/<front>/`, restore the board
 row from the Archived section, re-add the today.md line and (if needed)
-the CLAUDE.md note. Task history resumes exactly where it stopped - task
-ids never changed.
+the note in `_command/CLAUDE.operating.md`. Task history resumes exactly
+where it stopped - task ids never changed.

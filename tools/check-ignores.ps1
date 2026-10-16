@@ -19,6 +19,7 @@ $ErrorActionPreference = "Stop"
 # committed from a clone of a public repo.
 $mustIgnore = @(
   # the operator's instance, in full: doctrine, spokes, boards, continuity
+  "_command/CLAUDE.operating.md",
   "_command/CONSTITUTION.local.md",
   "_command/daily/today.md",
   "_command/mental-model.md",

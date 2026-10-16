@@ -167,8 +167,10 @@ git pull upstream main    # updates framework/, .claude/skills/ and tools/; your
 ```
 
 Read the new entries in [CHANGELOG.md](CHANGELOG.md) after each pull: doctrine changes never
-reach you silently. Run `git config merge.ours.driver true` once so the shipped
-`.gitattributes` keeps your own `CLAUDE.md` over the bootstrap on every pull. Your instance
+reach you silently. Your operating instructions live in `_command/CLAUDE.operating.md`, which
+the shipped `CLAUDE.md` imports, so you never edit `CLAUDE.md` and no pull meets a local edit.
+An instance lifted off before 2026-10-17 kept them in `CLAUDE.md` itself: move them once, before
+your next pull, with the steps in the CHANGELOG entry of that date. Your instance
 (`_command/`) is gitignored and never travels here; keep it in a private repository of your
 own if you want its history.
 

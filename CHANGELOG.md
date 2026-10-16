@@ -6,6 +6,60 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-10-17: the shipped `CLAUDE.md` is never edited in your clone (MC-104).
+  LIFTOFF Stage 4 used to rewrite it into your operating instructions, which
+  left a tracked file with a local edit: the first pull that updated it was
+  refused, and stashing the edit to get the pull through put every later
+  session back on the first-flight bootstrap without a word. Stage 4 now
+  writes the operating instructions to `_command/CLAUDE.operating.md`,
+  gitignored with the rest of `_command/`, and the shipped `CLAUDE.md`
+  imports it on its last line. Imports resolve from the folder of the file
+  that holds them, so the operating file's six imports read
+  `@../framework/...` for the doctrine and plain sibling paths for the
+  instance files. `/preflight` check 1 follows the chain and fails on a
+  local edit of `CLAUDE.md`. `.gitattributes` (`CLAUDE.md merge=ours`) is
+  gone: a merge driver acts only when both sides committed a change to the
+  file, so it never covered the uncommitted edit, and with nothing edited
+  locally it has nothing left to do. The fieldkit repro script sends its
+  JSON with a `Content-Type` header.
+
+  If you lifted off before this, move your operating text once, BEFORE you
+  pull this change (the pull is refused while `CLAUDE.md` carries your
+  edit). From the portfolio root:
+
+  ```bash
+  test -e _command/CLAUDE.operating.md || cp CLAUDE.md _command/CLAUDE.operating.md
+  sed -i.bak -e 's|^@framework/|@../framework/|' -e 's|^@_command/|@|' _command/CLAUDE.operating.md && rm _command/CLAUDE.operating.md.bak
+  grep -n '^@' _command/CLAUDE.operating.md   # every import must now resolve from _command/
+  git fetch upstream
+  git merge-base --is-ancestor HEAD upstream/main && git restore CLAUDE.md && git merge --ff-only upstream/main
+  ```
+
+  The first line never overwrites an operating file already in place, so
+  the block is safe to run again. The two rewrites cover the six imports
+  LIFTOFF wrote; an import you added yourself needs the same change by
+  hand: `../` in front of a path from the portfolio root, `_command/`
+  dropped from a path inside it. The last line puts the shipped
+  `CLAUDE.md` back only when your branch fast-forwards to `upstream/main`;
+  if it has commits of its own, the line stops before changing anything,
+  so merge those by hand and run it again. On Windows, run the block in
+  Git Bash, or make the copy and the import edits by hand.
+
+  If a pull already replaced your `CLAUDE.md` because you stashed your
+  edit to get it through, your text is in the stash. Find its entry with
+  `git stash list`, write it out with
+  `git show 'stash@{0}:CLAUDE.md' > _command/CLAUDE.operating.md` (your
+  entry's number in place of 0), run the `sed` and `grep` lines, and stop
+  there. If you committed your own `CLAUDE.md`, run the
+  first three lines, merge as usual, then take the shipped file back with
+  `git checkout upstream/main -- CLAUDE.md` and commit it.
+
+  Then open a fresh session at the portfolio root and ask which files its
+  instructions came from: the answer names `_command/CLAUDE.operating.md`
+  and its six imports. A session opened in a folder below the portfolio
+  root, such as a front's repo, loads them only once you approve imports
+  from outside its folder.
+
 - 2026-10-16: every front is a folder holding its repos, `fronts/<front>/<repo>`,
   even when it has only one (MC-130). `/new-front` and LIFTOFF used to move a
   repo so that it became the front's folder (`mv <path> ./fronts/<front>`),

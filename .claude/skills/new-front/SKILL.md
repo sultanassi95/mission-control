@@ -62,8 +62,8 @@ instead of inside it. Offer, with the exact command shown:
   own folder name, so a front named after its only repo reads
   `fronts/<front>/<front>`.
 - **Register-in-place:** the spoke records the external absolute path,
-  and the root `CLAUDE.md` gains a note that this front's directory must
-  be added to sessions that work on it.
+  and the operating file `_command/CLAUDE.operating.md` gains a note that
+  this front's directory must be added to sessions that work on it.
 - **Non-git fronts** (a design folder, a course, a consulting gig) are
   first-class: their folder is `fronts/<front>/`, made when there are
   files and holding them directly, with no repo inside; hub without
