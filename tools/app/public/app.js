@@ -28,8 +28,9 @@
   let seenOp = 0
   const TABS = [['flight', 'Flight'], ['consoles', 'Consoles'], ['poll', 'Poll'], ['loops', 'Loops']]
 
-  const S = { tab: 'flight', state: null, live: false, sheet: null, sel: null, filter: 'ALL', query: '', open: new Set(), queued: [], tune: null, notes: {}, details: new Set(), sending: false, opener: null, flights: [], profile: '' }
-  try { S.profile = localStorage.getItem('mcapp-profile') ?? '' } catch {}
+  // The remembered profile (localStorage mcapp-profile) is a wish, not the state: nothing is named or
+  // connected until the first listing of live profiles decides which one opens (loadFlights).
+  const S = { tab: 'flight', state: null, live: false, sheet: null, sel: null, filter: 'ALL', query: '', open: new Set(), queued: [], tune: null, notes: {}, details: new Set(), sending: false, opener: null, flights: [], profile: '', resolved: false, listFailed: false, streamFailed: false }
   // Every request goes to the chosen profile's Flight through the front door.
   const base = () => (S.profile ? `/p/${encodeURIComponent(S.profile)}` : '')
   const authHeaders = () => (token ? { 'x-mcapp-token': token } : {})
@@ -265,7 +266,9 @@
         <div class="btnrow"><button class="ghost" type="button" data-a="back">Keep</button><button class="ghost" type="button" data-a="dismiss">Dismiss</button><button class="danger" type="button" data-a="sdyes">Stand down</button></div>`
     } else if (S.sheet === 'profiles') {
       head = 'Profiles'
-      body = S.flights.length
+      body = S.listFailed
+        ? `<p class="sys">Can't reach the Mac to list profiles; trying again.</p>`
+        : S.flights.length
         ? `<div class="profiles">${S.flights.map(f => `<button class="prof" type="button" data-a="profile" data-v="${esc(f.profile)}" aria-pressed="${f.profile === S.profile}"><span class="prof-name">${esc(label(f.profile))}</span>${f.unreachable ? pill(['failed', 'Not answering']) : f.gates ? pill(['waiting', `${f.gates} waiting`]) : f.busy ? pill(['running', 'Working']) : pill(['idle', 'Idle'])}</button>`).join('')}</div>
           <p class="hint">A profile appears here while its session runs /console app.</p>`
         : '<p class="empty">No Flight is running. Type /console app in a Claude session.</p>'
@@ -356,10 +359,17 @@
       main.className = `main view-${S.tab}`
       paint(main, 'main', views[S.tab]())
       const busy = fleet().flight?.busy
-      $('link-text').textContent = S.live ? (busy ? `Live · ${fleet().flight?.activity || 'Flight is working'}` : 'Live · connected to Flight') : S.state ? 'Reconnecting…' : 'Not connected: sign in to Tailscale, or open the link /console app printed'
+      // No listing means the Mac is out of reach; a listing with no stream means only this profile's Flight is not answering.
+      const down = S.listFailed ? 'Not connected: sign in to Tailscale, or open the link /console app printed' : S.streamFailed ? 'Flight not answering; retrying' : 'Connecting to Flight…'
+      $('link-text').textContent = S.live ? (busy ? `Live · ${fleet().flight?.activity || 'Flight is working'}` : 'Live · connected to Flight') : S.state ? 'Reconnecting…' : down
       document.querySelector('.dot').className = `dot ${S.live ? (busy ? 'busy' : 'live') : ''}`
       const others = S.flights.filter(f => f.profile !== S.profile && (f.gates || f.busy))
-      $('profile').hidden = S.flights.length < 2 && !S.profile
+      // The switcher names only a listed profile and shows only while there is another to switch to: it waits for the
+      // first listing and hides while fewer than two profiles are listed or the Mac cannot be reached.
+      const hideSwitcher = !S.resolved || S.listFailed || !S.profile || S.flights.length < 2
+      // A switcher that hides while it has focus hands focus to the menu beside it, so a keyboard user is not dropped.
+      if (hideSwitcher && document.activeElement === $('profile')) $('menu').focus()
+      $('profile').hidden = hideSwitcher
       $('profile-name').textContent = S.profile ? label(S.profile) : 'Profile'
       $('profile').setAttribute('aria-label', `Profile: ${S.profile ? label(S.profile) : 'none'}${others.length ? `, ${others.length} other ${others.length === 1 ? 'profile needs' : 'profiles need'} a look` : ''}. Switch profile`)
       $('profile-dot').className = `dot ${others.some(f => f.gates) ? 'busy' : 'live'}`
@@ -375,7 +385,9 @@
         const first = document.querySelector('.sheet input, .sheet .sheet-body button, .sheet [data-a="close"]')
         first?.focus()
       } else if (repainted && last.sheet === '' && wasOpen) {
-        S.opener?.focus?.()
+        // The switcher hides when one profile is left, even with its sheet open; focus then goes to the menu beside it.
+        const back = S.opener?.hidden ? $('menu') : S.opener
+        back?.focus?.()
         S.opener = null
       }
       if (S.tab === 'flight' && stick) main.scrollTop = main.scrollHeight
@@ -399,7 +411,13 @@
     toastTimer = setTimeout(() => { t.hidden = true }, kind === 'error' ? 8000 : 2600)
   }
 
+  const STILL_CONNECTING = 'Still connecting to Flight. Try again in a moment.'
   async function send(op, text) {
+    // Before the first listing the request would reach the front door's own profile, which may not be the one about to open.
+    if (!S.resolved) {
+      toast(STILL_CONNECTING)
+      return false
+    }
     try {
       const headers = { 'Content-Type': 'application/json', ...authHeaders() }
       const r = await fetch(`${base()}/op`, { method: 'POST', headers, body: JSON.stringify({ op, text }) })
@@ -496,7 +514,7 @@
   document.addEventListener('toggle', e => {
     if (e.target.tagName === 'DETAILS' && e.target.dataset.id) e.target.open ? S.details.add(e.target.dataset.id) : S.details.delete(e.target.dataset.id)
   }, true)
-  $('profile').addEventListener('click', () => { S.opener = $('profile'); S.sheet = 'profiles'; render(); void loadFlights() })
+  $('profile').addEventListener('click', () => { S.opener = $('profile'); S.sheet = 'profiles'; render(); void loadFlights(false) })
   $('menu').addEventListener('click', () => { S.opener = $('menu'); S.sheet = 'menu'; render() })
   $('slash').addEventListener('click', () => { S.opener = $('slash'); S.sheet = 'slash'; S.query = ''; render() })
   $('send').addEventListener('submit', async e => {
@@ -507,6 +525,7 @@
     let text = typedText
     const photo = S.photo
     if (!text && !photo) return
+    if (!S.resolved) return toast(STILL_CONNECTING)
     if (photo && text.startsWith('/')) return toast('Remove the photo to run a command.', 'error')
     if (photo) {
       // Locked while it uploads, so the photo and the draft sent are the ones on screen.
@@ -635,9 +654,9 @@
     if (es) es.close()
     // Over the tailnet the signed-in Tailscale identity is enough; a token is needed only on the Mac's own address.
     es = new EventSource(token ? `${base()}/events?t=${encodeURIComponent(token)}` : `${base()}/events`)
-    es.onopen = () => { S.live = true; render() }
+    es.onopen = () => { S.live = true; S.streamFailed = false; render() }
     // A non-200 (the profile's server restarting) closes an EventSource for good; open a new one.
-    es.onerror = () => { S.live = false; render(); if (es.readyState === EventSource.CLOSED) setTimeout(() => es.readyState === EventSource.CLOSED && connect(), 3000) }
+    es.onerror = () => { S.live = false; if (!S.state) S.streamFailed = true; render(); if (es.readyState === EventSource.CLOSED) setTimeout(() => es.readyState === EventSource.CLOSED && connect(), 3000) }
     es.onmessage = m => {
       const first = S.state === null
       try { S.state = JSON.parse(m.data) } catch { return }
@@ -654,44 +673,64 @@
       render()
     }
   }
-  // The live profiles, refreshed every few seconds; a remembered profile that is gone falls back to the front door's own.
+  // The live profiles, refreshed every few seconds. The first listing that names a profile decides which one opens:
+  // the remembered one when it is listed, else this Mac's own, else the first listed; until then the front door's own
+  // Flight is shown unnamed. A profile missing from two timed listings in a row is left the same way; a listing a tap
+  // asks for refreshes the list but never counts as a miss, so a restarting profile keeps its grace. Every move is
+  // remembered, so a profile that stopped never pulls the app back when it runs again.
   let misses = 0
-  async function loadFlights() {
+  async function loadFlights(counted = true) {
+    let list
     try {
       const r = await fetch('/flights.json', { headers: authHeaders() })
-      if (!r.ok) return
-      S.flights = await r.json()
+      if (!r.ok) throw new Error(`flights ${r.status}`)
+      list = await r.json()
     } catch {
-      return
+      S.listFailed = true
+      return render()
     }
-    let chosen = ''
-    try { chosen = localStorage.getItem('mcapp-profile') ?? '' } catch {}
-    if (chosen && chosen !== S.profile && S.flights.some(f => f.profile === chosen)) return switchProfile(chosen, false)
-    // A profile missing from one listing is often only restarting; fall back after two misses in a row.
-    misses = S.flights.some(f => f.profile === S.profile) ? 0 : misses + 1
-    if (misses >= 2 || (!S.profile && S.flights.length)) {
-      const fallback = S.flights.find(f => f.self)?.profile ?? S.flights[0]?.profile ?? ''
-      if (fallback && fallback !== S.profile) {
-        if (S.profile) toast(`${label(S.profile)} is not running; showing ${label(fallback)}.`)
-        // The first profile resolved is remembered, so a later message cannot land in a different profile unseen.
-        return switchProfile(fallback, !chosen)
-      }
+    S.listFailed = false
+    S.flights = Array.isArray(list) ? list : []
+    const listed = p => S.flights.some(f => f.profile === p)
+    const fallback = S.flights.find(f => f.self)?.profile ?? S.flights[0]?.profile ?? ''
+    if (!S.resolved || !S.profile) {
+      const opening = !S.resolved
+      S.resolved = true
+      let chosen = ''
+      try { chosen = localStorage.getItem('mcapp-profile') ?? '' } catch {}
+      const pick = chosen && listed(chosen) ? chosen : fallback
+      // An empty listing (the front door's own entry missing) names no profile and says nothing about the remembered
+      // one: the front door's own Flight opens unnamed, and the next listing that names a profile decides.
+      if (!pick) return opening ? switchProfile('', false) : render()
+      if (chosen && pick !== chosen) toast(`${label(chosen)} is not running; showing ${label(pick)}.`)
+      return switchProfile(pick)
+    }
+    // A profile missing from one listing is often only restarting; it is left after two timed misses in a row.
+    if (listed(S.profile)) misses = 0
+    else if (counted) misses++
+    if (misses >= 2 && fallback && fallback !== S.profile) {
+      toast(`${label(S.profile)} is not running; showing ${label(fallback)}.`)
+      return switchProfile(fallback)
     }
     render()
   }
   function switchProfile(p, remember = true) {
     if (remember) try { localStorage.setItem('mcapp-profile', p) } catch {}
-    if (p === S.profile) return render()
+    misses = 0
+    if (p === S.profile && es) return render()
     S.profile = p
     stick = true
     S.state = null
     S.live = false
+    S.streamFailed = false
     S.queued = []
     S.sel = null
     S.tune = null
     S.notes = {}
     S.details = new Set()
-    S.sheet = null
+    // A move the app makes keeps the profiles sheet open, so a tap on the switcher is never closed underneath;
+    // a profile picked in the sheet closes it in the click handler.
+    if (S.sheet !== 'profiles') S.sheet = null
     seenOp = 0
     connect()
     render()
@@ -705,7 +744,7 @@
   document.addEventListener('visibilitychange', repin)
   window.addEventListener('pageshow', repin)
   render()
-  connect()
+  // The stream opens once the first listing has chosen a profile (switchProfile connects).
   void loadFlights()
-  setInterval(loadFlights, 5000)
+  setInterval(() => loadFlights(), 5000)
 })()

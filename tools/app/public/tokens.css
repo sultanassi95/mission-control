@@ -20,6 +20,7 @@
   --rise: 220ms;
   --pulse: 1.2s; --pulse-step: .2s; --dim: .25; --bubble: 88%;
   --toast-lift: 96px;
+  --prof-max: min(9.5em, 40vw);
   --rail: 220px; --read: 760px; --wide: 1200px; --card-min: 320px; --sheet-w: 640px;
   color-scheme: light;
 }
