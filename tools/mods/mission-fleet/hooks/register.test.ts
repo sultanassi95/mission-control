@@ -162,3 +162,24 @@ test('the app is the founder\'s to start: refused through Flight\'s tool', async
   const viaTool = await $.tool.call({ tool: 'mcp__mission-fleet__console', args: 'app' } as Parameters<Engine['tool']['call']>[0])
   expect(JSON.stringify(viaTool)).toContain('founder')
 })
+
+// A user-level /console skill makes the engine refuse the plugin's own command registration. That
+// refusal must not stop the Controller type and the console tool from registering.
+test('a refused console command still registers the controller type and the console tool', async ($, on) => {
+  const registered: string[] = []
+  const written: { path: string; text: string }[] = []
+  on('command.register', () => ({ deny: '"/console" refused: it is the user\'s /console' }))
+  on('agent.register', (_$, e) => { registered.push(`agent:${e.name}`); return { value: undefined } })
+  on('tool.register', (_$, e) => { registered.push(`tool:${e.name}`); return { value: undefined } })
+  on('session.start', () => ({ cwd: '/p' }))
+  on('session.root', () => ({ value: '/p' }))
+  on('fs.read', (_$, e) => (e.path === '/p/_command/trackers/fronts.md' ? { value: '# Fronts' } : { deny: `ENOENT ${e.path}` }))
+  on('fs.write', (_$, e) => { written.push({ path: e.path, text: e.text }); return { value: undefined } })
+  await $.session.start({ cwd: '/p' } as Parameters<Engine['session']['start']>[0])
+  expect(registered).toContain('agent:controller')
+  expect(registered).toContain('tool:console')
+  const line = written.find(w => w.path === '/p/_command/fleet/audit.log')?.text ?? ''
+  expect(line).toContain('session.start')
+  expect(line).toContain('command.register')
+  expect(line).toContain('refused: it is the user')
+})
