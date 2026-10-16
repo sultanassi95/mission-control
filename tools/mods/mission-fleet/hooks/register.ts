@@ -196,6 +196,9 @@ export const register: Register = on => {
     if (next.origin.plugin === 'mission-fleet' && !e.agentId) {
       const seat = fleetSelfApproval(e.tool, e.input, await read($, consoles))
       if (seat) {
+        // Rules and lower hooks still decide; only the ask the mode cannot settle becomes an allow.
+        const beneath = await next(e)
+        if (beneath.decision !== 'ask') return beneath
         await log($, 'approve', seat, `fleet ${e.tool === 'Agent' ? 'staffing' : 'message'} approved by the fleet, not the mode`)
         return { decision: 'allow' as const }
       }
