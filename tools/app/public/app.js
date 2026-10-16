@@ -80,7 +80,10 @@
   const fleet = () => S.state?.fleet ?? {}
   const consoles = () => fleet().consoles ?? []
   const pollItems = () => fleet().poll ?? []
-  const openGates = () => pollItems().filter(p => p.state === 'open')
+  // A decision the app sent to Flight holds its gate for the relay code's lifetime (RELAY_TTL in guards.ts).
+  const SENT_HOLD = 10 * 60_000
+  const sentToFlight = p => Boolean(p.sentAt) && Date.now() - Date.parse(p.sentAt) <= SENT_HOLD
+  const openGates = () => pollItems().filter(p => p.state === 'open' && !sentToFlight(p))
 
   function statusOf(c) {
     if (c.status === 'stood-down') return ['idle', 'Stood down']
@@ -145,12 +148,15 @@
   function viewPoll() {
     if (!S.state) return '<p class="sys">Checking what is waiting on you…</p>'
     const items = pollItems()
-    const open = items.filter(p => p.state === 'open')
+    const open = items.filter(p => p.state === 'open' && !sentToFlight(p))
     let h = ''
+    for (const p of items.filter(x => x.state === 'open' && sentToFlight(x))) {
+      h += `<article class="gate"><div class="kind"><span class="call">${esc(p.from)}</span><span>· ${esc(p.id)}</span></div><h3>${esc(p.title)}</h3><p class="hint" role="status">Sent to Flight. It runs once Flight is free.</p></article>`
+    }
     for (const p of items.filter(x => x.undelivered).slice(-3).reverse()) {
       h += `<article class="gate undelivered"><div class="kind"><span class="call">${esc(p.from)}</span><span>· ${esc(p.id)}</span></div><h3>Your ${p.state === 'go' ? 'GO' : 'NO-GO'} did not reach ${esc(p.from)}</h3><p class="hint">${esc(p.undelivered)}. Staff the console again from Flight, then call it with the decision.</p></article>`
     }
-    if (!open.length) h += '<p class="empty">Nothing is waiting on you. New go/no-go calls appear here.</p>'
+    if (!open.length && !items.some(x => x.state === 'open' && sentToFlight(x))) h += '<p class="empty">Nothing is waiting on you. New go/no-go calls appear here.</p>'
     const down = new Set(consoles().filter(c => c.status === 'stood-down').map(c => c.callSign))
     open.forEach((p, i) => {
       const orphan = down.has(p.from)

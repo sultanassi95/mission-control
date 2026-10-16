@@ -586,3 +586,9 @@ export function spendRelayCode(codes: RelayCodes, code: string | undefined, args
   const flat = (t: string) => t.trim().replace(/\s+/g, ' ')
   return minted !== undefined && flat(minted.args) === flat(args) && now - minted.at <= RELAY_TTL
 }
+
+/** A poll decision the app sent to Flight, still inside its code's lifetime: not open for another tap. */
+export function awaitingFlight(sentAt: string | undefined, now: number): boolean {
+  const at = sentAt ? Date.parse(sentAt) : NaN
+  return Number.isFinite(at) && now - at <= RELAY_TTL
+}

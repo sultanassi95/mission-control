@@ -7,7 +7,7 @@ import { commonDir, CONTROLLER_PROMPT, CONTROLLER_TYPE, DEFAULT_BUDGET, EFFORTS,
 
 const APP_PORT = 4777
 const MODEL_LIST = Object.keys(MODEL_IDS).join(', ')
-import { fleetSelfApproval, isRelayedVerb, protectedFromSpoke, RELAY_TTL, splitRelayCode, spendRelayCode, toolRefusal } from './guards'
+import { awaitingFlight, fleetSelfApproval, isRelayedVerb, protectedFromSpoke, RELAY_TTL, splitRelayCode, spendRelayCode, toolRefusal } from './guards'
 import type { RelayCodes } from './guards'
 import { dependentsOf, isNothing, parseStatus, pollId, prSignature, prsIn } from './loops'
 import type { Role as GuardRole } from './guards'
@@ -442,7 +442,7 @@ async function runConsole($: EngineInterface, args: string, fromPerson: boolean)
     const replaced = all.filter(p => p.state === 'superseded').slice(-3)
     const undelivered = all.filter(p => p.undelivered).slice(-3)
     const down = new Set(fleet.filter(c => c.status === 'stood-down').map(c => c.callSign))
-    const lines = open.map(p => `${p.id}  ${p.from}${down.has(p.from) ? ' (stood down; kept for its next Controller)' : ''}  ${p.kind}: ${p.title}${p.targets?.length ? `  (tells: ${p.targets.join(', ')})` : ''}`)
+    const lines = open.map(p => `${p.id}  ${p.from}${down.has(p.from) ? ' (stood down; kept for its next Controller)' : ''}${awaitingFlight(p.sentAt, Date.now()) ? ' (sent from the app, waiting for Flight)' : ''}  ${p.kind}: ${p.title}${p.targets?.length ? `  (tells: ${p.targets.join(', ')})` : ''}`)
     if (lines.length === 0) lines.push('Nothing is waiting on the founder.')
     if (replaced.length) lines.push('', 'Recently replaced by a newer report:', ...replaced.map(p => `  ${p.id}  ${p.from}: ${p.title.slice(0, 100)}`))
     if (undelivered.length) lines.push('', 'Decided but not delivered:', ...undelivered.map(p => `  ${p.id}  ${p.from}: ${p.undelivered}`))
@@ -1082,6 +1082,13 @@ const relayCodes: RelayCodes = new Map()
 async function relayToFlight($: EngineInterface, text: string): Promise<string> {
   const args = text.trim()
   const now = Date.now()
+  // A go or no-go holds its gate from the tap, so the card cannot be answered twice while Flight is busy.
+  const [verb = '', id = ''] = args.split(/\s+/)
+  if (['go', 'nogo', 'no-go'].includes(verb.toLowerCase())) {
+    const item = (await read($, poll)).filter(p => p.id.toLowerCase() === id.toLowerCase()).at(-1)
+    if (item?.state === 'open' && awaitingFlight(item.sentAt, now)) return `${item.id} is already with Flight; it runs once Flight is free.`
+    if (item?.state === 'open') await update($, poll, list => list.map(p => (p.id === item.id && p.at === item.at ? { ...p, sentAt: new Date(now).toISOString() } : p)))
+  }
   for (const [k, v] of relayCodes) if (now - v.at > RELAY_TTL) relayCodes.delete(k)
   const code = hex(16)
   relayCodes.set(code, { args, at: now })

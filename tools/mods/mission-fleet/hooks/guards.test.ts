@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { fleetSelfApproval, isFlightOnly, isRelayedVerb, RELAY_TTL, splitRelayCode, spendRelayCode, isShellLikeTool, pinnedDir, protectedFromSpoke, pushDestination, shellRefusal, tokenize, toolRefusal } from './guards'
+import { awaitingFlight, fleetSelfApproval, isFlightOnly, isRelayedVerb, RELAY_TTL, splitRelayCode, spendRelayCode, isShellLikeTool, pinnedDir, protectedFromSpoke, pushDestination, shellRefusal, tokenize, toolRefusal } from './guards'
 import type { RelayCodes } from './guards'
 
 const C = (cmd: string, prot: string[] = []) => shellRefusal('controller', cmd, prot)
@@ -368,4 +368,12 @@ test('a relay code works once, for exactly the args it was minted for, within it
   expect(spendRelayCode(codes, 'never-minted', 'go MI8', 2000)).toBe(false)
   codes.set('c4', { args: 'call KARNAK line one\nline two', at: 1000 })
   expect(spendRelayCode(codes, 'c4', 'call KARNAK line one line  two', 2000)).toBe(true)
+})
+
+test('a decision sent to Flight holds its gate for the code lifetime, then frees it', () => {
+  const at = Date.parse('2026-10-16T01:57:00Z')
+  expect(awaitingFlight('2026-10-16T01:57:00.000Z', at + 5_000)).toBe(true)
+  expect(awaitingFlight('2026-10-16T01:57:00.000Z', at + RELAY_TTL + 1)).toBe(false)
+  expect(awaitingFlight(undefined, at)).toBe(false)
+  expect(awaitingFlight('not a date', at)).toBe(false)
 })
