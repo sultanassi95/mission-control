@@ -35,7 +35,7 @@ export type Role = 'controller' | 'back room'
 const GIT_READS = ['status', 'log', 'diff', 'show', 'rev-parse', 'ls-files', 'ls-remote', 'blame', 'describe', 'shortlog', 'grep', 'cat-file', 'show-ref', 'for-each-ref', 'merge-base', 'rev-list', 'name-rev', 'reflog', 'help', 'version']
 const GIT_LOCAL_WRITES = ['add', 'commit', 'fetch', 'branch', 'tag', 'notes', 'mv', 'rm', 'apply', 'am', 'format-patch', 'worktree']
 const GIT_ALLOWED: Record<Role, Set<string>> = {
-  controller: new Set([...GIT_READS, ...GIT_LOCAL_WRITES, 'switch', 'checkout', 'restore', 'reset', 'merge', 'rebase', 'cherry-pick', 'revert', 'pull', 'remote', 'config', 'push']),
+  controller: new Set([...GIT_READS, ...GIT_LOCAL_WRITES, 'switch', 'checkout', 'restore', 'reset', 'merge', 'rebase', 'cherry-pick', 'revert', 'pull', 'remote', 'config', 'push', 'clone']),
   'back room': new Set([...GIT_READS, 'add', 'commit']),
 }
 
@@ -331,6 +331,25 @@ function gitRefusal(role: Role, rest: Word[], protectedBranches: string[]): stri
   })
   if (runs) return `git ${name} ${runs.text} can run a command or write a file; it is not allowed here.`
   if (name === 'reflog' && args.some(a => ['expire', 'delete'].includes(a.text))) return 'git reflog is read-only here.'
+  // A fresh clone is how a first-run test proves a repo works without the local .git config. Several
+  // clone options (-u, -c, --template, and git accepts any unambiguous abbreviation of them) can run
+  // a command in the new repo, so options are allowed by list and everything else is refused.
+  if (name === 'clone') {
+    const WITH_VALUE = new Set(['--depth', '-b', '--branch'])
+    const FLAGS = new Set(['-q', '--quiet', '--single-branch', '--no-single-branch', '--no-tags'])
+    for (let j = 0; j < args.length; j++) {
+      const a = args[j]
+      if (!a || a.dynamic || a.glob) return 'git clone arguments must be literal.'
+      const t = a.text
+      if (!t.startsWith('-')) {
+        if (/^(ext|fd)::/.test(t)) return 'git clone from an ext:: or fd:: source is not allowed: it runs a command.'
+        continue
+      }
+      if (FLAGS.has(t) || /^--(depth|branch|filter)=[^=]/.test(t)) continue
+      if (WITH_VALUE.has(t)) { j++; continue }
+      return `git clone ${t} is not allowed here: only --depth, --branch, --filter, --single-branch, --no-tags and --quiet.`
+    }
+  }
   if (name === 'push') {
     const why = pushRefusal(args, protectedBranches)
     return why ? `A Controller may push only its own feature branch: ${why}.` : undefined

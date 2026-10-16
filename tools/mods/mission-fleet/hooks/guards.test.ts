@@ -72,6 +72,17 @@ test('git and gh run only at the head of a command', () => {
   expect(C('git send-pack origin main')).toContain('allowlist')
 })
 
+test('a Controller may clone fresh, but not with options that run a command in the new repo', () => {
+  expect(C('git clone https://github.com/acme/web.git ../web-fresh')).toBeUndefined()
+  expect(C('git clone --depth 1 https://github.com/acme/web.git ../web-fresh')).toBeUndefined()
+  expect(C('git clone --branch main --single-branch https://github.com/acme/web.git ../web-fresh')).toBeUndefined()
+  for (const cmd of ['git clone -u "sh -c id" https://github.com/acme/web.git x', 'git clone --upload-pack=id https://github.com/acme/web.git x', 'git clone -c core.fsmonitor=id https://github.com/acme/web.git x', 'git clone --config=core.hooksPath=/tmp/h https://github.com/acme/web.git x', 'git clone --template=/tmp/t https://github.com/acme/web.git x', 'git clone -qc core.fsmonitor=id https://github.com/acme/web.git x', 'git clone --conf core.fsmonitor=id https://github.com/acme/web.git x', 'git clone --temp=/tmp/t https://github.com/acme/web.git x', 'git clone --separate-git-dir=/tmp/g https://github.com/acme/web.git x', 'git clone --reference /tmp/r https://github.com/acme/web.git x']) {
+    expect(C(cmd)).toContain('git clone')
+  }
+  expect(C('git clone "ext::sh -c id" x')).toContain('ext::')
+  expect(shellRefusal('back room', 'git clone https://github.com/acme/web.git x', [])).toContain('never runs git clone')
+})
+
 test('an interpreter fed by a heredoc or a pipe cannot carry a git command', () => {
   expect(C('bash <<EOF\ngit push origin main\nEOF')).toContain('bash on the same line')
   expect(C("sh <<'X'\ngit stash\nX")).toContain('sh on the same line')
