@@ -22,12 +22,14 @@ test('parses verbs, positional words and flags', () => {
   expect(parseArgs('')).toEqual({ verb: '', rest: [], flags: {} })
 })
 
-// A fake portfolio: one front with two project spokes, answered beneath the plugin.
+// A fake portfolio: one front with two project spokes, and a second front, answered beneath the plugin.
 const FILES: Record<string, string> = {
   '/p/_command/trackers/fronts.md': '# Fronts',
   '/p/_command/portfolio/fieldkit/_front.md': '# fieldkit hub',
-  '/p/_command/portfolio/fieldkit/api/api.md': '---\nrepo: api\npath: fronts/fieldkit/api\n---',
-  '/p/_command/portfolio/fieldkit/web/web.md': '---\nrepo: web\npath: fronts/fieldkit/web\n---',
+  '/p/_command/portfolio/fieldkit/api/api.md': '---\nrepo: api\npath: fronts/fieldkit/api\nremote: git@github.com:fieldkit-org/api.git\n---',
+  '/p/_command/portfolio/fieldkit/web/web.md': '---\nrepo: web\npath: fronts/fieldkit/web\nremote: git@personal-github:FieldKit-Labs/web.git   (the partner key)\n---',
+  '/p/_command/portfolio/shelf/_front.md': '# shelf hub',
+  '/p/_command/portfolio/shelf/shelf.md': '---\nrepo: shelf\npath: fronts/shelf/shelf\nremote: git@github.com:shelf-co/shelf.git\n---',
 }
 const DIRS: Record<string, { name: string; kind: 'file' | 'dir'; size: number }[]> = {
   '/p/_command/portfolio/fieldkit': [
@@ -36,6 +38,7 @@ const DIRS: Record<string, { name: string; kind: 'file' | 'dir'; size: number }[
   ],
   '/p/_command/portfolio/fieldkit/api': [{ name: 'api.md', kind: 'file', size: 1 }],
   '/p/_command/portfolio/fieldkit/web': [{ name: 'web.md', kind: 'file', size: 1 }],
+  '/p/_command/portfolio/shelf': [{ name: '_front.md', kind: 'file', size: 1 }, { name: 'shelf.md', kind: 'file', size: 1 }],
 }
 // deno-lint-ignore no-explicit-any
 const portfolio = (on: any) => {
@@ -570,4 +573,112 @@ test('an item raised before agent ids were recorded is held when nothing is staf
   const after = polls.at(-1)?.find(p => p.id === 'MI2')
   expect(after?.held).toBeTruthy()
   expect(after?.undelivered).toBeUndefined()
+})
+
+// ---- Clones and whole call text (MC-126) ----
+
+// A staffed FIELDKIT Controller, its record as staffing writes it.
+const FK: Console = {
+  callSign: 'FIELDKIT', front: 'fieldkit', name: 'console-fieldkit', agentId: 'f1', cwd: '/p/fronts/fieldkit', budget: 4, protectedBranches: [],
+  cloneOwners: ['fieldkit-labs', 'fieldkit-org'], cloneHome: '/p/fronts/fieldkit', model: 'opus', staffedAt: '2026-10-16T09:00:00.000Z', status: 'staffed',
+}
+// The record of a console staffed before clones were allowed: no owners or folder on it.
+const legacy = (c: Console): Console => {
+  const old = { ...c }
+  delete old.cloneOwners
+  delete old.cloneHome
+  return old
+}
+
+test('staffing again replaces a stood-down record with one carrying its front\'s owners and folder, for a front and a project console', async ($, on) => {
+  portfolio(on)
+  // FIELDKIT was staffed before clones were allowed, then stood down.
+  seed(on, { consoles: [{ ...legacy(FK), status: 'stood-down' }] })
+  const seen = writes(on, 'consoles')
+  on('agent.spawn', () => ({ deny: 'stop here' }))
+  expect((await run($, 'staff fieldkit')).text).toContain('Could not staff FIELDKIT: stop here')
+  expect((await run($, 'staff fieldkit --project web')).text).toContain('Could not staff FIELDKIT-WEB: stop here')
+  // The kit strips a spawn's agentId, so the record is read from the reservation the staffing wrote.
+  const written = seen.get('consoles') as Console[][]
+  // The reservation is the first write: the stood-down record is replaced, never kept beside it.
+  expect(written[0]?.filter(c => c.callSign === 'FIELDKIT').map(c => c.status)).toEqual(['staffing'])
+  const reserved = written.flat().filter(c => c.status === 'staffing')
+  const front = reserved.find(c => c.callSign === 'FIELDKIT')
+  const web = reserved.find(c => c.callSign === 'FIELDKIT-WEB')
+  expect(front?.cloneOwners).toEqual(['fieldkit-labs', 'fieldkit-org'])
+  expect(front?.cloneHome).toBe('/p/fronts/fieldkit')
+  expect(web?.cloneOwners).toEqual(['fieldkit-labs', 'fieldkit-org'])
+  expect(web?.cloneHome).toBe('/p/fronts/fieldkit')
+  expect(web?.cwd).toBe('/p/fronts/fieldkit/web')
+})
+// A Bash call in the Controller's own loop, decided by the tool.check chain as a session decides it.
+const bashBy = ($: Engine, command: string) => $.tool.check({ tool: 'Bash', input: { command }, agentId: 'f1' } as Parameters<Engine['tool']['check']>[0])
+
+test('the tool.check hook judges a staffed Controller\'s clone by the owners and folder on its record', async ($, on) => {
+  portfolio(on)
+  const audit = auditLines(on)
+  seed(on, { consoles: [FK] })
+  on('agent.list', () => ({ value: [] }))
+  // Beneath the plugin everything is allowed, so a deny is the fleet guard's own.
+  on('tool.check', () => ({ decision: 'allow' as const }))
+  // The instrument: the hook decides this call as the FIELDKIT Controller's.
+  const stash = await bashBy($, 'cd /p/fronts/fieldkit && git stash')
+  expect(stash.decision).toBe('deny')
+  expect(stash.reason).toContain('never stashes')
+  // The positive control: its own front's repository, into its front's folder.
+  expect((await bashBy($, 'cd /p/fronts/fieldkit && git clone --depth 1 git@github.com:fieldkit-org/api.git')).decision).toBe('allow')
+  expect((await bashBy($, 'cd /p/fronts/fieldkit && git clone https://github.com/FieldKit-Labs/web')).decision).toBe('allow')
+  const upload = await bashBy($, 'cd /p/fronts/fieldkit && git clone -u x git@github.com:fieldkit-org/api.git')
+  expect(upload.decision).toBe('deny')
+  expect(upload.reason).toContain('-u is not an allowed clone option')
+  const other = await bashBy($, 'cd /p/fronts/fieldkit && git clone git@github.com:shelf-co/shelf.git')
+  expect(other.decision).toBe('deny')
+  expect(other.reason).toContain('shelf-co is not an owner your front\'s spokes name (they name fieldkit-labs, fieldkit-org)')
+  const away = await bashBy($, 'cd /p/fronts/fieldkit && git clone git@github.com:fieldkit-org/api.git /p/fronts/shelf/api')
+  expect(away.decision).toBe('deny')
+  expect(away.reason).toContain('it would land in /p/fronts/shelf/api; a clone lands in /p/fronts/fieldkit/api')
+  expect(audit.join('\n')).toContain('\tguard\tFIELDKIT\tcontroller Bash denied: A Controller clones only its own front\'s repositories, into its front\'s folder: -u is not an allowed clone option')
+})
+
+test('a Controller staffed before clones were allowed is refused a clone until it is stood down and staffed again', async ($, on) => {
+  portfolio(on)
+  seed(on, { consoles: [legacy(FK)] })
+  on('agent.list', () => ({ value: [] }))
+  on('tool.check', () => ({ decision: 'allow' as const }))
+  expect((await bashBy($, 'cd /p/fronts/fieldkit && git status')).decision).toBe('allow')
+  const r = await bashBy($, 'cd /p/fronts/fieldkit && git clone git@github.com:fieldkit-org/api.git')
+  expect(r.decision).toBe('deny')
+  expect(r.reason).toContain('this console was staffed before clones were allowed: it can clone once it is stood down and staffed again')
+})
+
+test('a call message is taken whole, so double-dash words and new lines reach the Controller as written', async ($, on) => {
+  portfolio(on)
+  seed(on, { consoles: [FK] })
+  const sent: { to: string; text: string }[] = []
+  on('session.send', (_$, e) => {
+    sent.push({ to: JSON.stringify(e.to), text: e.text })
+    return { isDelivered: true }
+  })
+  expect((await run($, 'call FIELDKIT clone it with --depth 1 --single-branch, then\nreport back')).text).toContain('Called FIELDKIT.')
+  expect(sent[0]?.to).toContain('f1')
+  expect(sent[0]?.text).toBe('clone it with --depth 1 --single-branch, then\nreport back')
+  expect((await run($, 'call FIELDKIT use --single-branch')).text).toContain('Called FIELDKIT.')
+  expect(sent[1]?.text).toBe('use --single-branch')
+  expect((await run($, 'call FIELDKIT')).text).toContain('Usage:')
+  expect(sent).toHaveLength(2)
+})
+
+test('a GO or NO-GO note is taken whole, double-dash words included', async ($, on) => {
+  portfolio(on)
+  const MI3: PollItem = { ...OPEN, id: 'MI3', at: '2026-10-16T00:51:00.000Z', title: 'tag the release', detail: 'blocked on you: tag the release' }
+  seed(on, { poll: [OPEN, MI3], consoles: [MC] })
+  const sent: string[] = []
+  on('session.send', (_$, e) => {
+    sent.push(e.text)
+    return { isDelivered: true }
+  })
+  expect((await person($, 'go MI2 ship it, clone with --depth 1 --no-tags')).text).toContain('MI2: GO recorded, told MISSION-CONTROL.')
+  expect(sent[0]).toContain('GO from the founder on MI2: ship it, clone with --depth 1 --no-tags')
+  expect((await person($, 'no-go MI3 not yet: --single-branch first')).text).toContain('MI3: NO-GO recorded, told MISSION-CONTROL.')
+  expect(sent[1]).toContain('NO-GO from the founder on MI3: not yet: --single-branch first')
 })

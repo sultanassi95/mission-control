@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { commonDir, CONTROLLER_PROMPT, isInsideRelative, MODEL_IDS, spokePath, staffingOrder } from './controller'
+import { commonDir, CONTROLLER_PROMPT, isInsideRelative, MODEL_IDS, remoteOwner, spokePath, staffingOrder } from './controller'
 
 test('the controller prompt carries the status format and the hard limits', () => {
   for (const line of ['state:', 'shipped:', 'blocked on you:', 'next:']) expect(CONTROLLER_PROMPT).toContain(line)
@@ -48,4 +48,22 @@ test('only relative spoke paths with no parent segment are trusted', () => {
 test('every console model alias maps to a request id', () => {
   expect(Object.keys(MODEL_IDS).sort()).toEqual(['fable', 'haiku', 'opus', 'sonnet'])
   for (const id of Object.values(MODEL_IDS)) expect(id).toMatch(/^claude-[a-z]+-\d+-\d+$/)
+})
+
+test('a spoke remote names its owner over github.com, a GitHub host alias or https, in lower case', () => {
+  expect(remoteOwner('git@github.com:Acme-Org/api.git')).toBe('acme-org')
+  expect(remoteOwner('git@personal-github:FieldKit-Labs/web.git   (the partner key)')).toBe('fieldkit-labs')
+  expect(remoteOwner('https://github.com/acme-org/web.git')).toBe('acme-org')
+  expect(remoteOwner('"https://github.com/acme-org/web" (read-only mirror)')).toBe('acme-org')
+})
+
+test('a spoke remote on another host, in another form or N/A names no owner', () => {
+  for (const value of [
+    'N/A', '', 'git@gitlab.com:acme-org/web.git', 'https://gitlab.com/acme-org/web', 'ssh://git@github.com/acme-org/web.git',
+    'file:///srv/web.git', 'origin git@github.com:acme-org/web.git', 'https://github.com/acme-org', 'git@github.com:-acme/web.git',
+    'git@github.com-work:acme-org/web.git', 'git@gitlab-work:acme-org/web.git', 'git@bitbucket:acme-org/x.git',
+  ]) expect(`${value} -> ${remoteOwner(value) ?? 'none'}`).toBe(`${value} -> none`)
+  // An alias counts only when it names GitHub, in any case.
+  expect(remoteOwner('git@GitHub-Personal:acme-org/web.git')).toBe('acme-org')
+  expect(remoteOwner(undefined)).toBeUndefined()
 })

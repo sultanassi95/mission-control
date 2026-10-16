@@ -71,6 +71,21 @@ export function spokePath(text: string): string | undefined {
   return spokeField(text, 'path')?.split(/\s+/)[0] || undefined
 }
 
+/**
+ * The repository owner a spoke's `remote:` value names, lower case: `<user>@github.com:OWNER/...`,
+ * `<user>@<alias>:OWNER/...` for an ssh-config host alias of GitHub (a name with no dot that
+ * contains "github", such as personal-github; an alias for any other host names no owner), or
+ * `https://github.com/OWNER/...`. Read from the value's first word, quotes stripped; undefined for
+ * N/A, another host or any other form.
+ */
+export function remoteOwner(value: string | undefined): string | undefined {
+  const first = value?.trim().split(/\s+/)[0]?.replace(/^["'`]+|["'`]+$/g, '')
+  if (!first) return undefined
+  const owner = '([A-Za-z0-9][A-Za-z0-9-]{0,38})/'
+  const m = new RegExp(`^[A-Za-z0-9._-]+@(?:github\\.com|[A-Za-z0-9_-]*github[A-Za-z0-9_-]*):${owner}`, 'i').exec(first) ?? new RegExp(`^https://github\\.com/${owner}`).exec(first)
+  return m?.[1]?.toLowerCase()
+}
+
 /** A spoke path the portfolio can resolve: relative, with no `..` segment. */
 export function isInsideRelative(path: string): boolean {
   return !path.startsWith('/') && !path.split('/').includes('..')

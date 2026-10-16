@@ -3,7 +3,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { AuditEntry, Console, Lineage, LoopEntry, PendingAdvisory, PollItem, PrWatch, Reservation } from '../types'
 
-import { commonDir, CONTROLLER_PROMPT, CONTROLLER_TYPE, DEFAULT_BUDGET, EFFORTS, isInsideRelative, MODEL_IDS, spokeField, spokePath, staffingOrder } from './controller'
+import { commonDir, CONTROLLER_PROMPT, CONTROLLER_TYPE, DEFAULT_BUDGET, EFFORTS, isInsideRelative, MODEL_IDS, remoteOwner, spokeField, spokePath, staffingOrder } from './controller'
 
 const APP_PORT = 4777
 const MODEL_LIST = Object.keys(MODEL_IDS).join(', ')
@@ -97,6 +97,16 @@ const nameOf = (scope: string) => `console-${scope.toLowerCase().replace(/[^a-z0
 const NOT_SPOKES = new Set(['_front.md', 'progress.md', 'deviations.md', '_map.md', 'scripts.md', 'DESIGN.md'])
 
 export type Parsed = { verb: string; rest: string[]; flags: Record<string, string>; error?: string }
+
+/**
+ * A call's message and a decision's note are free text, taken whole: the verb, its call sign or
+ * item id, and the rest as written (trimmed, newlines kept), so a word in it that starts with two
+ * dashes reaches the Controller instead of being read as a console flag.
+ */
+function freeText(args: string): { verb: string; target: string; text: string } | undefined {
+  const m = /^\s*(call|go|nogo|no-go)(?:\s+(\S+))?(?:\s+([\s\S]*))?$/.exec(args)
+  return m ? { verb: m[1] ?? '', target: m[2] ?? '', text: (m[3] ?? '').trim() } : undefined
+}
 
 export function parseArgs(args: string): Parsed {
   const words = args.trim().split(/\s+/).filter(Boolean)
@@ -211,7 +221,10 @@ export const register: Register = on => {
     if (!e.agentId) return next(e)
     const role = await roleOf($, e.agentId)
     if (!role) return next(e)
-    const why = toolRefusal(role.kind, e.tool, e.input, role.console.protectedBranches, role.console.cwd)
+    const c = role.console
+    // A console staffed before clones were allowed has no owners or folder on record, so it clones nothing.
+    const clone = c.cloneOwners && c.cloneHome ? { owners: c.cloneOwners, home: c.cloneHome } : undefined
+    const why = toolRefusal(role.kind, e.tool, e.input, c.protectedBranches, c.cwd, clone)
     if (!why) return next(e)
     await log($, 'guard', role.console.callSign, `${role.kind} ${e.tool} denied: ${why}`)
     return { decision: 'deny' as const, reason: why }
@@ -378,7 +391,9 @@ async function runConsole($: EngineInterface, args: string, fromPerson: boolean)
     if (!fromPerson) return "Flight's questions are the founder's to answer: type /console answer yourself, or use the app."
     return answerAsk($, args.replace(/^\s*answer\s*/i, ''))
   }
-  const { verb, rest, flags, error } = parseArgs(args)
+  const free = freeText(args)
+  const parsed: Parsed = free ? { verb: free.verb, rest: free.target ? [free.target] : [], flags: {} } : parseArgs(args)
+  const { verb, rest, flags, error } = parsed
   if (error) return `${error}\n${USAGE}`
 
   if (verb === 'staff') return staff($, rest[0], flags)
@@ -400,12 +415,13 @@ async function runConsole($: EngineInterface, args: string, fromPerson: boolean)
 
   if (verb === 'call') {
     const [sign, ...words] = rest
+    const text = free ? free.text : words.join(' ')
     const c = fleet.find(x => x.callSign === callSignOf(sign ?? '') && x.status === 'staffed')
     if (!c) return `No staffed console ${sign ?? ''}. /console list shows the fleet.`
-    if (words.length === 0) return USAGE
-    const sent = await $.session.send({ to: { agentId: c.agentId }, text: words.join(' ') })
+    if (text === '') return USAGE
+    const sent = await $.session.send({ to: { agentId: c.agentId }, text })
     await log($, 'call', c.callSign, sent.isDelivered ? 'delivered' : `refused: ${sent.reason}`)
-    if (sent.isDelivered) await addLoop($, { from: 'FLIGHT', to: c.callSign, kind: 'call', text: words.join(' ') })
+    if (sent.isDelivered) await addLoop($, { from: 'FLIGHT', to: c.callSign, kind: 'call', text })
     return sent.isDelivered ? `Called ${c.callSign}. Its answer arrives as a status check.` : `Call to ${c.callSign} not delivered: ${sent.reason}`
   }
 
@@ -473,7 +489,7 @@ async function runConsole($: EngineInterface, args: string, fromPerson: boolean)
 
   if (verb === 'go' || verb === 'nogo' || verb === 'no-go') {
     if (!fromPerson) return 'Go and no-go are the founder\'s: type /console go|nogo <id> yourself, or use the app.'
-    return decide($, rest[0] ?? '', verb === 'go' ? 'go' : 'no-go', rest.slice(1).join(' '))
+    return decide($, rest[0] ?? '', verb === 'go' ? 'go' : 'no-go', free ? free.text : rest.slice(1).join(' '))
   }
 
   if (verb === 'retry') {
@@ -573,17 +589,36 @@ async function findRoot($: EngineInterface): Promise<string | undefined> {
   return undefined
 }
 
-async function spokesOf($: EngineInterface, frontDir: string, project: string | undefined): Promise<{ file: string; path: string; base?: string }[]> {
-  // A spoke is <front>/<name>.md (single-project) or <front>/<project>/<project>.md (multi-project).
+/** Where a front's spokes may be: <front>/<name>.md (single-project) or <front>/<project>/<project>.md (multi-project). */
+async function spokeCandidates($: EngineInterface, frontDir: string, project?: string): Promise<string[]> {
+  if (project) return [`${frontDir}/${project}/${project}.md`, `${frontDir}/${project}.md`]
   const candidates: string[] = []
-  if (project) candidates.push(`${frontDir}/${project}/${project}.md`, `${frontDir}/${project}.md`)
-  else {
-    const entries = await $.fs.list(frontDir).catch(() => [])
-    for (const e of entries) {
-      if (e.kind === 'file' && e.name.endsWith('.md') && !NOT_SPOKES.has(e.name)) candidates.push(`${frontDir}/${e.name}`)
-      if (e.kind === 'dir' && !e.name.startsWith('.') && e.name !== 'tasks') candidates.push(`${frontDir}/${e.name}/${e.name}.md`)
-    }
+  const entries = await $.fs.list(frontDir).catch(() => [])
+  for (const e of entries) {
+    if (e.kind === 'file' && e.name.endsWith('.md') && !NOT_SPOKES.has(e.name)) candidates.push(`${frontDir}/${e.name}`)
+    if (e.kind === 'dir' && !e.name.startsWith('.') && e.name !== 'tasks') candidates.push(`${frontDir}/${e.name}/${e.name}.md`)
   }
+  return candidates
+}
+
+/** The repository owners every spoke of a front names in its `remote:` line, lower case, each once. */
+async function ownersOf($: EngineInterface, frontDir: string): Promise<string[]> {
+  const owners = new Set<string>()
+  for (const file of await spokeCandidates($, frontDir)) {
+    let text
+    try {
+      text = await $.fs.read(file)
+    } catch {
+      continue
+    }
+    const owner = remoteOwner(spokeField(text, 'remote'))
+    if (owner) owners.add(owner)
+  }
+  return [...owners].sort()
+}
+
+async function spokesOf($: EngineInterface, frontDir: string, project: string | undefined): Promise<{ file: string; path: string; base?: string }[]> {
+  const candidates = await spokeCandidates($, frontDir, project)
   const found: { file: string; path: string; base?: string }[] = []
   for (const file of candidates) {
     let text
@@ -622,6 +657,9 @@ async function staff($: EngineInterface, front: string | undefined, flags: Recor
   if (project && spokes.length === 0) return `No project "${project}" on front "${front}": no spoke with a path found.`
   const repoDir = commonDir(spokes.map(x => x.path))
   const cwd = flags.cwd ?? (repoDir ? `${root}/${repoDir}` : root)
+  // A clone comes from an owner the front's own spokes name, all of them, and lands in the front's folder.
+  const cloneOwners = await ownersOf($, frontDir)
+  const cloneHome = `${root}/fronts/${front}`
 
   const scope = project ? `${front}-${project}` : front
   const callSign = callSignOf(scope)
@@ -634,7 +672,7 @@ async function staff($: EngineInterface, front: string | undefined, flags: Recor
     if (holder) return list
     const reserved: Console = {
       callSign, front, ...(project ? { project } : {}), name, agentId: '', cwd, budget,
-      protectedBranches: [...new Set(spokes.flatMap(x => protectedFromSpoke(x.base)))],
+      protectedBranches: [...new Set(spokes.flatMap(x => protectedFromSpoke(x.base)))], cloneOwners, cloneHome,
       model: flags.model ?? 'default', ...(flags.effort ? { tune: { effort: flags.effort } } : {}), staffedAt: new Date().toISOString(), status: 'staffing',
     }
     return [...list.filter(c => c.callSign !== callSign), reserved]

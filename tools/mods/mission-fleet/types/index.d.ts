@@ -10,6 +10,13 @@ export type Console = {
   budget: number
   /** Branches this console never pushes to: the spoke base branches, beyond the always-protected list. */
   protectedBranches: string[]
+  /**
+   * The repository owners its front's spokes name in their `remote:` lines, lower case: a clone comes
+   * from one of them. Read at staffing; absent on a console staffed before clones were allowed.
+   */
+  cloneOwners?: string[]
+  /** The front's own folder, `<root>/fronts/<front>`: a clone lands here, beside the front's repositories. */
+  cloneHome?: string
   model: string
   /** Set by /console retune or staff --effort; applied on each of the Controller's model requests. */
   tune?: { model?: string; effort?: string }
