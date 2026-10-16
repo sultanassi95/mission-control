@@ -559,3 +559,29 @@ export function fleetSelfApproval(tool: string, input: unknown, seats: FleetSeat
   }
   return undefined
 }
+
+/** Console verbs that message or start an agent. From the app they run through Flight, never from the app's own loop. */
+const RELAYED = new Set(['staff', 'call', 'go', 'nogo', 'no-go', 'dismiss', 'stand-down'])
+export function isRelayedVerb(args: string): boolean {
+  return RELAYED.has((args.trim().split(/\s+/)[0] ?? '').toLowerCase())
+}
+
+/** Splits a trailing app relay code off console args. */
+export function splitRelayCode(args: string): { args: string; code?: string } {
+  const m = /\s--code\s+([0-9a-f]{32})\s*$/.exec(args)
+  return m ? { args: args.slice(0, m.index).trim(), code: m[1] } : { args }
+}
+
+export type RelayCodes = Map<string, { args: string; at: number }>
+export const RELAY_TTL = 10 * 60_000
+
+/**
+ * Spends an app relay code: true only for a code minted for exactly these args, within its
+ * lifetime. A code is gone after one try, whether it matched or not.
+ */
+export function spendRelayCode(codes: RelayCodes, code: string | undefined, args: string, now: number): boolean {
+  if (!code) return false
+  const minted = codes.get(code)
+  codes.delete(code)
+  return minted !== undefined && minted.args === args.trim() && now - minted.at <= RELAY_TTL
+}

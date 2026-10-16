@@ -7,7 +7,8 @@ import { commonDir, CONTROLLER_PROMPT, CONTROLLER_TYPE, DEFAULT_BUDGET, EFFORTS,
 
 const APP_PORT = 4777
 const MODEL_LIST = Object.keys(MODEL_IDS).join(', ')
-import { fleetSelfApproval, protectedFromSpoke, toolRefusal } from './guards'
+import { fleetSelfApproval, isRelayedVerb, protectedFromSpoke, RELAY_TTL, splitRelayCode, spendRelayCode, toolRefusal } from './guards'
+import type { RelayCodes } from './guards'
 import { dependentsOf, isNothing, parseStatus, pollId, prSignature, prsIn } from './loops'
 import type { Role as GuardRole } from './guards'
 
@@ -361,8 +362,12 @@ export const register: Register = on => {
 
   on('tool.call', { tool: /^mcp__mission-fleet__console$/ }, async ($, e) => {
     if (e.agentId) return { result: 'Only Flight runs the console tool; a Controller reports to Flight instead.', isError: true }
-    const args = typeof (e as { args?: unknown }).args === 'string' ? (e as { args: string }).args : ''
-    return { result: await runConsole($, args, false) }
+    const raw = typeof (e as { args?: unknown }).args === 'string' ? (e as { args: string }).args : ''
+    // An app op relayed through Flight carries a one-time code minted for exactly these args: the founder's own.
+    const { args, code } = splitRelayCode(raw)
+    const fromApp = spendRelayCode(relayCodes, code, args, Date.now())
+    if (code && !fromApp) return { result: 'That app code is unknown, used or expired; send it again from the app.', isError: true }
+    return { result: await runConsole($, args, fromApp) }
   }).catch(() => ({ result: FAILED, isError: true }))
 }
 
@@ -1065,6 +1070,26 @@ async function pushLoop($: EngineInterface, current: App) {
 }
 
 /** An action from the app: the founder's, since only the token-holder reaches /op. */
+// One-time codes for app ops relayed through Flight, by code.
+const relayCodes: RelayCodes = new Map()
+
+/**
+ * An app op that messages or starts an agent, handed to Flight as a prompt in the founder's name.
+ * Sent from the app's own loop, the engine never asks this plugin's tool.check, so auto mode refuses
+ * it; Flight's call of the console tool runs where the fleet can approve it.
+ */
+async function relayToFlight($: EngineInterface, text: string): Promise<string> {
+  const args = text.trim()
+  const now = Date.now()
+  for (const [k, v] of relayCodes) if (now - v.at > RELAY_TTL) relayCodes.delete(k)
+  const code = hex(16)
+  relayCodes.set(code, { args, at: now })
+  const prompt = `From the Mission Control App, the founder sent: ${args}\nRun it now with the console tool, args exactly: ${args} --code ${code}`
+  void $.prompt.submit({ text: prompt, asUser: true }).catch((err: unknown) => log($, 'app-op', 'relay', `not sent to Flight: ${String(err).slice(0, 160)}`))
+  await log($, 'app-op', 'relay', `${args.slice(0, 80)} sent to Flight`)
+  return 'Sent to Flight; it runs once Flight is free.'
+}
+
 async function runAppOp($: EngineInterface, op: string, text: string, id = 0) {
   await log($, 'app-op', op, text.slice(0, 160))
   let result = ''
@@ -1072,10 +1097,10 @@ async function runAppOp($: EngineInterface, op: string, text: string, id = 0) {
     // Only the token-holding app reaches /op, so its prompt is the founder's own words, read without the plugin frame.
     await $.prompt.submit({ text, asUser: true })
     result = 'Sent to Flight.'
-  } else if (op === 'console') result = await runConsole($, text, true)
+  } else if (op === 'console') result = isRelayedVerb(text) ? await relayToFlight($, text) : await runConsole($, text, true)
   else if (op === 'command') {
     const [command = '', ...words] = text.trim().split(/\s+/)
-    if (command === 'console') result = await runConsole($, words.join(' '), true)
+    if (command === 'console') result = isRelayedVerb(words.join(' ')) ? await relayToFlight($, words.join(' ')) : await runConsole($, words.join(' '), true)
     else result = (await $.command.run({ command, args: words.join(' ') })).text ?? `/${command} ran.`
   }
   lastOp = { id, text: result, at: new Date().toISOString() }
