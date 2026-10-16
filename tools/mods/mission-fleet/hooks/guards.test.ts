@@ -377,3 +377,105 @@ test('a decision sent to Flight holds its gate for the code lifetime, then frees
   expect(awaitingFlight(undefined, at)).toBe(false)
   expect(awaitingFlight('not a date', at)).toBe(false)
 })
+
+// ---- $(cat <<'EOF' ... EOF) values (MC-126 review) ----
+
+const sub = (body: string) => `$(cat <<'EOF'\n${body}\nEOF\n)`
+
+test('a $(cat <<EOF) value hides nothing from the push, command-name and gh rules', () => {
+  // Each was allowed when the tokenizer read the value as the word HEREDOC.
+  expect(C(`git push origin ${sub('main')}`)).toContain('stands only as a commit, tag, note or merge message')
+  expect(C(`git push -u origin "${sub('main')}"`)).toContain('stands only as a commit, tag, note or merge message')
+  expect(C(`git push origin ${sub('feat/x --force')}`)).toContain('stands only as a commit, tag, note or merge message')
+  expect(C(`${sub('git')} push origin main`)).toContain('never a command name built from a variable')
+  expect(C(`gh api ${sub('graphql -f query=x')}`)).toContain('stands only as a --title or --body')
+  expect(C(`gh pr create ${sub('--repo other/repo')}`)).toContain('stands only as a --title or --body')
+  expect(C(`git fetch ${sub('--upload-pack=x /tmp/r')}`)).toContain('stands only as a commit, tag, note or merge message')
+  expect(C(`git remote ${sub('set-url origin x')}`)).toContain('stands only as a commit, tag, note or merge message')
+  expect(C(`git -C ${sub('/tmp/r')} status`)).toContain('stands only as a commit, tag, note or merge message')
+  // Off a message option it is refused too: -F names a file, --grep a pattern.
+  expect(C(`git commit -F "${sub('x')}"`)).toContain('stands only as a commit, tag, note or merge message')
+  expect(C(`git log --grep "${sub('x')}"`)).toContain('stands only as a commit, tag, note or merge message')
+})
+
+test('a $(cat <<EOF) value still passes as a message, in each spelling git and gh take', () => {
+  for (const cmd of [
+    `git commit -m "${sub('fix(x): tidy')}"`, `git commit -am "${sub('fix(x): tidy')}"`, `git commit --message "${sub('x')}"`,
+    `git commit --message="${sub('x')}"`, `git commit -m"${sub('x')}"`, `git commit -m "subject" -m "${sub('body')}"`,
+    `git tag -a v1 -m "${sub('release')}"`, `git merge --no-ff -m "${sub('merge x')}" feat/x`, `git notes add -m "${sub('n')}"`,
+    `gh pr create --title "t" --body "${sub('## Summary\n- push and stash notes')}"`, `gh pr comment 12 -b "${sub('looks good')}"`,
+    `gh issue create -t "${sub('t')}" -b "${sub('b')}"`, `echo "${sub('notes on git')}"`,
+  ]) expect(`${cmd} -> ${C(cmd) ?? 'allowed'}`).toBe(`${cmd} -> allowed`)
+  expect(B(`git commit -m "${sub('fix(x): tidy')}"`)).toBeUndefined()
+})
+
+test('an unquoted $(cat <<EOF) value word-splits, so a message option cannot carry it', () => {
+  // Unquoted, the body splits: -m takes its first word and the rest ride in as options. Each was
+  // allowed while the value was read as a message regardless of quoting.
+  expect(C(`git commit -m ${sub('fix -X foo')}`)).toContain('stands only as a commit, tag, note or merge message')
+  expect(C(`git commit -m${sub('fix -X foo')}`)).toContain('stands only as a commit, tag, note or merge message')
+  expect(C(`git tag -a v1 -m ${sub('rel --sign')} feat/x`)).toContain('stands only as a commit, tag, note or merge message')
+  expect(C(`gh api repos/o/r/pulls/1/merge -t ${sub('x -X PUT -f merge_method=squash')}`)).toContain('stands only as a --title or --body')
+  expect(C(`gh pr create --title t --body ${sub('b --repo other/repo')}`)).toContain('stands only as a --title or --body')
+  // Wholly inside double quotes it is one argument, so it still stands as the message.
+  expect(C(`git commit -m "${sub('fix -X foo')}"`)).toBeUndefined()
+  expect(C(`git commit -m"${sub('fix -X foo')}"`)).toBeUndefined()
+  expect(C(`gh pr create --title t --body "${sub('b --repo other/repo')}"`)).toBeUndefined()
+})
+
+test('a $(cat <<EOF) inside single quotes or a comment is text, so the lines it spans still run', () => {
+  // zsh and bash run the middle line of each; the old pre-pass swallowed it with the heredoc.
+  expect(C(`echo '$(cat <<'EOF'\n' && git push origin main && echo '\nEOF\n)'`)).toContain('base or deploy branch')
+  expect(C(`# $(cat <<'EOF'\ngit push origin main\n: <<'X'\nEOF\n)\nX`)).toContain('base or deploy branch')
+  // The body ends only at a line that is exactly the delimiter, as zsh and bash end it.
+  expect(C(`git commit -m "$(cat <<'EOF'\nmsg\n  EOF\n)"`)).toContain('run plainly')
+  expect(C(`git commit -m "$(cat <<'EOF'\nmsg\nEOF \n)"`)).toContain('run plainly')
+  expect(C(`git commit -m "$(cat <<-'EOF'\n\tmsg\n\tEOF\n)"`)).toBeUndefined()
+})
+
+test('a redirect heredoc ends where the shell ends it, and a delimiter it cannot read exactly makes the line unreadable', () => {
+  // zsh -c runs the push in each: the old reader ended the body at " A", or never saw a heredoc begin.
+  expect(C(`cat > /dev/null <<'A'\n A\necho '\nA\ngit push origin main\n' x'`)).toContain('base or deploy branch')
+  expect(C(`cat > /dev/null <<\\EOF\necho '\nEOF\ngit push origin main\n' x'`)).toContain('run plainly')
+  expect(C(`cat > /dev/null <<E"O"F\nE\necho '\nEOF\ngit push origin main\n' x'`)).toContain('run plainly')
+  // Still read: a plain heredoc, a <<- one with a tab-indented terminator, and a commit message on stdin.
+  expect(C("cat > /tmp/x <<'A'\nbody\nA\ngit push origin main")).toContain('base or deploy branch')
+  expect(C('cat > /tmp/x <<-A\n\tbody\n\tA\ngit status')).toBeUndefined()
+  expect(C("git commit -F - <<'EOF'\nfix(x): tidy\nEOF")).toBeUndefined()
+})
+
+test('on a line that names git, a $(cat <<EOF) value is no other command\'s argument, redirect or hidden path', () => {
+  expect(C(`eval "${sub('git push origin main')}"`)).toContain('never as an argument of eval')
+  expect(C(`find . -name x -exec ${sub('git')} push origin main ';'`)).toContain('never as an argument of find')
+  expect(C(`echo x | xargs ${sub('git')} push origin main`)).toContain('never as an argument of xargs')
+  expect(C(`echo x > "${sub('/tmp/out')}"`)).toContain('never names a redirect target')
+  // Its body is checked for Flight's files like any other word, except as a git or gh message.
+  const today = ['_command', 'daily', 'today.md'].join('/')
+  expect(C(`cp report.md "${sub(today)}"`)).toContain('Flight\'s to write')
+  expect(C(`cat "${sub(today)}"`)).toBeUndefined()
+  expect(C(`git commit -m "${sub(`docs: sync ${today}`)}"`)).toBeUndefined()
+  expect(C(`gh pr create --title t --body "${sub(`rewrites ${today}`)}"`)).toBeUndefined()
+})
+
+test('on a line that names git or gh, nothing sets a variable that moves what git reads or runs', () => {
+  const P = (cmd: string) => shellRefusal('controller', cmd, [], '/w/fronts/acme/web')
+  const AT = 'cd /w/fronts/acme/web && '
+  for (const cmd of [
+    `export HOME=/tmp/h; ${AT}git status`, `export XDG_CONFIG_HOME=/tmp/x && ${AT}git status`, `export PATH=/tmp/bin:/usr/bin; ${AT}git status`,
+    `export CDPATH=/tmp; ${AT}git status`, `export SSH_AUTH_SOCK=/tmp/s; ${AT}git status`, `declare -x HOME=/tmp/h; ${AT}git status`,
+    `readonly ZDOTDIR=/tmp/z; ${AT}git status`, `HOME=/tmp/h; ${AT}git status`, `PATH+=:/tmp/bin; ${AT}git status`,
+    `CDPATH=/tmp cd x && ${AT}git status`, `export HOME; ${AT}git status`, `export X="$Y"; ${AT}git status`, `GIT_DIR=/x; ${AT}git status`,
+    `BASH_ENV=/tmp/e; ${AT}gh pr list`,
+    // git runs EDITOR, VISUAL and PAGER as programs, and the loader honours DYLD_* and LD_*.
+    `export EDITOR=/tmp/e.sh; ${AT}git commit --allow-empty`, `export VISUAL=/tmp/v; ${AT}git commit --allow-empty`,
+    `export PAGER=/tmp/p; ${AT}git log`, `export DYLD_INSERT_LIBRARIES=/tmp/x.dylib; ${AT}git status`, `LD_PRELOAD=/tmp/x.so; ${AT}git status`,
+  ]) expect(`${cmd} -> ${P(cmd) ?? 'allowed'}`).toContain('nothing sets HOME, PATH, CDPATH')
+  // An append assignment is an assignment too: before git it is an environment prefix.
+  expect(C('FOO+=x git status')).toContain('environment prefix')
+  expect(P(`. ./env.sh && ${AT}git status`)).toContain('. does not run')
+  expect(P(`source ./env.sh && ${AT}git status`)).toContain('source does not run')
+  // A line without git or gh may set them, since nothing on it reads them; other variables pass beside git.
+  expect(P('export PATH=/opt/homebrew/bin:/usr/bin && node -v')).toBeUndefined()
+  expect(P('HOME=/tmp/h npm test')).toBeUndefined()
+  expect(P(`export NODE_ENV=test; ${AT}git status`)).toBeUndefined()
+})

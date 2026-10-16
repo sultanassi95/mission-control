@@ -58,48 +58,60 @@ const TEXT_ONLY = new Set(['echo', 'printf', 'grep', 'rg', 'cat', 'head', 'tail'
 const READERS = new Set(['cat', 'grep', 'rg', 'head', 'tail', 'less', 'more', 'wc', 'ls', 'diff', 'stat', 'file', 'sed', 'awk', 'git', 'sort', 'uniq', 'cut', 'tr', 'nl', 'jq'])
 /** Shells and interpreters that read a program from stdin or a heredoc when given no script file. */
 const READS_STDIN = /^(sh|bash|zsh|dash|ksh|fish|csh|tcsh|python[0-9.]*|perl|ruby|node|deno|bun|php|lua|osascript)$/
+// Variables that move what git reads or runs: its config and ssh (HOME, XDG_CONFIG_HOME, GIT_*, SSH_*),
+// the programs it finds (PATH), the files a shell reads at start (ENV, BASH_ENV, ZDOTDIR) and where a
+// relative cd lands (CDPATH). Matched as an assignment (NAME=, NAME+=) or a bare name (export NAME).
+const GIT_LEVER = /^((GH|GIT|GITHUB|SSH|DYLD|LD)_[A-Za-z0-9_]*|HOME|PATH|CDPATH|XDG_CONFIG_HOME|ENV|BASH_ENV|ZDOTDIR|EDITOR|VISUAL|PAGER)(\+?=|$)/
+const SETTERS = new Set(['export', 'declare', 'typeset', 'readonly', 'local', 'set', 'setenv'])
+const LEVER_REFUSAL = 'On a line that names git or gh, nothing sets HOME, PATH, CDPATH, XDG_CONFIG_HOME, ENV, BASH_ENV, ZDOTDIR, EDITOR, VISUAL, PAGER or a GIT_*, GH_*, GITHUB_*, SSH_*, DYLD_* or LD_* variable, and nothing exports a value built from a variable: they can redirect git and gh or make it run a program. Run that as a separate command.'
 
-export type Word = { text: string; dynamic: boolean; glob: boolean }
+/**
+ * A word as the shell will see it. `heredoc` marks one that holds a `$(cat <<'EOF' ... EOF)`: its
+ * text shows `HEREDOC` there, `body` holds what the substitution prints, and the word is dynamic,
+ * because unquoted the shell splits that output into words of its own. `splits` marks a heredoc that
+ * was NOT inside double quotes, so at run time it word-splits into several arguments: it may not stand
+ * as a message, since a message option would take only its first word and the rest ride in as options.
+ */
+export type Word = { text: string; dynamic: boolean; glob: boolean; heredoc?: true; body?: string; splits?: true }
 export type Simple = { words: Word[]; redirects: Word[]; sep: string }
 export type Parsed = { commands: Simple[]; opaque: boolean; bodies: string[] }
 
 /**
- * Replaces each `$(cat <<'EOF' ... EOF)` (quoted delimiter only) with a literal
- * word, ending at the FIRST terminator line and only when `)` follows it.
+ * The `$(cat <<'EOF' ... EOF)` (quoted delimiter only) that starts at `at`: where it ends, just past
+ * its `)`, and its body. Undefined for any other `$(`. The body ends at the first line that is
+ * exactly the delimiter (after tabs, for `<<-`), where zsh and bash end it, and only `)` may follow.
  */
-function literalCommitHeredocs(input: string): string {
+function heredocSubstitution(text: string, at: number): { end: number; body: string } | undefined {
   // Nothing may follow the delimiter on its line: text there runs as a command (MC-116).
-  const open = /\$\(\s*cat\s+<<-?\s*(['"])(\w+)\1[ \t]*\n/g
-  let out = ''
-  let from = 0
-  for (let m = open.exec(input); m; m = open.exec(input)) {
-    const bodyStart = m.index + m[0].length
-    const term = new RegExp(`^[ \\t]*${m[2]}[ \\t]*$`, 'm').exec(input.slice(bodyStart))
-    if (!term) break
-    const after = bodyStart + term.index + term[0].length
-    const close = /^\s*\)/.exec(input.slice(after))
-    if (!close) continue
-    out += input.slice(from, m.index) + 'HEREDOC'
-    from = after + close[0].length
-    open.lastIndex = from
-  }
-  return out + input.slice(from)
+  const open = /\$\([ \t]*cat[ \t]+<<(-?)[ \t]*(['"])(\w+)\2[ \t]*\n/y
+  open.lastIndex = at
+  const m = open.exec(text)
+  if (!m) return undefined
+  const start = at + m[0].length
+  const term = new RegExp(`^${m[1] ? '\\t*' : ''}${m[3]}$`, 'gm')
+  term.lastIndex = start
+  const t = term.exec(text)
+  if (!t) return undefined
+  const close = /\s*\)/y
+  close.lastIndex = t.index + t[0].length
+  return close.exec(text) ? { end: close.lastIndex, body: text.slice(start, t.index) } : undefined
 }
 
 /**
  * A bash-subset tokenizer: quotes and escapes resolved, `$var`/`${}` and globs
  * marked, `$(...)`, backticks and process substitution marked opaque, heredoc
- * bodies skipped (a `$(cat <<'EOF' ... EOF)` commit message is literal text).
+ * bodies skipped. A `$(cat <<'EOF' ... EOF)` is read where it stands, so one
+ * inside single quotes or a comment is text, never a substitution; it becomes a
+ * dynamic `heredoc` word carrying its body (a commit message is the use).
  */
-export function tokenize(input: string): Parsed {
-  const text = literalCommitHeredocs(input)
+export function tokenize(text: string): Parsed {
   const commands: Simple[] = []
   let opaque = false
   let words: Word[] = []
   let redirects: Word[] = []
   let cur: Word | undefined
   let redirecting = false
-  const heredocs: { delim: string; quoted: boolean }[] = []
+  const heredocs: { delim: string; quoted: boolean; dash: boolean }[] = []
   const bodies: string[] = []
   const end = () => {
     if (cur) (redirecting ? redirects : words).push(cur)
@@ -114,15 +126,27 @@ export function tokenize(input: string): Parsed {
     redirecting = false
   }
   const ch = (i: number) => text[i] ?? ''
+  // Once the line is opaque it is refused whatever else it holds, so no later `$(` is searched for a heredoc.
+  const substitution = (at: number) => (opaque ? undefined : heredocSubstitution(text, at))
+  const holdHeredoc = (w: Word, body: string, splits: boolean) => {
+    w.text += 'HEREDOC'
+    w.dynamic = true
+    w.heredoc = true
+    w.body = (w.body ?? '') + body
+    // Unquoted, the substitution word-splits at run time; inside double quotes it stays one argument.
+    if (splits) w.splits = true
+  }
   for (let i = 0; i < text.length; i++) {
     const c = ch(i)
     if (c === '\n') {
       flush('\n')
       while (heredocs.length) {
-        const h = heredocs.shift() ?? { delim: '', quoted: true }
-        const rest = text.slice(i + 1)
-        const m = new RegExp(`^[ \\t]*${h.delim}[ \\t]*$`, 'm').exec(rest)
-        const body = m ? rest.slice(0, m.index) : rest
+        const h = heredocs.shift() ?? { delim: '', quoted: true, dash: false }
+        // The body ends at the first line that is exactly the delimiter (after tabs, for <<-), where zsh and bash end it.
+        const term = new RegExp(`^${h.dash ? '\\t*' : ''}${h.delim}$`, 'gm')
+        term.lastIndex = i + 1
+        const m = term.exec(text)
+        const body = text.slice(i + 1, m ? m.index : text.length)
         bodies.push(body)
         // An unquoted heredoc expands $(...), backticks and variables inside its body.
         if (!h.quoted && /\$|`/.test(body)) opaque = true
@@ -130,7 +154,7 @@ export function tokenize(input: string): Parsed {
           i = text.length
           break
         }
-        const lineEnd = text.indexOf('\n', i + 1 + m.index)
+        const lineEnd = text.indexOf('\n', m.index)
         i = lineEnd < 0 ? text.length : lineEnd
       }
       continue
@@ -162,13 +186,16 @@ export function tokenize(input: string): Parsed {
         i = j
         continue
       }
-      if (ch(j) === '-') j++
-      while (ch(j) === ' ') j++
-      const m = /^(['"]?)(\w+)\1/.exec(text.slice(j))
-      if (m) {
-        heredocs.push({ delim: m[2] ?? '', quoted: (m[1] ?? '') !== '' })
-        i = j + m[0].length - 1
-      } else i = j - 1
+      const dash = ch(j) === '-'
+      if (dash) j++
+      while (ch(j) === ' ' || ch(j) === '\t') j++
+      const word = /(['"]?)(\w+)\1/y
+      word.lastIndex = j
+      const m = word.exec(text)
+      // Only a plain or wholly quoted delimiter is read: the shell ends <<\EOF and <<E"O"F at EOF, which this would not.
+      if (!m || /[\w'"\\$`]/.test(ch(j + m[0].length))) opaque = true
+      else heredocs.push({ delim: m[2] ?? '', quoted: (m[1] ?? '') !== '', dash })
+      i = m ? j + m[0].length - 1 : j - 1
       continue
     }
     if (c === '>' || c === '<') {
@@ -204,8 +231,14 @@ export function tokenize(input: string): Parsed {
         if (d === '\\' && ch(j + 1) === '\n') j++
         else if (d === '\\') cur.text += ch(++j)
         else if (d === '`' || (d === '$' && ch(j + 1) === '(')) {
-          opaque = true
-          cur.dynamic = true
+          const sub = d === '$' ? substitution(j) : undefined
+          if (sub) {
+            holdHeredoc(cur, sub.body, false)
+            j = sub.end - 1
+          } else {
+            opaque = true
+            cur.dynamic = true
+          }
         } else if (d === '$' && /[A-Za-z_{@*#?$!0-9]/.test(ch(j + 1))) {
           cur.dynamic = true
           cur.text += d
@@ -227,6 +260,12 @@ export function tokenize(input: string): Parsed {
         if (text.slice(i + 2, close < 0 ? text.length : close).includes('\\')) opaque = true
       }
       if (ch(i + 1) === '(') {
+        const sub = substitution(i)
+        if (sub) {
+          holdHeredoc(cur, sub.body, true)
+          i = sub.end - 1
+          continue
+        }
         opaque = true
         cur.dynamic = true
         i++
@@ -247,10 +286,10 @@ export function headOf(s: Simple): { head?: Word; rest: Word[] } {
   let i = 0
   while (i < w.length) {
     const t = w[i]?.text ?? ''
-    if (SHELL_KEYWORDS.has(t) || /^[A-Za-z_][A-Za-z0-9_]*=/.test(t)) i++
+    if (SHELL_KEYWORDS.has(t) || /^[A-Za-z_][A-Za-z0-9_]*\+?=/.test(t)) i++
     else if (WRAPPERS.has(t)) {
       i++
-      while (i < w.length && /^(-|[A-Za-z_][A-Za-z0-9_]*=|\d+[smhd]?$)/.test(w[i]?.text ?? '')) i++
+      while (i < w.length && /^(-|[A-Za-z_][A-Za-z0-9_]*\+?=|\d+[smhd]?$)/.test(w[i]?.text ?? '')) i++
     } else break
   }
   return { head: w[i], rest: w.slice(i + 1) }
@@ -305,14 +344,39 @@ export function pushRefusal(args: Word[], protectedBranches: string[]): string |
   return undefined
 }
 
-function gitRefusal(role: Role, rest: Word[], protectedBranches: string[]): string | undefined {
+// A heredoc word hides from every rule what it expands to, so it stands only as a message: the value
+// of one of these options, as the next word or attached (-mHEREDOC, --message=HEREDOC), and only when
+// double-quoted. Unquoted it word-splits, and the option would take its first word while the rest ride
+// in as further options (`gh api ... -t $(cat <<EOF\nx -X PUT\nEOF)` would run -X PUT).
+type MessageOption = { next: RegExp; attached: RegExp }
+const GIT_MESSAGE: MessageOption = { next: /^(-[A-Za-z]*m|--message)$/, attached: /^(-[A-Za-z]*m|--message=)$/ }
+const GIT_MESSAGE_SUBS = new Set(['commit', 'tag', 'notes', 'merge'])
+const GH_MESSAGE: MessageOption = { next: /^(-[bt]|--body|--title)$/, attached: /^(-[bt]|--body=|--title=)$/ }
+
+/** True when words[k] is a heredoc word standing as the value of a message option. */
+function isMessage(words: Word[], k: number, option: MessageOption): boolean {
+  const w = words[k]
+  if (!w?.heredoc || w.splits) return false
+  if (w.text !== 'HEREDOC') return w.text.endsWith('HEREDOC') && option.attached.test(w.text.slice(0, -'HEREDOC'.length))
+  const prev = words[k - 1]
+  return prev !== undefined && !prev.dynamic && option.next.test(prev.text)
+}
+
+/** Where a git call's subcommand sits past its global options, and the first global that can alias or redirect it. */
+function gitGlobals(rest: Word[]): { at: number; banned: boolean } {
   let i = 0
   for (; i < rest.length; i++) {
     const t = rest[i]?.text ?? ''
-    if (t === '-c' || t.startsWith('--config-env') || t.startsWith('--exec-path')) return 'git -c, --config-env and --exec-path are not allowed: they can alias or redirect a command.'
+    if (t === '-c' || t.startsWith('--config-env') || t.startsWith('--exec-path')) return { at: i, banned: true }
     if (t === '-C' || t === '--git-dir' || t === '--work-tree' || t === '--namespace') i++
     else if (!t.startsWith('-')) break
   }
+  return { at: i, banned: false }
+}
+
+function gitRefusal(role: Role, rest: Word[], protectedBranches: string[]): string | undefined {
+  const { at: i, banned } = gitGlobals(rest)
+  if (banned) return 'git -c, --config-env and --exec-path are not allowed: they can alias or redirect a command.'
   const sub = rest[i]
   if (!sub) return undefined
   if (sub.dynamic || sub.glob) return 'The git subcommand must be literal.'
@@ -320,6 +384,9 @@ function gitRefusal(role: Role, rest: Word[], protectedBranches: string[]): stri
   if (!GIT_ALLOWED[role].has(name)) {
     if (name === 'stash') return role === 'controller' ? 'A Controller never stashes: the tree may hold someone else\'s work. Commit to your branch instead.' : 'A back-room agent never runs git stash; report to your Controller instead.'
     return role === 'controller' ? `git ${name} is not on a Controller's allowlist.` : `A back-room agent never runs git ${name}; report to your Controller instead.`
+  }
+  if (rest.some((w, k) => w.heredoc && !(k > i && GIT_MESSAGE_SUBS.has(name) && isMessage(rest, k, GIT_MESSAGE)))) {
+    return `In git, a $(cat <<'EOF' ... EOF) value stands only as a commit, tag, note or merge message (-m or --message); here it is part of git ${name}'s arguments.`
   }
   const args = rest.slice(i + 1)
   const RUNNERS = ['--exec', '--upload-pack', '--receive-pack', '--ext-diff', '--textconv', '--output', '--open-files-in-pager']
@@ -341,6 +408,7 @@ function gitRefusal(role: Role, rest: Word[], protectedBranches: string[]): stri
 }
 
 function ghRefusal(rest: Word[]): string | undefined {
+  if (rest.some((w, k) => w.heredoc && !isMessage(rest, k, GH_MESSAGE))) return 'In gh, a $(cat <<\'EOF\' ... EOF) value stands only as a --title or --body.'
   const pos: Word[] = []
   for (let i = 0; i < rest.length; i++) {
     const w = rest[i]
@@ -392,6 +460,18 @@ function foldPath(p: string): string {
   return `/${out.join('/')}`
 }
 
+/** The `cd <dir> &&` run directly before a command: only that pins it (anything else may not have run, or ran in a subshell). */
+function cdChain(commands: Simple[], index: number): Word[] {
+  const chain: Word[] = []
+  for (let k = index - 1; k >= 0; k--) {
+    const prev = commands[k] as Simple
+    const { head: h, rest: r } = headOf(prev)
+    if (prev.sep !== '&&' || !h || h.text !== 'cd' || r.length !== 1) break
+    chain.unshift(r[0] as Word)
+  }
+  return chain
+}
+
 /**
  * The repo directory a git or gh call is pinned to: `git -C <dir>`, else the
  * last literal `cd` before it on the line; undefined when nothing pins it.
@@ -409,16 +489,8 @@ export function pinnedDir(commands: Simple[], index: number): string | undefined
     const dir = c >= 0 ? rest[c + 1] : undefined
     if (dir) return dir.dynamic || dir.glob || !dir.text.startsWith('/') ? undefined : foldPath(dir.text)
   }
-  // Only a run of `cd <dir> &&` directly before the call pins it: anything else may not have run, or ran in a subshell.
-  const chain: Word[] = []
-  for (let k = index - 1; k >= 0; k--) {
-    const prev = commands[k] as Simple
-    const { head: h, rest: r } = headOf(prev)
-    if (prev.sep !== '&&' || !h || h.text !== 'cd' || r.length !== 1) break
-    chain.unshift(r[0] as Word)
-  }
   let dir: string | undefined
-  for (const to of chain) {
+  for (const to of cdChain(commands, index)) {
     if (to.dynamic || to.glob || to.text.startsWith('-')) return undefined
     if (to.text.startsWith('/')) dir = foldPath(to.text)
     else if (dir) dir = foldPath(`${dir}/${to.text}`)
@@ -439,14 +511,17 @@ export function shellRefusal(role: Role, command: string, protectedBranches: str
       if (APP_HOME.test(body) || tokenize(body).commands.some(s => [...s.words, ...s.redirects].some(w => APP_HOME.test(w.text)))) return APP_HOME_REFUSAL
     }
   }
-  if (parsed.opaque) return 'Commands run plainly here: no $(...), backticks, <(...) or unquoted heredocs that expand (a commit message may use $(cat <<\'EOF\' ... EOF)).'
+  if (parsed.opaque) return 'Commands run plainly here: no $(...), backticks, <(...), heredocs that expand, or a heredoc delimiter other than one plain word, bare or wholly quoted (a commit message may use $(cat <<\'EOF\' ... EOF)).'
   const rawMentionsGit = /\b(git|gh)\b/i.test(command)
   const scanned: string[] = []
   for (const s of parsed.commands) {
     const { head, rest } = headOf(s)
-    const isCommit = baseName(head?.text ?? '') === 'git' && rest.some(w => w.text === 'commit')
+    const name = baseName(head?.text ?? '')
+    const isCommit = name === 'git' && rest.some(w => w.text === 'commit')
     if (!isCommit) scanned.push(...s.words.map(w => w.text), ...s.redirects.map(w => w.text))
     else scanned.push(...s.redirects.map(w => w.text))
+    // A heredoc value is checked by what it holds, except in git and gh, where it stands only as a message.
+    if (name !== 'git' && name !== 'gh') scanned.push(...[...s.words, ...s.redirects].flatMap(w => w.body ?? []))
   }
   if (mentionsFlightFile(scanned.join(' '))) {
     const pureRead = parsed.commands.every(s => {
@@ -463,22 +538,33 @@ export function shellRefusal(role: Role, command: string, protectedBranches: str
   for (let k = 0; k < parsed.commands.length; k++) {
     const s = parsed.commands[k] as Simple
     const { head, rest } = headOf(s)
+    if (s.redirects.some(w => w.heredoc)) return 'A $(cat <<\'EOF\' ... EOF) value never names a redirect target here: write the path itself.'
+    // Assignments standing alone last for the rest of the line, and before a command they reach what it
+    // runs (CDPATH before cd). Before git or gh any prefix is refused below, with its own reason.
+    const prefixed = head !== undefined && ['git', 'gh'].includes(baseName(head.text))
+    if (rawMentionsGit && !prefixed && (head ? s.words.slice(0, s.words.indexOf(head)) : s.words).some(w => GIT_LEVER.test(w.text))) return LEVER_REFUSAL
     if (!head) continue
     if (head.dynamic || head.glob) return 'Commands run plainly here: never a command name built from a variable, glob or brace.'
     if (/\s/.test(head.text)) return 'A command name with spaces in it (env -S and the like) is not allowed here.'
     const name = baseName(head.text)
     const argsNameGit = rest.some(w => /\b(git|gh)\b/i.test(w.text))
     if (argsNameGit && !['git', 'gh'].includes(name) && !TEXT_ONLY.has(name)) return `git and gh run only at the head of a command, not through ${name}.`
-    if (rawMentionsGit && (name === 'xargs' || name === 'eval' || name === 'source' || name === '.' || name === 'exec') && rest.some(w => INTERPRETER.test(baseName(w.text)) || /\b(git|gh)\b/i.test(w.text))) {
+    // The same for a heredoc value, whose words the checks above cannot see (find -exec, xargs or eval of one).
+    if (rawMentionsGit && !['git', 'gh'].includes(name) && !TEXT_ONLY.has(name) && rest.some(w => w.heredoc)) {
+      return `On a line that names git or gh, a $(cat <<'EOF' ... EOF) value stands only as a git or gh message or as text to print, never as an argument of ${name}.`
+    }
+    if (rawMentionsGit && (name === 'source' || name === '.')) return `On a line that names git or gh, ${name} does not run: the file it reads can set variables that redirect git. Run it as a separate command.`
+    if (rawMentionsGit && (name === 'xargs' || name === 'eval' || name === 'exec') && rest.some(w => INTERPRETER.test(baseName(w.text)) || /\b(git|gh)\b/i.test(w.text))) {
       return `git and gh run only as plain commands, never through ${name}.`
     }
     // Fail closed: on a line that names git or gh, no interpreter runs at all (a pipe, heredoc, -c, /dev/stdin or option can feed it a program).
     if (['export', 'declare', 'typeset', 'set', 'setenv'].includes(name) && rest.some(w => /^(GH_|GIT_|GITHUB_)/.test(w.text))) return 'Setting GH_*, GIT_* or GITHUB_* variables is not allowed here: they can redirect git and gh in later commands.'
+    if (rawMentionsGit && SETTERS.has(name) && rest.some(w => GIT_LEVER.test(w.text) || w.dynamic)) return LEVER_REFUSAL
     if (/(127\.0\.0\.1|localhost|0\.0\.0\.0|\[::1\]):47(7[7-9]|8\d|9[0-7])\b/.test(command)) return 'The Mission Control App is the founder\'s: fleet agents never reach it.'
     if ((name === 'ps' && rest.some(w => /^[a-zA-Z]*e[a-zA-Z]*$/.test(w.text) || /^-[A-Za-z]*E/.test(w.text))) || /\/proc\/[^/\s]+\/environ/.test(command)) return 'Reading other processes\' environments is not allowed here.'
     if (name === 'claude') return 'A fleet agent never starts another Claude session: it would run without the fleet guards or budget. Use your back room (the Agent tool) instead.'
     if (rawMentionsGit && READS_STDIN.test(name)) return `git and gh run only as plain commands; ${name} on the same line is not allowed. Run it as a separate command.`
-    if ((name === 'git' || name === 'gh') && s.words.slice(0, s.words.indexOf(head)).some(w => /^[A-Za-z_][A-Za-z0-9_]*=/.test(w.text) || w.text === 'env')) {
+    if ((name === 'git' || name === 'gh') && s.words.slice(0, s.words.indexOf(head)).some(w => /^[A-Za-z_][A-Za-z0-9_]*\+?=/.test(w.text) || w.text === 'env')) {
       return `${name} runs here with no environment prefix (VAR=... or env): variables like GIT_SSH_COMMAND or GIT_CONFIG_PARAMETERS can redirect it.`
     }
     if (scopeDir && (name === 'git' || name === 'gh')) {
