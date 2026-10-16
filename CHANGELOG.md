@@ -6,6 +6,15 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-10-16: the console skill is now `fleet` (`.claude/skills/fleet/SKILL.md`,
+  MC-121). The skill and the mission-fleet mod's `/console` command shared one
+  name, so the engine refused the mod's command at every session start, and a
+  typed `/console go <id>` could load the skill's text instead of running: the
+  decision never reached its Controller. `/console` now belongs to the mod
+  alone, and `/fleet` loads the guide. If you copied the skills into
+  `~/.claude/skills/`, delete the old `console` folder there, or the clash
+  stays.
+
 - 2026-10-15 (latest): the spend recorder (MC-069), a Claude Code mod at
   `tools/mods/spend-recorder` that records the model, effort and token usage
   of every model call, per session and per agent, in the plugin's store (the
@@ -78,9 +87,10 @@ changes should never reach you silently.
   Controller names is watched every ten minutes, waking the Controller on a
   change in state, reviews, comments or checks. The mod ships 47 tests, run
   with `claude plugin test tools/mods/mission-fleet`. New: the console skill
-  (`.claude/skills/console/SKILL.md`), the Controller clause in the
-  constitution, and `framework/remote-access.md`, the runbook for reaching the
-  app from a phone through `tailscale serve` only, never a public tunnel.
+  (renamed `fleet` on 2026-10-16, now `.claude/skills/fleet/SKILL.md`), the
+  Controller clause in the constitution, and `framework/remote-access.md`, the
+  runbook for reaching the app from a phone through `tailscale serve` only,
+  never a public tunnel.
 
 - 2026-10-11 (later still): `/product-flow` after its first dry run (MC-091).
   A tabletop run of a sample idea through every instruction found eleven

@@ -14,7 +14,7 @@ flowchart TB
 
 Model tiers here mean: the cheap tier, the mid tier, and the frontier tier of whatever model family your harness runs (on Claude Code: the current cheap, mid and frontier models plus the one above the frontier for final synthesis - named, priced and dated in your instance's `CONSTITUTION.local.md`, because the framework speaks in tiers and never pins a model).
 
-**The console fleet's words** (`.claude/skills/console/SKILL.md`): Flight is the orchestrator session; a Controller owns one front or project on a console with a call sign; its sub-agents are its back room; their messages are the loops; the go/no-go poll holds what waits on the founder; the Front Room is the Mission Control App. A Controller is one more dispatch: staff it on the routing preset for its work (the Controller row below) and retune it on evidence.
+**The console fleet's words** (`.claude/skills/fleet/SKILL.md`): Flight is the orchestrator session; a Controller owns one front or project on a console with a call sign; its sub-agents are its back room; their messages are the loops; the go/no-go poll holds what waits on the founder; the Front Room is the Mission Control App. A Controller is one more dispatch: staff it on the routing preset for its work (the Controller row below) and retune it on evidence.
 
 **Ceilings first:** the routing ceilings in `_command/CONSTITUTION.local.md` cap these presets - a frugal posture steps each row down; a missing tier maps to the nearest available one (no frontier tier at all: every frontier row falls to the mid tier, and judgment work earns `--thinking high` instead). Presets are defaults, not entitlements. An invocation's `--spend lean` steps dispatches one further tier down, always below the ceilings, never above.
 

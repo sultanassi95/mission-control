@@ -1,15 +1,21 @@
 ---
-name: console
+name: fleet
 description: >-
   Flight's console fleet: staff a kept-alive Controller for one front or
   project, call it, retune its model and effort, keep the go/no-go poll, and
   stand it down - from the terminal or the Mission Control App. Use whenever
   the founder asks to put an agent on a front or project, to check on or
-  redirect one, to answer a Controller's gate, or types /console. Needs the
-  mission-fleet mod (tools/mods/mission-fleet) loaded in the session.
+  redirect one, or to answer a Controller's gate. The commands are /console,
+  which the mission-fleet mod (tools/mods/mission-fleet) adds, so the mod
+  must be loaded in the session.
 ---
 
-# Console
+# Fleet
+
+This skill is the guide to the `/console` commands. They belong to the
+mission-fleet mod, so the skill carries a different name: a skill named
+`console` would take `/console` from the mod, and a typed command could then
+load this text instead of running.
 
 The orchestrator session is **Flight**. Each **Controller** owns one front or
 one project of a front, staffed on a **console** with a call sign. A

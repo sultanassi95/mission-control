@@ -288,7 +288,7 @@ is done only when the probe passes.**
   project never blindsides its dependents.
 - **Run several fronts at once:** `/console staff <front>` puts a kept-alive
   Controller on a front or project, and `/console list`, `call`, `retune`,
-  `poll` and `stand-down` run the fleet (`.claude/skills/console/SKILL.md`).
+  `poll` and `stand-down` run the fleet (`.claude/skills/fleet/SKILL.md`).
   It needs the mission-fleet mod, `tools/mods/mission-fleet`, loaded as a
   Claude Code plugin (`tools/README.md` says how).
 - **The Mission Control App:** `/console app` starts a local control surface
