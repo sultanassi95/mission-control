@@ -16,6 +16,9 @@
  * folder read later) is outside it; only an OS-level boundary closes that.
  */
 
+import type { PollItem } from '../types'
+import { isUndelivered } from './loops'
+
 /** Branches no Controller pushes to, whatever its spoke says. */
 export const ALWAYS_PROTECTED = ['main', 'master', 'dev', 'develop', 'test', 'staging', 'stage', 'production', 'prod', 'release']
 
@@ -561,7 +564,7 @@ export function fleetSelfApproval(tool: string, input: unknown, seats: FleetSeat
 }
 
 /** Console verbs that message or start an agent. From the app they run through Flight, never from the app's own loop. */
-const RELAYED = new Set(['staff', 'call', 'go', 'nogo', 'no-go', 'dismiss', 'stand-down'])
+const RELAYED = new Set(['staff', 'call', 'go', 'nogo', 'no-go', 'retry', 'dismiss', 'stand-down'])
 export function isRelayedVerb(args: string): boolean {
   return RELAYED.has((args.trim().split(/\s+/)[0] ?? '').toLowerCase())
 }
@@ -591,4 +594,17 @@ export function spendRelayCode(codes: RelayCodes, code: string | undefined, args
 export function awaitingFlight(sentAt: string | undefined, now: number): boolean {
   const at = sentAt ? Date.parse(sentAt) : NaN
   return Number.isFinite(at) && now - at <= RELAY_TTL
+}
+
+/**
+ * The poll item an app op holds while Flight runs it, so its card takes no second tap: an open gate
+ * for go or no-go, an undelivered decision for retry. Undefined for any other op or item.
+ */
+export function relayHold(args: string, items: readonly PollItem[]): PollItem | undefined {
+  const [verb = '', id = ''] = args.trim().split(/\s+/)
+  const item = items.filter(p => p.id.toLowerCase() === id.toLowerCase()).at(-1)
+  if (!item) return undefined
+  const v = verb.toLowerCase()
+  if (v === 'retry') return isUndelivered(item) ? item : undefined
+  return (v === 'go' || v === 'nogo' || v === 'no-go') && item.state === 'open' ? item : undefined
 }

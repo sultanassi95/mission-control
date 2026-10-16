@@ -84,6 +84,8 @@
   const SENT_HOLD = 10 * 60_000
   const sentToFlight = p => Boolean(p.sentAt) && Date.now() - Date.parse(p.sentAt) <= SENT_HOLD
   const openGates = () => pollItems().filter(p => p.state === 'open' && !sentToFlight(p))
+  // A go or no-go that never reached its Controller (isUndelivered in the mod's hooks/loops.ts).
+  const undelivered = p => Boolean(p.undelivered) && (p.state === 'go' || p.state === 'no-go')
 
   function statusOf(c) {
     if (c.status === 'stood-down') return ['idle', 'Stood down']
@@ -153,10 +155,8 @@
     for (const p of items.filter(x => x.state === 'open' && sentToFlight(x))) {
       h += `<article class="gate"><div class="kind"><span class="call">${esc(p.from)}</span><span>· ${esc(p.id)}</span></div><h3>${esc(p.title)}</h3><p class="hint" role="status">Sent to Flight. It runs once Flight is free.</p></article>`
     }
-    for (const p of items.filter(x => x.undelivered).slice(-3).reverse()) {
-      h += `<article class="gate undelivered"><div class="kind"><span class="call">${esc(p.from)}</span><span>· ${esc(p.id)}</span></div><h3>Your ${p.state === 'go' ? 'GO' : 'NO-GO'} did not reach ${esc(p.from)}</h3><p class="hint">${esc(p.undelivered)}. Staff the console again from Flight, then call it with the decision.</p></article>`
-    }
-    if (!open.length && !items.some(x => x.state === 'open' && sentToFlight(x))) h += '<p class="empty">Nothing is waiting on you. New go/no-go calls appear here.</p>'
+    for (const p of items.filter(undelivered).reverse()) h += undeliveredCard(p)
+    if (!open.length && !items.some(x => (x.state === 'open' && sentToFlight(x)) || undelivered(x))) h += '<p class="empty">Nothing is waiting on you. New go/no-go calls appear here.</p>'
     const down = new Set(consoles().filter(c => c.status === 'stood-down').map(c => c.callSign))
     open.forEach((p, i) => {
       const orphan = down.has(p.from)
@@ -172,11 +172,29 @@
         <div class="btnrow ${orphan ? 'two' : 'one'}"><button class="ghost" type="button" data-a="ask" data-v="${esc(p.id)}">Ask Flight first</button>${orphan ? `<button class="warn" type="button" data-a="gatedismiss" data-v="${esc(p.id)}">Dismiss</button>` : ''}</div>
       </article>`
     })
-    const decided = items.filter(p => (p.state === 'go' || p.state === 'no-go' || p.state === 'dismissed') && !p.undelivered).slice(-6).reverse()
+    const decided = items.filter(p => (p.state === 'go' || p.state === 'no-go' || p.state === 'dismissed') && !undelivered(p)).slice(-6).reverse()
     const replaced = items.filter(p => p.state === 'superseded').slice(-3).reverse()
     if (decided.length) h += '<p class="section-label">Decided</p>' + decided.map(p => `<p class="resolved">${pill(p.state === 'go' ? ['done', 'Go'] : p.state === 'dismissed' ? ['idle', 'Dismissed'] : ['failed', 'No-go'])}<span>${esc(p.id)} · ${esc(p.from)}</span></p>`).join('')
     if (replaced.length) h += '<p class="section-label">Replaced by a newer report</p>' + replaced.map(p => `<p class="resolved">${pill(['idle', 'Replaced'])}<span>${esc(p.id)} · ${esc(str(p.title).slice(0, 90))}</span></p>`).join('')
     return h
+  }
+
+  // A decision that did not reach its Controller: why, in one plain sentence (the engine's own words
+  // behind Technical details), then Retry while the Controller that raised it is staffed, and Dismiss.
+  // The mod's snapshot says why (p.why) and where that Controller stands (p.seat: live, replaced, gone).
+  function undeliveredCard(p) {
+    const verdict = p.state === 'go' ? 'GO' : 'NO-GO'
+    const why = esc(p.why || 'The message could not be delivered.')
+    const key = `${p.id}:why`
+    const raw = `<details data-id="${esc(key)}"${S.details.has(key) ? ' open' : ''}><summary>Technical details</summary><pre>${esc(p.undelivered)}</pre></details>`
+    // Beside Retry, Dismiss is neutral so Retry stays the card's one primary action; alone, it is .warn as on the stood-down card.
+    const dismiss = cls => `<button class="${cls}" type="button" data-a="gatedismiss" data-v="${esc(p.id)}">Dismiss</button>`
+    let body
+    if (sentToFlight(p)) body = '<p class="hint" role="status">Retry sent to Flight. It runs once Flight is free.</p>'
+    else if (p.seat === 'live') body = `<p class="hint">${why} Retry sends the same ${verdict} to ${esc(p.from)}.</p>${raw}<div class="btnrow two"><button class="${p.state === 'go' ? 'go secondary' : 'nogo'}" type="button" data-a="gateretry" data-v="${esc(p.id)}">Retry ${verdict}</button>${dismiss('ghost')}</div>`
+    else if (p.seat === 'replaced') body = `<p class="hint">${why} The ${esc(p.from)} Controller that raised it has been replaced. Tell the new one from Flight, or dismiss this.</p>${raw}<div class="btnrow one">${dismiss('warn')}</div>`
+    else body = `<p class="hint">${why} ${esc(p.from)} is no longer staffed. Staff the console again from Flight, then tell it the decision, or dismiss this.</p>${raw}<div class="btnrow one">${dismiss('warn')}</div>`
+    return `<article class="gate undelivered"><div class="kind"><span class="call">${esc(p.from)}</span><span>· ${esc(p.id)}</span></div><h3>Your ${verdict} did not reach ${esc(p.from)}</h3>${body}</article>`
   }
 
   function viewLoops() {
@@ -434,6 +452,7 @@
         break
       }
       case 'gatedismiss': await send('console', `dismiss-gate ${v}`); break
+      case 'gateretry': await send('console', `retry ${v}`); break
       case 'ask': S.tab = 'flight'; render(); $('draft').value = `About ${v}: `; $('draft').focus(); return
       case 'filter': S.filter = v; break
       case 'expand': S.open.has(v) ? S.open.delete(v) : S.open.add(v); break

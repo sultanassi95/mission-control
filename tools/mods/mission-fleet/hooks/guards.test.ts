@@ -1,6 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
-import { awaitingFlight, fleetSelfApproval, isFlightOnly, isRelayedVerb, RELAY_TTL, splitRelayCode, spendRelayCode, isShellLikeTool, pinnedDir, protectedFromSpoke, pushDestination, shellRefusal, tokenize, toolRefusal } from './guards'
+import type { PollItem } from '../types'
+import { awaitingFlight, fleetSelfApproval, isFlightOnly, isRelayedVerb, RELAY_TTL, relayHold, splitRelayCode, spendRelayCode, isShellLikeTool, pinnedDir, protectedFromSpoke, pushDestination, shellRefusal, tokenize, toolRefusal } from './guards'
 import type { RelayCodes } from './guards'
 
 const C = (cmd: string, prot: string[] = []) => shellRefusal('controller', cmd, prot)
@@ -346,7 +347,7 @@ test('the fleet approves its own spawn only of a Controller under a reserved con
 })
 
 test('app console ops that message or start an agent are relayed through Flight', () => {
-  for (const a of ['staff karnak', 'call KARNAK hi', 'go MI8', 'nogo MI8 not now', 'no-go MI8', 'dismiss KARNAK', 'stand-down KARNAK']) expect(isRelayedVerb(a)).toBe(true)
+  for (const a of ['staff karnak', 'call KARNAK hi', 'go MI8', 'nogo MI8 not now', 'no-go MI8', 'retry MI8', 'dismiss KARNAK', 'stand-down KARNAK']) expect(isRelayedVerb(a)).toBe(true)
   for (const a of ['list', 'poll', 'loops KARNAK', 'retune KARNAK haiku', 'dismiss-gate MI8', '']) expect(isRelayedVerb(a)).toBe(false)
 })
 
@@ -376,4 +377,18 @@ test('a decision sent to Flight holds its gate for the code lifetime, then frees
   expect(awaitingFlight('2026-10-16T01:57:00.000Z', at + RELAY_TTL + 1)).toBe(false)
   expect(awaitingFlight(undefined, at)).toBe(false)
   expect(awaitingFlight('not a date', at)).toBe(false)
+})
+
+test('an app op holds only the item it decides while Flight runs it', () => {
+  const base: PollItem = { id: 'MI1', at: '2026-10-16T00:30:12.000Z', from: 'MISSION-CONTROL', kind: 'gate', title: 'approve the plan', detail: 'blocked on you: approve the plan', state: 'go', agentId: 'a1' }
+  const open: PollItem = { ...base, id: 'MI2', state: 'open' }
+  const stuck: PollItem = { ...base, undelivered: 'Auto mode classifier gave no verdict' }
+  const items = [open, stuck]
+  expect(relayHold('go MI2', items)?.id).toBe('MI2')
+  expect(relayHold('nogo mi2 not now', items)?.id).toBe('MI2')
+  expect(relayHold('retry MI1', items)?.id).toBe('MI1')
+  expect(relayHold('retry MI2', items)).toBeUndefined()
+  expect(relayHold('go MI1', items)).toBeUndefined()
+  expect(relayHold('call MISSION-CONTROL go', items)).toBeUndefined()
+  expect(relayHold('retry MI9', items)).toBeUndefined()
 })

@@ -1,3 +1,5 @@
+import type { PollItem } from '../types'
+
 export type StatusCheck = {
   state?: string
   shipped?: string
@@ -56,4 +58,69 @@ export function pollId(callSign: string, n: number): string {
 export function dependentsOf(scope: string, maps: { front: string; text: string }[], own: string): string[] {
   const needle = new RegExp(`\\b${scope.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i')
   return maps.filter(m => m.front !== own && needle.test(m.text)).map(m => m.front)
+}
+
+/** A console as the seat checks read it. */
+export type Seat = { callSign: string; agentId: string; status: string }
+
+/** Where the Controller that raised an item stands: still staffed, replaced by a later console under its call sign, or gone. */
+export type SeatState = 'live' | 'replaced' | 'gone'
+
+/**
+ * The console whose Controller may hear an item's decision now: the agent that raised it, while its
+ * console is staffed, and never a later console under the same call sign. An item opened before
+ * agent ids were recorded falls back to the console staffed under its call sign.
+ */
+export function liveSeat<S extends Seat>(item: Pick<PollItem, 'agentId' | 'from'>, seats: readonly S[]): S | undefined {
+  return item.agentId
+    ? seats.find(s => s.agentId === item.agentId && s.status === 'staffed')
+    : seats.find(s => s.callSign === item.from && s.status === 'staffed')
+}
+
+export function seatState(item: Pick<PollItem, 'agentId' | 'from'>, seats: readonly Seat[]): SeatState {
+  if (liveSeat(item, seats)) return 'live'
+  return seats.some(s => s.callSign === item.from && s.status === 'staffed') ? 'replaced' : 'gone'
+}
+
+/**
+ * A go or no-go that never reached its Controller: it stays on the Poll until a retry delivers it or
+ * the founder dismisses it. The same test as the app's `undelivered` in tools/app/public/app.js.
+ */
+export function isUndelivered(item: Pick<PollItem, 'state' | 'undelivered'>): boolean {
+  return Boolean(item.undelivered) && (item.state === 'go' || item.state === 'no-go')
+}
+
+/**
+ * One plain sentence for the founder in place of an engine refusal, which is often written for the
+ * model ("Issue the action again once..."). The raw text stays on the item and in the audit log.
+ */
+export function plainReason(raw: string): string {
+  if (/auto mode|classifier/i.test(raw)) return 'Auto mode blocked the message.'
+  if (/no agent recorded/i.test(raw)) return 'No Controller was staffed to receive it.'
+  if (/not found|no agent named|no such|nobody|unknown (agent|recipient)|no longer|not running|has ended/i.test(raw)) return 'The Controller could not be found; its session may have ended.'
+  if (/denied|permission|not allowed/i.test(raw)) return 'A permission rule blocked the message.'
+  return 'The message could not be delivered.'
+}
+
+/** What the founder can do at the terminal about an undelivered decision, by where its Controller stands. */
+export function undeliveredAdvice(item: Pick<PollItem, 'id' | 'from' | 'state'>, seat: SeatState): string {
+  if (seat === 'live') return `/console retry ${item.id} sends the same ${item.state === 'no-go' ? 'NO-GO' : 'GO'} to ${item.from}.`
+  if (seat === 'replaced') return `The ${item.from} Controller that raised it has been replaced: tell the new one with /console call ${item.from}.`
+  return `${item.from} is no longer staffed: staff the console again from Flight, then tell it the decision with /console call ${item.from}.`
+}
+
+/** A poll item as the app draws it: an undelivered decision carries its plain reason and where its Controller stands. */
+export function cardFacts(item: PollItem, seats: readonly Seat[]): PollItem & { why?: string; seat?: SeatState } {
+  return isUndelivered(item) ? { ...item, why: plainReason(item.undelivered ?? ''), seat: seatState(item, seats) } : item
+}
+
+/** How many closed items the app keeps as recent history. */
+export const APP_HISTORY = 30
+
+/**
+ * The poll items the app draws: the last APP_HISTORY closed items as history, then every undelivered
+ * decision however old (each waits on the founder until a retry or a dismiss), then every open item.
+ */
+export function appPoll(items: readonly PollItem[]): PollItem[] {
+  return [...items.filter(p => p.state !== 'open' && !isUndelivered(p)).slice(-APP_HISTORY), ...items.filter(isUndelivered), ...items.filter(p => p.state === 'open')]
 }
