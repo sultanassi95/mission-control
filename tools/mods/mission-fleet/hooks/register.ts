@@ -149,11 +149,12 @@ const FAILED = 'The console command failed partway. /console list shows what the
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     // Each step stands alone: the engine refuses /console when a user command has that name, and that must not skip the rest.
-    const step = async (name: string, run: () => Promise<void> | void) => {
+    const step = async (name: string, run: () => unknown) => {
       try {
         await run()
       } catch (err) {
         await log($, 'session.start', name, `failed: ${String(err).slice(0, 160)}`).catch(() => undefined)
+        if (name !== 'command.register') try { $.ui.toast(`mission-fleet: ${name} failed at session start; see _command/fleet/audit.log`) } catch { /* no UI */ }
       }
     }
     await step('command.register', () => $.command.register({
