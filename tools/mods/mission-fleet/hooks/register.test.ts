@@ -183,3 +183,10 @@ test('a refused console command still registers the controller type and the cons
   expect(line).toContain('command.register')
   expect(line).toContain('refused: it is the user')
 })
+
+test('a go through Flight\'s tool with a code the app never minted is refused', async ($, on) => {
+  portfolio(on)
+  const forged = await $.tool.call({ tool: 'mcp__mission-fleet__console', args: `go FI1 --code ${'f'.repeat(32)}` } as Parameters<Engine['tool']['call']>[0])
+  expect(JSON.stringify(forged)).toContain('unknown, used or expired')
+  expect(JSON.stringify(forged)).not.toContain('No poll item')
+})

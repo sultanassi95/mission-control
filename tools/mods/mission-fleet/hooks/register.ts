@@ -7,7 +7,8 @@ import { commonDir, CONTROLLER_PROMPT, CONTROLLER_TYPE, DEFAULT_BUDGET, EFFORTS,
 
 const APP_PORT = 4777
 const MODEL_LIST = Object.keys(MODEL_IDS).join(', ')
-import { fleetSelfApproval, protectedFromSpoke, toolRefusal } from './guards'
+import { awaitingFlight, fleetSelfApproval, isRelayedVerb, protectedFromSpoke, RELAY_TTL, splitRelayCode, spendRelayCode, toolRefusal } from './guards'
+import type { RelayCodes } from './guards'
 import { dependentsOf, isNothing, parseStatus, pollId, prSignature, prsIn } from './loops'
 import type { Role as GuardRole } from './guards'
 
@@ -193,15 +194,18 @@ export const register: Register = on => {
   // Guards: what a Controller and its back room may run. A guard that fails denies.
   on('tool.check', async ($, e, next) => {
     // Auto mode cannot judge a call a plugin raised, so the fleet approves its own sends and spawns.
-    if (next.origin.plugin === 'mission-fleet' && !e.agentId) {
-      const seat = fleetSelfApproval(e.tool, e.input, await read($, consoles))
-      if (seat) {
-        // Rules and lower hooks still decide; only the ask the mode cannot settle becomes an allow.
-        const beneath = await next(e)
-        if (beneath.decision !== 'ask') return beneath
-        await log($, 'approve', seat, `fleet ${e.tool === 'Agent' ? 'staffing' : 'message'} approved by the fleet, not the mode`)
-        return { decision: 'allow' as const }
+    const seat = e.tool === 'SendMessage' || e.tool === 'Agent' ? fleetSelfApproval(e.tool, e.input, await read($, consoles)) : undefined
+    if (seat && (next.origin.plugin !== 'mission-fleet' || e.agentId)) {
+      await log($, 'approve-miss', seat, `${e.tool} not the fleet's own: origin=${JSON.stringify(next.origin)} loop=${e.agentId ?? 'main'}`)
+    } else if (seat) {
+      // Rules and lower hooks still decide; only the ask the mode cannot settle becomes an allow.
+      const beneath = await next(e)
+      if (beneath.decision !== 'ask') {
+        if (beneath.decision === 'deny') await log($, 'approve-miss', seat, `${e.tool} denied beneath the fleet: rule=${beneath.rule ?? '-'} hook=${beneath.hook ?? '-'} reason=${(beneath.reason ?? '').slice(0, 120)}`)
+        return beneath
       }
+      await log($, 'approve', seat, `fleet ${e.tool === 'Agent' ? 'staffing' : 'message'} approved by the fleet, not the mode`)
+      return { decision: 'allow' as const }
     }
     if (!e.agentId) return next(e)
     const role = await roleOf($, e.agentId)
@@ -358,8 +362,12 @@ export const register: Register = on => {
 
   on('tool.call', { tool: /^mcp__mission-fleet__console$/ }, async ($, e) => {
     if (e.agentId) return { result: 'Only Flight runs the console tool; a Controller reports to Flight instead.', isError: true }
-    const args = typeof (e as { args?: unknown }).args === 'string' ? (e as { args: string }).args : ''
-    return { result: await runConsole($, args, false) }
+    const raw = typeof (e as { args?: unknown }).args === 'string' ? (e as { args: string }).args : ''
+    // An app op relayed through Flight carries a one-time code minted for exactly these args: the founder's own.
+    const { args, code } = splitRelayCode(raw)
+    const fromApp = spendRelayCode(relayCodes, code, args, Date.now())
+    if (code && !fromApp) return { result: 'That app code is unknown, used or expired; send it again from the app.', isError: true }
+    return { result: await runConsole($, args, fromApp) }
   }).catch(() => ({ result: FAILED, isError: true }))
 }
 
@@ -434,7 +442,7 @@ async function runConsole($: EngineInterface, args: string, fromPerson: boolean)
     const replaced = all.filter(p => p.state === 'superseded').slice(-3)
     const undelivered = all.filter(p => p.undelivered).slice(-3)
     const down = new Set(fleet.filter(c => c.status === 'stood-down').map(c => c.callSign))
-    const lines = open.map(p => `${p.id}  ${p.from}${down.has(p.from) ? ' (stood down; kept for its next Controller)' : ''}  ${p.kind}: ${p.title}${p.targets?.length ? `  (tells: ${p.targets.join(', ')})` : ''}`)
+    const lines = open.map(p => `${p.id}  ${p.from}${down.has(p.from) ? ' (stood down; kept for its next Controller)' : ''}${awaitingFlight(p.sentAt, Date.now()) ? ' (sent from the app, waiting for Flight)' : ''}  ${p.kind}: ${p.title}${p.targets?.length ? `  (tells: ${p.targets.join(', ')})` : ''}`)
     if (lines.length === 0) lines.push('Nothing is waiting on the founder.')
     if (replaced.length) lines.push('', 'Recently replaced by a newer report:', ...replaced.map(p => `  ${p.id}  ${p.from}: ${p.title.slice(0, 100)}`))
     if (undelivered.length) lines.push('', 'Decided but not delivered:', ...undelivered.map(p => `  ${p.id}  ${p.from}: ${p.undelivered}`))
@@ -1062,6 +1070,34 @@ async function pushLoop($: EngineInterface, current: App) {
 }
 
 /** An action from the app: the founder's, since only the token-holder reaches /op. */
+// One-time codes for app ops relayed through Flight, by code. A plugin reload drops them, and the
+// relayed call is then refused as unknown, so the founder sends it again from the app.
+const relayCodes: RelayCodes = new Map()
+
+/**
+ * An app op that messages or starts an agent, handed to Flight as a prompt in the founder's name.
+ * Sent from the app's own loop, the engine never asks this plugin's tool.check, so auto mode refuses
+ * it; Flight's call of the console tool runs where the fleet can approve it.
+ */
+async function relayToFlight($: EngineInterface, text: string): Promise<string> {
+  const args = text.trim()
+  const now = Date.now()
+  // A go or no-go holds its gate from the tap, so the card cannot be answered twice while Flight is busy.
+  const [verb = '', id = ''] = args.split(/\s+/)
+  if (['go', 'nogo', 'no-go'].includes(verb.toLowerCase())) {
+    const item = (await read($, poll)).filter(p => p.id.toLowerCase() === id.toLowerCase()).at(-1)
+    if (item?.state === 'open' && awaitingFlight(item.sentAt, now)) return `${item.id} is already with Flight; it runs once Flight is free.`
+    if (item?.state === 'open') await update($, poll, list => list.map(p => (p.id === item.id && p.at === item.at ? { ...p, sentAt: new Date(now).toISOString() } : p)))
+  }
+  for (const [k, v] of relayCodes) if (now - v.at > RELAY_TTL) relayCodes.delete(k)
+  const code = hex(16)
+  relayCodes.set(code, { args, at: now })
+  const prompt = `From the Mission Control App, the founder sent: ${args}\nRun it now with the console tool, args exactly: ${args} --code ${code}`
+  void $.prompt.submit({ text: prompt, asUser: true }).catch((err: unknown) => log($, 'app-op', 'relay', `not sent to Flight: ${String(err).slice(0, 160)}`))
+  await log($, 'app-op', 'relay', `${args.slice(0, 80)} sent to Flight`)
+  return 'Sent to Flight; it runs once Flight is free.'
+}
+
 async function runAppOp($: EngineInterface, op: string, text: string, id = 0) {
   await log($, 'app-op', op, text.slice(0, 160))
   let result = ''
@@ -1069,10 +1105,10 @@ async function runAppOp($: EngineInterface, op: string, text: string, id = 0) {
     // Only the token-holding app reaches /op, so its prompt is the founder's own words, read without the plugin frame.
     await $.prompt.submit({ text, asUser: true })
     result = 'Sent to Flight.'
-  } else if (op === 'console') result = await runConsole($, text, true)
+  } else if (op === 'console') result = isRelayedVerb(text) ? await relayToFlight($, text) : await runConsole($, text, true)
   else if (op === 'command') {
     const [command = '', ...words] = text.trim().split(/\s+/)
-    if (command === 'console') result = await runConsole($, words.join(' '), true)
+    if (command === 'console') result = isRelayedVerb(words.join(' ')) ? await relayToFlight($, words.join(' ')) : await runConsole($, words.join(' '), true)
     else result = (await $.command.run({ command, args: words.join(' ') })).text ?? `/${command} ran.`
   }
   lastOp = { id, text: result, at: new Date().toISOString() }

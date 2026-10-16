@@ -1,6 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
-import { fleetSelfApproval, isFlightOnly, isShellLikeTool, pinnedDir, protectedFromSpoke, pushDestination, shellRefusal, tokenize, toolRefusal } from './guards'
+import { awaitingFlight, fleetSelfApproval, isFlightOnly, isRelayedVerb, RELAY_TTL, splitRelayCode, spendRelayCode, isShellLikeTool, pinnedDir, protectedFromSpoke, pushDestination, shellRefusal, tokenize, toolRefusal } from './guards'
+import type { RelayCodes } from './guards'
 
 const C = (cmd: string, prot: string[] = []) => shellRefusal('controller', cmd, prot)
 const B = (cmd: string) => shellRefusal('back room', cmd, [])
@@ -342,4 +343,37 @@ test('the fleet approves its own spawn only of a Controller under a reserved con
   expect(fleetSelfApproval('Agent', { subagent_type: 'mission-fleet:controller', name: 'console-other' }, seats)).toBeUndefined()
   expect(fleetSelfApproval('Agent', { subagent_type: 'mission-fleet:controller', name: 'console-karnak' }, [{ ...seats[0]!, status: 'staffed', agentId: 'a2' }])).toBeUndefined()
   expect(fleetSelfApproval('Bash', { command: 'ls' }, seats)).toBeUndefined()
+})
+
+test('app console ops that message or start an agent are relayed through Flight', () => {
+  for (const a of ['staff karnak', 'call KARNAK hi', 'go MI8', 'nogo MI8 not now', 'no-go MI8', 'dismiss KARNAK', 'stand-down KARNAK']) expect(isRelayedVerb(a)).toBe(true)
+  for (const a of ['list', 'poll', 'loops KARNAK', 'retune KARNAK haiku', 'dismiss-gate MI8', '']) expect(isRelayedVerb(a)).toBe(false)
+})
+
+test('a relay code is split off the end of the args, and only a well-formed one', () => {
+  const code = 'a'.repeat(32)
+  expect(splitRelayCode(`go MI8 --code ${code}`)).toEqual({ args: 'go MI8', code })
+  expect(splitRelayCode('go MI8')).toEqual({ args: 'go MI8' })
+  expect(splitRelayCode('go MI8 --code nothex')).toEqual({ args: 'go MI8 --code nothex' })
+})
+
+test('a relay code works once, for exactly the args it was minted for, within its lifetime', () => {
+  const codes: RelayCodes = new Map([['c1', { args: 'go MI8', at: 1000 }], ['c2', { args: 'go MI8', at: 1000 }], ['c3', { args: 'go MI8', at: 1000 }]])
+  expect(spendRelayCode(codes, 'c1', 'go MI8', 2000)).toBe(true)
+  expect(spendRelayCode(codes, 'c1', 'go MI8', 2000)).toBe(false)
+  expect(spendRelayCode(codes, 'c2', 'go MI9', 2000)).toBe(false)
+  expect(spendRelayCode(codes, 'c2', 'go MI8', 2000)).toBe(false)
+  expect(spendRelayCode(codes, 'c3', 'go MI8', 1000 + RELAY_TTL + 1)).toBe(false)
+  expect(spendRelayCode(codes, undefined, 'go MI8', 2000)).toBe(false)
+  expect(spendRelayCode(codes, 'never-minted', 'go MI8', 2000)).toBe(false)
+  codes.set('c4', { args: 'call KARNAK line one\nline two', at: 1000 })
+  expect(spendRelayCode(codes, 'c4', 'call KARNAK line one line  two', 2000)).toBe(true)
+})
+
+test('a decision sent to Flight holds its gate for the code lifetime, then frees it', () => {
+  const at = Date.parse('2026-10-16T01:57:00Z')
+  expect(awaitingFlight('2026-10-16T01:57:00.000Z', at + 5_000)).toBe(true)
+  expect(awaitingFlight('2026-10-16T01:57:00.000Z', at + RELAY_TTL + 1)).toBe(false)
+  expect(awaitingFlight(undefined, at)).toBe(false)
+  expect(awaitingFlight('not a date', at)).toBe(false)
 })

@@ -488,7 +488,7 @@ function dropStale(entry) {
 
 // Every live profile with what the switcher shows: open gates and whether Flight is working.
 async function flightsSummary() {
-  const summarise = s => ({ busy: Boolean(s?.fleet?.flight?.busy), gates: (s?.fleet?.poll ?? []).filter(p => p.state === 'open').length })
+  const summarise = s => ({ busy: Boolean(s?.fleet?.flight?.busy), gates: (s?.fleet?.poll ?? []).filter(p => p.state === 'open' && !(p.sentAt && Date.now() - Date.parse(p.sentAt) <= 10 * 60_000)).length })
   return Promise.all(
     flights().map(async e => {
       if (e.profile === PROFILE) return { profile: e.profile, self: true, ...summarise(state) }

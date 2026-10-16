@@ -37,6 +37,8 @@ export type PollItem = {
   agentId: string
   /** Set when a decision could not be delivered. */
   undelivered?: string
+  /** When the app sent a decision on it to Flight; the gate takes no other tap until Flight runs it or the code expires. */
+  sentAt?: string
   decidedAt?: string
   note?: string
   /** For an advisory: the fronts whose map names the changed scope. */
