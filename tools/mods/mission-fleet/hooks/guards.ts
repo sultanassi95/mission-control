@@ -342,7 +342,7 @@ function gitRefusal(role: Role, rest: Word[], protectedBranches: string[]): stri
       if (!a || a.dynamic || a.glob) return 'git clone arguments must be literal.'
       const t = a.text
       if (!t.startsWith('-')) {
-        if (/^(ext|fd)::/.test(t)) return 'git clone from an ext:: or fd:: source is not allowed: it runs a command.'
+        if (t.includes('::')) return 'git clone from a <helper>:: source is not allowed: git runs git-remote-<helper> for it.'
         continue
       }
       if (FLAGS.has(t) || /^--(depth|branch|filter)=[^=]/.test(t)) continue

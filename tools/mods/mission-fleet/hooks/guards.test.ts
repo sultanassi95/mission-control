@@ -79,7 +79,8 @@ test('a Controller may clone fresh, but not with options that run a command in t
   for (const cmd of ['git clone -u "sh -c id" https://github.com/acme/web.git x', 'git clone --upload-pack=id https://github.com/acme/web.git x', 'git clone -c core.fsmonitor=id https://github.com/acme/web.git x', 'git clone --config=core.hooksPath=/tmp/h https://github.com/acme/web.git x', 'git clone --template=/tmp/t https://github.com/acme/web.git x', 'git clone -qc core.fsmonitor=id https://github.com/acme/web.git x', 'git clone --conf core.fsmonitor=id https://github.com/acme/web.git x', 'git clone --temp=/tmp/t https://github.com/acme/web.git x', 'git clone --separate-git-dir=/tmp/g https://github.com/acme/web.git x', 'git clone --reference /tmp/r https://github.com/acme/web.git x']) {
     expect(C(cmd)).toContain('git clone')
   }
-  expect(C('git clone "ext::sh -c id" x')).toContain('ext::')
+  expect(C('git clone "ext::sh -c id" x')).toContain('::')
+  expect(C('git clone evil::https://example.com/r.git x')).toContain('git-remote-')
   expect(shellRefusal('back room', 'git clone https://github.com/acme/web.git x', [])).toContain('never runs git clone')
 })
 
