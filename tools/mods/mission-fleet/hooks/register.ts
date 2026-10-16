@@ -193,15 +193,18 @@ export const register: Register = on => {
   // Guards: what a Controller and its back room may run. A guard that fails denies.
   on('tool.check', async ($, e, next) => {
     // Auto mode cannot judge a call a plugin raised, so the fleet approves its own sends and spawns.
-    if (next.origin.plugin === 'mission-fleet' && !e.agentId) {
-      const seat = fleetSelfApproval(e.tool, e.input, await read($, consoles))
-      if (seat) {
-        // Rules and lower hooks still decide; only the ask the mode cannot settle becomes an allow.
-        const beneath = await next(e)
-        if (beneath.decision !== 'ask') return beneath
-        await log($, 'approve', seat, `fleet ${e.tool === 'Agent' ? 'staffing' : 'message'} approved by the fleet, not the mode`)
-        return { decision: 'allow' as const }
+    const seat = e.tool === 'SendMessage' || e.tool === 'Agent' ? fleetSelfApproval(e.tool, e.input, await read($, consoles)) : undefined
+    if (seat && (next.origin.plugin !== 'mission-fleet' || e.agentId)) {
+      await log($, 'approve-miss', seat, `${e.tool} not the fleet's own: origin=${JSON.stringify(next.origin)} loop=${e.agentId ?? 'main'}`)
+    } else if (seat) {
+      // Rules and lower hooks still decide; only the ask the mode cannot settle becomes an allow.
+      const beneath = await next(e)
+      if (beneath.decision !== 'ask') {
+        if (beneath.decision === 'deny') await log($, 'approve-miss', seat, `${e.tool} denied beneath the fleet: rule=${beneath.rule ?? '-'} hook=${beneath.hook ?? '-'} reason=${(beneath.reason ?? '').slice(0, 120)}`)
+        return beneath
       }
+      await log($, 'approve', seat, `fleet ${e.tool === 'Agent' ? 'staffing' : 'message'} approved by the fleet, not the mode`)
+      return { decision: 'allow' as const }
     }
     if (!e.agentId) return next(e)
     const role = await roleOf($, e.agentId)
