@@ -1070,7 +1070,8 @@ async function pushLoop($: EngineInterface, current: App) {
 }
 
 /** An action from the app: the founder's, since only the token-holder reaches /op. */
-// One-time codes for app ops relayed through Flight, by code.
+// One-time codes for app ops relayed through Flight, by code. A plugin reload drops them, and the
+// relayed call is then refused as unknown, so the founder sends it again from the app.
 const relayCodes: RelayCodes = new Map()
 
 /**

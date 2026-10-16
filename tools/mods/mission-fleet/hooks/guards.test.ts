@@ -366,4 +366,6 @@ test('a relay code works once, for exactly the args it was minted for, within it
   expect(spendRelayCode(codes, 'c3', 'go MI8', 1000 + RELAY_TTL + 1)).toBe(false)
   expect(spendRelayCode(codes, undefined, 'go MI8', 2000)).toBe(false)
   expect(spendRelayCode(codes, 'never-minted', 'go MI8', 2000)).toBe(false)
+  codes.set('c4', { args: 'call KARNAK line one\nline two', at: 1000 })
+  expect(spendRelayCode(codes, 'c4', 'call KARNAK line one line  two', 2000)).toBe(true)
 })

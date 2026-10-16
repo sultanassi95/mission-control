@@ -583,5 +583,6 @@ export function spendRelayCode(codes: RelayCodes, code: string | undefined, args
   if (!code) return false
   const minted = codes.get(code)
   codes.delete(code)
-  return minted !== undefined && minted.args === args.trim() && now - minted.at <= RELAY_TTL
+  const flat = (t: string) => t.trim().replace(/\s+/g, ' ')
+  return minted !== undefined && flat(minted.args) === flat(args) && now - minted.at <= RELAY_TTL
 }
