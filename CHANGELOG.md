@@ -6,7 +6,30 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
-- 2026-10-17 (latest): the license changes from PolyForm Noncommercial 1.0.0
+- 2026-10-17 (latest): a message from the app carries several files, photos
+  and documents alike, and a slash command sent from it shows once, as typed
+  (MC-134). The attach button takes up to ten files per message, 8 MB each
+  and 32 MB in all: photos, scaled on the device to 1600 px JPEG, and PDF,
+  `.txt`, `.md`, `.csv` and `.json` documents. The server keeps each file by
+  its own bytes (a PDF picked as `notes.txt` is stored and sent as a PDF) and
+  refuses any other type by name; Office formats are refused for now. Flight
+  receives one `[Photo from the app: ...]` or `[Document from the app: ...]`
+  line per file, each a path it opens with Read. The conversation shows the
+  photos inline and each document as a chip that opens it in a new tab,
+  after a reload as well, and a file pruned from the Mac reads "no longer on
+  the Mac". The upload folder's retention cap covers documents too. A sent
+  `/epic-flow ...` used to show twice, the queued copy beside the engine's
+  raw `<command-message>` tags, then only the raw tags after a reload: the
+  transcript now reads those tags back as the command typed, and a queued
+  message leaves only when its own copy arrives, so an older identical
+  message never clears it. A message over 5800 characters, file lines
+  included, is refused in the page with its length, before any file goes
+  up when the typed text alone is too long; the server takes 8000, but the
+  transcript the app reads back keeps a message's first 6000 characters,
+  so a longer one came back cut, without its files. Files already stored
+  stay in the tray for a shorter retry.
+
+- 2026-10-17: the license changes from PolyForm Noncommercial 1.0.0
   to PolyForm Shield 1.0.0 (MC-145). Any purpose, use at work included, is
   now permitted except one: providing a product that competes with Mission
   Control, or with any product its author provides using it, whether sold or

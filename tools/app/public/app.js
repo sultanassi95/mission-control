@@ -11,8 +11,8 @@
 
   const $ = id => document.getElementById(id)
   const str = v => (v === undefined || v === null ? '' : String(v))
-  // Claude Code records a prompt the app submits between a plugin preamble and a trailing note; the founder typed only what follows it.
-  const typed = v => stripReminders(v).replace(/^The [\w-]+ plugin sent a message:\n/, '').replace(/\n+This is how Claude Code surfaces a prompt a plugin submits[\s\S]*$/, '').trim()
+  // The founder's own words read back from Flight's transcript, and the files a message carried (transcript.js).
+  const { typed, waiting, attachments, line, stripReminders, PHOTO_EXTS, DOC_EXTS } = window.mcTranscript
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
   const ICONS = {
     flight: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg>',
@@ -32,14 +32,14 @@
 
   // The remembered profile (localStorage mcapp-profile) is a wish, not the state: nothing is named or
   // connected until the first listing of live profiles decides which one opens (loadFlights).
-  const S = { tab: 'flight', state: null, live: false, sheet: null, sel: null, filter: 'ALL', query: '', open: new Set(), queued: [], tune: null, notes: {}, details: new Set(), sending: false, opener: null, flights: [], profile: '', resolved: false, listFailed: false, streamFailed: false }
+  // files: the attachment tray, in the order picked; upload: which of them is going up while a message sends.
+  const S = { tab: 'flight', state: null, live: false, sheet: null, sel: null, filter: 'ALL', query: '', open: new Set(), queued: [], files: [], upload: null, tune: null, notes: {}, details: new Set(), sending: false, opener: null, flights: [], profile: '', resolved: false, listFailed: false, streamFailed: false }
   // Every request goes to the chosen profile's Flight through the front door.
   const base = () => (S.profile ? `/p/${encodeURIComponent(S.profile)}` : '')
   const authHeaders = () => (token ? { 'x-mcapp-token': token } : {})
   const label = p => str(p).charAt(0).toUpperCase() + str(p).slice(1)
   // Claude Code records its own notices (a background task finishing, a system reminder) as user
   // messages; they show as a quiet line, never as the founder's words. null: not a notice.
-  const stripReminders = t => str(t).replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, '').trim()
   const harnessNotice = text => {
     const t = str(text).trim()
     if (/^<task-notification>/.test(t) || /^\[SYSTEM NOTIFICATION/.test(t)) {
@@ -49,34 +49,58 @@
     if (/^<system-reminder>/.test(t) && !stripReminders(t)) return ''
     return null
   }
-  // A photo travels as a line naming its stored path; Flight opens the path with Read.
-  const PHOTO_LINE = /\n*\[Photo from the app: (.+?\/uploads\/([a-f0-9]{24}\.(?:jpg|png|webp))) - open it with Read\]\s*$/
-  // Photos are fetched with the token in a header and shown from a blob: URL, so the token never sits in the page.
-  const photos = new Map()
-  const photoSrc = id => {
+  // Each file a message carried travels as a line naming its stored path, which Flight opens with Read. The
+  // page fetches it once with the token in a header and shows it from a blob: URL, so the token never sits
+  // in the page. A document's blob takes a fixed type whatever the server answered: a PDF opens as a PDF,
+  // every text file as plain text, never as a page.
+  const OPENS_AS = { pdf: 'application/pdf', txt: 'text/plain;charset=utf-8', md: 'text/plain;charset=utf-8', csv: 'text/plain;charset=utf-8', json: 'text/plain;charset=utf-8' }
+  const TYPE_OF = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp', ...OPENS_AS }
+  const kept = new Map()
+  const keptFile = (id, ext) => {
     const key = `${S.profile}/${id}`
-    if (!photos.has(key)) {
-      photos.set(key, '')
+    if (!kept.has(key)) {
+      kept.set(key, { state: 'loading', url: '' })
       fetch(`${base()}/upload/${id}`, { headers: authHeaders() })
-        .then(r => (r.ok ? r.blob() : null))
-        .then(b => {
-          if (b) {
-            photos.set(key, URL.createObjectURL(b))
-            render()
+        .then(async r => {
+          // Only the server's own answer for a pruned file means gone; a 404 from the front door (a profile
+          // restarting, so not listed for a moment) is asked again like any other failure.
+          if (r.status === 404 && (await r.text().catch(() => '')) === 'that file is gone') kept.set(key, { state: 'gone', url: '' })
+          else if (!r.ok) throw new Error(`upload ${r.status}`)
+          else {
+            const b = await r.blob()
+            kept.set(key, { state: 'ready', url: URL.createObjectURL(OPENS_AS[ext] ? new Blob([b], { type: OPENS_AS[ext] }) : b) })
           }
+          render()
         })
-        .catch(() => undefined)
+        // Not fetched this time (the link down, the Mac asleep): a later repaint asks again.
+        .catch(() => setTimeout(() => kept.delete(key), 10_000))
     }
-    return photos.get(key)
+    return kept.get(key)
   }
-  const userBubble = (text, img, who = 'You') => {
-    const m = PHOTO_LINE.exec(text)
-    const body = m ? text.slice(0, m.index) : text
-    const src = img ?? (m ? photoSrc(m[2]) : '')
-    const pic = src ? `<img class="photo" src="${esc(src)}" alt="Photo you sent">` : m ? '<p class="hint">Photo loading…</p>' : ''
-    return `<div class="msg user"><div class="who">${esc(who)}</div>${pic}${body ? esc(body) : ''}</div>`
+  const photoView = (f, i, n) => {
+    const got = keptFile(f.id, f.ext)
+    if (got.state === 'ready') return `<img${n > 1 ? '' : ' class="photo"'} src="${esc(got.url)}" alt="${n > 1 ? `Photo ${i + 1} of ${n} you sent` : 'Photo you sent'}">`
+    return `<span class="ph">${got.state === 'gone' ? 'Photo no longer on the Mac' : 'Photo loading…'}</span>`
+  }
+  const docView = f => {
+    const got = keptFile(f.id, f.ext)
+    const name = esc(f.name || f.id)
+    const type = `<span class="ftype" aria-hidden="true">${esc(f.ext)}</span>`
+    if (got.state === 'ready') return `<a class="doc" href="${esc(got.url)}" target="_blank" rel="noopener" data-a="doc" data-v="${esc(f.id)}">${type}<span class="doc-name">${name}<span class="visually-hidden">, opens in a new tab</span></span></a>`
+    return `<span class="doc${got.state === 'gone' ? ' gone' : ''}">${type}<span class="doc-name">${name}</span><span class="doc-state">· ${got.state === 'gone' ? 'no longer on the Mac' : 'loading'}</span></span>`
+  }
+  // The founder's message: its photos (a grid when several), its documents as chips, then its words.
+  const userBubble = (text, who = 'You') => {
+    const { body, files } = attachments(text)
+    const photos = files.filter(f => f.kind === 'photo')
+    const docs = files.filter(f => f.kind === 'document')
+    const pics = photos.length > 1 ? `<div class="photos">${photos.map((f, i) => photoView(f, i, photos.length)).join('')}</div>` : photos.map(f => photoView(f, 0, 1)).join('')
+    const chips = docs.length ? `<div class="docs">${docs.map(docView).join('')}</div>` : ''
+    return `<div class="msg user"><div class="who">${esc(who)}</div>${pics}${chips}${body ? esc(body) : ''}</div>`
   }
   let queueSeq = 0
+  // The founder's messages in Flight's transcript, as he typed them.
+  const said = () => (fleet().flight?.messages ?? []).filter(x => x.role === 'user').map(x => typed(x.text))
   try { S.tab = sessionStorage.getItem('mcapp-tab') || 'flight' } catch {}
 
   const fleet = () => S.state?.fleet ?? {}
@@ -137,7 +161,7 @@
       const who = window.mcBadge ? window.mcBadge.label(signs, slots()) : 'FLIGHT'
       parts.push(`<div class="msg assistant md"><div class="who">${who}</div>${window.mcMarkdown ? window.mcMarkdown(text) : esc(text)}</div>`)
     }
-    for (const q of S.queued) parts.push(userBubble(q.text, q.preview, `You · ${q.sent ? 'waiting for Flight' : 'sending'}`))
+    for (const q of S.queued) parts.push(userBubble(q.text, `You · ${q.sent ? 'waiting for Flight' : 'sending'}`))
     if (f.ask) parts.push(askCard(f.ask))
     else if (f.asking) parts.push(`<div class="notice" role="status">Flight is waiting for your answer on the Mac: ${esc(f.asking)}</div>`)
     // What Flight is doing right now, so a long turn never looks like nothing is happening.
@@ -313,7 +337,7 @@
   // ---------- render ----------
   // Each region is replaced only when its HTML changed, so a state push every two seconds
   // does not steal focus, collapse a report, wipe a note or replay a sheet's animation.
-  const last = { main: '', tabs: '', sheet: '', quick: '' }
+  const last = { main: '', tabs: '', sheet: '', quick: '', tray: '' }
   // A field being typed in is never rebuilt under the cursor: replacing it closes the phone keyboard
   // and breaks the word it is composing. The region repaints once the field loses focus.
   const typingIn = el => {
@@ -395,6 +419,10 @@
       $('profile-dot').className = `dot ${others.some(f => f.gates) ? 'busy' : 'live'}`
       $('profile-dot').hidden = !others.length
       $('composer').hidden = S.tab !== 'flight'
+      $('tray').hidden = !S.files.length
+      paint($('tray-items'), 'tray', trayItems())
+      const hint = trayHint()
+      if ($('tray-hint').textContent !== hint) $('tray-hint').textContent = hint
       paint($('quick'), 'quick', ['/console list', '/briefing', '/standup', '/debrief'].map(q => `<button type="button" data-a="quick" data-v="${esc(q)}">${esc(q)}</button>`).join(''))
       const n = openGates().length + pollItems().filter(undelivered).length
       paint($('tabs'), 'tabs', TABS.map(([k, l]) => `<button class="tab" type="button" role="tab" data-a="tab" data-v="${k}" aria-selected="${S.tab === k}">${ICONS[k]}${l}${k === 'poll' && n ? `<span class="badge" aria-label="${n} waiting">${n}</span>` : ''}</button>`).join(''))
@@ -425,7 +453,12 @@
   function toast(msg, kind = 'info') {
     const t = $('toast')
     t.textContent = msg
-    t.className = `toast${kind === 'error' ? ' error' : ''}`
+    // Above the composer when it shows, however tall the tray makes it, so a toast never covers the draft or
+    // the tray it is about; on the other tabs, where the lift token puts it.
+    const c = $('composer')
+    const top = c.hidden ? 0 : c.getBoundingClientRect().top
+    t.style.setProperty('--toast-above', top > 0 ? `${Math.ceil(innerHeight - top)}px` : '')
+    t.className = `toast${kind === 'error' ? ' error' : ''}${top > 0 ? ' over' : ''}`
     t.hidden = false
     clearTimeout(toastTimer)
     toastTimer = setTimeout(() => { t.hidden = true }, kind === 'error' ? 8000 : 2600)
@@ -536,6 +569,17 @@
       }
       case 'appstopask': S.sheet = 'appstop'; break
       case 'appstopyes': await send('console', 'app stop'); S.sheet = null; break
+      case 'unattach': {
+        const i = S.files.findIndex(f => String(f.key) === v)
+        if (i < 0 || S.sending) return
+        const [gone] = S.files.splice(i, 1)
+        if (!gone.shared) URL.revokeObjectURL(gone.url)
+        render()
+        // Focus stays in the tray: the item now in that place, else the last one, else the paperclip.
+        const rest = document.querySelectorAll('[data-a="unattach"]')
+        ;(rest[Math.min(i, rest.length - 1)] ?? $('attach')).focus()
+        return
+      }
       default: return
     }
     render()
@@ -568,35 +612,79 @@
     const box = $('draft')
     const typedText = box.value.trim()
     let text = typedText
-    const photo = S.photo
-    if (!text && !photo) return
+    const picked = S.files.slice()
+    if (!text && !picked.length) return
     if (!S.resolved) return toast(STILL_CONNECTING)
-    if (photo && text.startsWith('/')) return toast('Remove the photo to run a command.', 'error')
-    if (photo) {
-      // Locked while it uploads, so the photo and the draft sent are the ones on screen.
+    if (picked.length && text.startsWith('/')) return toast('Remove the attachments to run a command.', 'error')
+    // A draft already over the limit is refused before any file goes up.
+    if (text.length > TEXT_MAX) return tooLong(text.length, false)
+    if (picked.length) {
+      // Locked while the files go up, one at a time, so the files and the draft sent are the ones on screen.
+      const where = S.profile
+      const unlock = () => {
+        S.sending = false
+        S.upload = null
+        lock(false)
+      }
       S.sending = true
-      lockPhoto(true)
-      render()
-      const stored = await upload(photo.blob)
-      S.sending = false
-      lockPhoto(false)
-      if (!stored) return render()
-      text = `${text || 'A photo for you.'}\n\n[Photo from the app: ${stored.path} - open it with Read]`
+      lock(true)
+      const lines = []
+      for (const [i, f] of picked.entries()) {
+        S.upload = { at: i + 1, of: picked.length }
+        render()
+        if (!f.stored) {
+          const r = await upload(f)
+          if (S.profile !== where) {
+            unlock()
+            toast('The profile changed while the files were going up, so nothing was sent. Send it again.', 'error')
+            return render()
+          }
+          if (r.error) {
+            // The tray stays as it is for a retry, which does not send a stored file twice.
+            unlock()
+            toast(r.error, 'error')
+            return render()
+          }
+          f.stored = r.stored
+          // The server keeps a file by its own bytes (a PDF picked as notes.txt is stored as a PDF, a photo
+          // picked under a text name as the photo it is), so its line and its blob follow the stored type.
+          const ext = f.stored.id.split('.').pop()
+          if (ext !== f.ext) {
+            if (!f.shared) URL.revokeObjectURL(f.url)
+            f.kind = PHOTO_EXTS.includes(ext) ? 'photo' : 'document'
+            f.ext = ext
+            f.url = URL.createObjectURL(new Blob([f.blob], { type: TYPE_OF[ext] }))
+          }
+          // The page holds the file already: its bubble shows it at once, queued and once Flight has it.
+          kept.set(`${S.profile}/${f.stored.id}`, { state: 'ready', url: f.url })
+          f.shared = true
+        }
+        lines.push(line({ kind: f.kind, path: f.stored.path, name: f.name }))
+      }
+      unlock()
+      text = `${text || forYou(picked)}\n\n${lines.join('\n')}`
     }
-    const op = !photo && text.startsWith('/console ') ? ['console', text.slice(9)] : !photo && text.startsWith('/') ? ['command', text.slice(1)] : ['prompt', text]
-    const item = { id: ++queueSeq, text, sent: false, preview: photo?.url }
+    const op = !picked.length && text.startsWith('/console ') ? ['console', text.slice(9)] : !picked.length && text.startsWith('/') ? ['command', text.slice(1)] : ['prompt', text]
+    // What is posted, each file's line included, holds at most TEXT_MAX characters; on a refusal the files stay
+    // stored and in the tray, so a shorter retry sends none of them twice.
+    if (op[1].length > TEXT_MAX) return tooLong(op[1].length, picked.length > 0)
+    // What the transcript held when it was sent, and the fleet's last answer then: neither is this message's arrival.
+    const item = { id: ++queueSeq, text, sent: false, op: 0, before: said(), lastAt: fleet().lastOp?.at }
     S.queued.push(item)
     S.sending = true
     box.value = ''
     render()
-    const ok = await send(op[0], op[1])
+    const r = await post(op[0], op[1])
     S.sending = false
-    if (ok) {
-      // The photo leaves the composer only once Flight has the message; a failed send keeps it for a retry.
-      if (photo && S.photo === photo) clearPhoto(false)
+    if (!r.error) {
+      // The files leave the composer only once Flight has the message; a failed send keeps them for a retry.
+      S.files = S.files.filter(f => !picked.includes(f))
       item.sent = true
+      // The fleet answers this op by its id (lastOp), which clears the queued copy of a command it ran itself.
+      item.op = r.id
       if (fleet().flight?.busy) toast('Queued: Flight runs it when the current turn ends.')
     } else {
+      toast(r.error, r.error === STILL_CONNECTING ? 'info' : 'error')
       S.queued = S.queued.filter(q => q.id !== item.id)
       if (!box.value) box.value = typedText
     }
@@ -631,8 +719,39 @@
   }
   themeBar()
 
-  // ---------- photos ----------
-  // Scaled on the device to 1600 px on the long side as JPEG, so a 10 MB camera file goes up as a few hundred KB.
+  // ---------- attachments ----------
+  // What one message may carry (DESIGN.md, Attachments). The server holds the per-file limit and reads each
+  // file's own bytes (uploads.mjs), so that check only spares the founder an upload bound to be refused; the
+  // count and the total are the page's own, since each file goes up on its own.
+  const LIMIT = { files: 10, file: 8 * 1024 * 1024, total: 32 * 1024 * 1024 }
+  // The longest message the page sends, each file's line included. The /op route takes 8000 (server.mjs), but
+  // the transcript the page reads back keeps only a message's first 6000 characters, the engine's frame around
+  // a prompt included (snapshot, in the mod's hooks/register.ts): a longer one comes back cut, its file lines
+  // lost, and its queued copy never matches it.
+  const TEXT_MAX = 5800
+  const tooLong = (n, withFiles) => {
+    toast(`That message is ${n} characters${withFiles ? ' with its file lines' : ''}, and Flight takes ${TEXT_MAX}. Shorten it${withFiles ? ' or send fewer files' : ''}, then send again.`, 'error')
+    render()
+  }
+  const DOCS = new Set(DOC_EXTS)
+  const PHOTO_NAME = /\.(jpe?g|png|webp|gif|heic|heif|avif)$/i
+  const total = () => S.files.reduce((n, f) => n + f.size, 0)
+  // Rounded up to a tenth, so a few small photos read 0.1 MB and the count never shows less than the limit sees.
+  const mb = n => (Math.ceil(n / 104857.6) / 10).toFixed(1)
+  const MB = n => `${n / 1048576} MB`
+  let fileSeq = 0
+  // Two files of one name (a phone names every photo alike) are told apart by place in their remove buttons.
+  function trayItems() {
+    return S.files.map((f, i) => {
+      const twin = S.files.some(g => g !== f && g.name === f.name)
+      const shown = f.kind === 'photo' ? `<img src="${esc(f.url)}" alt="">` : `<span class="ftype" aria-hidden="true">${esc(f.ext)}</span>`
+      return `<li class="att">${shown}<span class="att-name">${esc(f.name)}</span><button class="att-x" type="button" data-a="unattach" data-v="${f.key}" aria-label="Remove ${esc(f.name)}${twin ? `, ${i + 1} of ${S.files.length}` : ''}"${S.sending ? ' disabled' : ''}>${ICONS.close}</button></li>`
+    }).join('')
+  }
+  const trayHint = () => (S.upload ? `Sending ${S.upload.at} of ${S.upload.of}…` : S.files.length ? `${S.files.length} of ${LIMIT.files} files · ${mb(total())} of ${MB(LIMIT.total)}` : '')
+  const forYou = list => (list.length === 1 ? (list[0].kind === 'photo' ? 'A photo for you.' : 'A file for you.') : list.every(f => f.kind === 'photo') ? `${list.length} photos for you.` : `${list.length} files for you.`)
+
+  // Photos are scaled on the device to 1600 px on the long side as JPEG, so a 10 MB camera file goes up as a few hundred KB.
   async function shrink(file) {
     const url = URL.createObjectURL(file)
     try {
@@ -656,43 +775,56 @@
       URL.revokeObjectURL(url)
     }
   }
-  async function upload(blob) {
+  // One file to the Mac, its picked type named for the server's check: { stored: { id, path } }, or
+  // { error } naming the file and the server's own reason.
+  async function upload(f) {
     try {
-      const r = await fetch(`${base()}/upload`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg', ...authHeaders() }, body: blob })
-      if (!r.ok) {
-        toast(r.status === 413 ? 'That photo is too large to send.' : r.status === 415 ? "That file isn't a photo the app can send." : "Couldn't send the photo. Try again.", 'error')
-        return null
-      }
-      return await r.json()
+      const r = await fetch(`${base()}/upload`, { method: 'POST', headers: { 'Content-Type': f.blob.type || 'application/octet-stream', 'x-mcapp-ext': f.ext, ...authHeaders() }, body: f.blob })
+      if (r.ok) return { stored: await r.json() }
+      const why = r.status === 401 ? 'this link has expired; open the new link from your Mac' : (await r.text().catch(() => '')).trim().slice(0, 200)
+      return { error: `Couldn't send ${f.name}${why ? `: ${why}` : '. Try again in a moment'}.` }
     } catch {
-      toast("Couldn't reach Flight. Check that the Mac is awake and connected.", 'error')
-      return null
+      return { error: "Couldn't reach Flight. Check that the Mac is awake and connected." }
     }
   }
-  function lockPhoto(on) {
-    for (const id of ['attach', 'preview-remove', 'draft']) $(id).disabled = on
+  function lock(on) {
+    for (const id of ['attach', 'draft']) $(id).disabled = on
   }
-  function clearPhoto(revoke = true) {
-    // A sent photo's blob URL stays alive for its queued bubble until the recorded message replaces it.
-    if (revoke && S.photo) URL.revokeObjectURL(S.photo.url)
-    S.photo = null
-    $('preview').hidden = true
-    $('preview-img').removeAttribute('src')
-  }
-  $('attach').addEventListener('click', () => $('photo').click())
-  $('photo').addEventListener('change', async e => {
-    const file = e.target.files?.[0]
+  $('attach').addEventListener('click', () => $('files').click())
+  // Each pick joins the tray in order until a limit is reached; the ones not added are named in one toast, with why.
+  $('files').addEventListener('change', async e => {
+    const picks = [...(e.target.files ?? [])]
     e.target.value = ''
-    if (!file) return
-    const blob = await shrink(file).catch(() => null)
-    if (!blob) return toast("Couldn't read that photo.", 'error')
-    if (S.photo) URL.revokeObjectURL(S.photo.url)
-    S.photo = { blob, url: URL.createObjectURL(blob) }
-    $('preview-img').src = S.photo.url
-    $('preview').hidden = false
+    if (!picks.length) return
+    const refused = []
+    for (const file of picks) {
+      const ext = (/\.([a-z0-9]+)$/i.exec(file.name)?.[1] ?? '').toLowerCase()
+      const photo = file.type.startsWith('image/') || PHOTO_NAME.test(file.name)
+      let why = ''
+      let item = null
+      if (S.files.length >= LIMIT.files) why = `a message carries ${LIMIT.files} files at most`
+      else if (!photo && !DOCS.has(ext)) why = 'only photos, PDF, or .txt, .md, .csv and .json files'
+      else if (!file.size) why = 'the file is empty'
+      else if (!photo && file.size > LIMIT.file) why = `over ${MB(LIMIT.file)}`
+      else if (photo) {
+        const blob = await shrink(file).catch(() => null)
+        if (blob) item = { kind: 'photo', ext: 'jpg', blob, url: URL.createObjectURL(blob) }
+        else why = "it can't be read as a photo"
+      } else item = { kind: 'document', ext, blob: file, url: URL.createObjectURL(new Blob([file], { type: OPENS_AS[ext] })) }
+      if (item) {
+        // Shrinking a photo takes a moment, and a second pick can land meanwhile: the count is asked again here.
+        if (S.files.length >= LIMIT.files) why = `a message carries ${LIMIT.files} files at most`
+        else if (item.blob.size > LIMIT.file) why = `over ${MB(LIMIT.file)}`
+        else if (total() + item.blob.size > LIMIT.total) why = `the message would pass ${MB(LIMIT.total)}`
+        if (why) URL.revokeObjectURL(item.url)
+        else S.files.push({ ...item, key: ++fileSeq, name: file.name, size: item.blob.size })
+      }
+      if (why) refused.push(`${file.name} (${why})`)
+      render()
+    }
+    if (refused.length) toast(`Not added: ${refused.join('; ')}.`, 'error')
     $('draft').focus()
   })
-  $('preview-remove').addEventListener('click', clearPhoto)
 
   let es = null
   function connect() {
@@ -714,9 +846,8 @@
         for (const id of summed) if (id <= op.id) summed.delete(id)
         if (op.text && !echo && !/^Sent to Flight\.$/.test(op.text)) toast(str(op.text).split('\n').slice(0, 3).join(' · ').slice(0, 220))
       }
-      const said = new Set((fleet().flight?.messages ?? []).filter(x => x.role === 'user').map(x => typed(x.text)))
-      for (const q of S.queued) if (q.sent && said.has(q.text) && q.preview) URL.revokeObjectURL(q.preview)
-      S.queued = S.queued.filter(q => !(q.sent && said.has(q.text)))
+      // A queued message leaves once its own copy reaches Flight's transcript or the fleet answered its op (transcript.js, waiting).
+      S.queued = waiting(S.queued, said(), fleet().lastOp)
       render()
     }
   }
@@ -771,6 +902,8 @@
     S.live = false
     S.streamFailed = false
     S.queued = []
+    // The tray keeps its files; they go up to the new profile when the message is sent.
+    for (const f of S.files) f.stored = null
     S.sel = null
     S.tune = null
     S.notes = {}

@@ -150,6 +150,8 @@ button { cursor: pointer; }
 .danger { border: 1px solid var(--fail); background: var(--fail-tint); color: var(--fail); border-radius: var(--r-field); min-height: var(--target); padding: 0 var(--s3); font-weight: 600; }
 .toast { position: fixed; left: var(--s4); right: var(--s4); bottom: calc(var(--toast-lift) + env(safe-area-inset-bottom, 0px)); max-width: 640px; margin-inline: auto; z-index: 8; background: var(--ink); color: var(--bg); padding: var(--s3) var(--s4); border-radius: var(--r-card); font-size: var(--t-sm); line-height: var(--lh-sm); }
 .toast.error { background: var(--fail-tint); color: var(--fail); border: 1px solid var(--fail); }
+/* On the Flight tab the toast sits above the composer, whose height the page measures (the tray grows it). */
+.toast.over { bottom: calc(var(--toast-above) + var(--s2)); }
 @media (min-width: 900px) { .main { padding: var(--s5); } }
 
 /* Markdown in Flight's replies (md.js escapes the text before adding these elements). */
@@ -193,12 +195,34 @@ button { cursor: pointer; }
   .sheet { max-width: var(--sheet-w); border-radius: var(--r-sheet); bottom: var(--s5); }
 }
 
-/* Photos (MC-107) */
+/* Attachments (MC-107, MC-134): the tray above the composer, and the files a sent message carried (DESIGN.md, Attachments). */
 .attach svg { width: var(--t-lg); height: var(--t-lg); stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.preview[hidden] { display: none; }
-.preview { display: flex; align-items: center; gap: var(--s3); padding: var(--s2) 0; }
-.preview img { width: var(--target); height: var(--target); object-fit: cover; border-radius: var(--r-field); border: 1px solid var(--line); }
+.tray[hidden] { display: none; }
+.tray { display: grid; gap: var(--s1); min-width: 0; }
+/* The row scrolls, so it clips: its padding holds a remove button's whole focus ring, and the margin keeps the items where they were. */
+.att-row { display: flex; gap: var(--s2); overflow-x: auto; margin: calc(var(--s1) * -1); padding: var(--s1) var(--s1) var(--s2); list-style: none; }
+.att { flex: none; display: flex; align-items: center; gap: var(--s2); padding-left: var(--s1); border: 1px solid var(--line); background: var(--surface); border-radius: var(--r-field); }
+.att img, .att .ftype { width: calc(var(--target) - var(--s2)); height: calc(var(--target) - var(--s2)); flex: none; }
+.att img { object-fit: cover; border-radius: var(--r-field); }
+.att-name { max-width: var(--att-name); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--t-sm); line-height: var(--lh-sm); }
+.att-x { width: var(--target); height: var(--target); flex: none; display: grid; place-items: center; border: 0; background: none; border-radius: var(--r-field); }
+.att-x svg { width: var(--t-md); height: var(--t-md); stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; }
+.att-x[disabled] { color: var(--ink-faint); cursor: default; }
+.ftype { display: grid; place-items: center; border-radius: var(--r-field); border: 1px solid var(--line); background: var(--bg); color: var(--ink-soft); font-family: var(--mono); font-size: var(--t-xs); line-height: var(--lh-xs); font-weight: 700; text-transform: uppercase; }
 .msg .photo { display: block; max-width: 100%; max-height: 40vh; border-radius: var(--r-field); margin-bottom: var(--s2); }
+.msg .photos { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s1); margin-bottom: var(--s2); }
+.msg .photos img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: var(--r-field); }
+.msg .ph { display: block; margin: 0 0 var(--s2); padding: var(--s2) var(--s3); background: var(--surface); color: var(--ink-soft); border-radius: var(--r-field); font-size: var(--t-xs); line-height: var(--lh-xs); }
+.msg .photos .ph { display: grid; place-items: center; aspect-ratio: 1; margin: 0; text-align: center; }
+.msg .docs { display: flex; flex-wrap: wrap; gap: var(--s2); margin-bottom: var(--s2); }
+.doc { display: inline-flex; align-items: center; gap: var(--s2); max-width: 100%; min-width: 0; min-height: var(--target); padding: 0 var(--s3) 0 var(--s1); border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: var(--r-field); text-decoration: none; white-space: nowrap; }
+.doc .ftype { width: calc(var(--target) - var(--s3)); height: calc(var(--target) - var(--s3)); flex: none; }
+.doc-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: var(--t-sm); line-height: var(--lh-sm); }
+.doc-state { flex: none; font-size: var(--t-xs); line-height: var(--lh-xs); color: var(--ink-soft); }
+.doc.gone .doc-name { color: var(--ink-soft); }
+/* A chip that is not a link yet (loading) or any more (gone) lets its state drop under a long name rather than squeeze it. */
+span.doc { flex-wrap: wrap; column-gap: var(--s2); row-gap: 0; padding-block: var(--s1); }
+.msg.user :focus-visible { outline-color: var(--accent-ink); }
 
 /* Flight's questions (MC-108) */
 .ask { border-color: var(--wait); }
