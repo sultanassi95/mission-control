@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
 # leak-sweep.sh - bash twin of leak-sweep.ps1. Keep the two in step: the
-# rules, the targets, where the deny-list is read from and the exit codes.
+# rules, the files each mode reads, where the deny-list is read from and the
+# exit codes.
 # Usage: tools/leak-sweep.sh [promote|instance] [root]
+#
+# promote reads every file that ships: in a git work tree, each file git
+# tracks and each new one it would add (untracked and not ignored); outside
+# one, every file under the root but .git and the instance (_command/). It
+# skips binary files, vendored or generated ones, and the test fixtures that
+# plant a leak on purpose (skip_in_promote below).
 #
 # promote reads the operator's deny-list from the instance,
 # _command/leak-sweep.private.txt beside this tools/ folder (gitignored with
@@ -9,6 +16,10 @@
 # a run from a clone or worktree with no instance of its own. With no list
 # it exits 2: a sweep that never checked the operator's own names is not clean.
 set -eu
+# Bytes, not characters. In a UTF-8 locale the BSD grep macOS ships never
+# matches a line that holds a byte which is not UTF-8 (a Windows-1252 quote, a
+# Latin-1 accent), so a term on such a line passed the sweep unseen.
+export LC_ALL=C
 
 MODE="${1:-promote}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -24,8 +35,25 @@ if [ "$MODE" != "promote" ] && [ "$MODE" != "instance" ]; then
   exit 2
 fi
 
-# promote guards the PUBLIC repo, so it reads everything that ships.
-TARGETS=(framework .claude/skills README.md LIFTOFF.md CLAUDE.md CHANGELOG.md)
+# promote guards the PUBLIC repo, so it reads every file that ships, not a list
+# of folders: a list once left tools/ unread, and real front names shipped in
+# its fixtures and comments.
+TARGETS=()
+
+# Files promote does not read: not written here, or planted on purpose.
+skip_in_promote() {
+  case "$1" in
+    # vendored or generated
+    node_modules/*|*/node_modules/*|vendor/*|*/vendor/*|.docs-viewer-cache/*|*/.docs-viewer-cache/*) return 0 ;;
+    */.claude-plugin/types/*|*.min.js|*.min.css) return 0 ;;
+    package-lock.json|*/package-lock.json|pnpm-lock.yaml|*/pnpm-lock.yaml|yarn.lock|*/yarn.lock) return 0 ;;
+    # the leaks the sweep's own tests plant, one per rule
+    tools/tests/fixtures/dirty/*) return 0 ;;
+    # an operator's list, wherever it was left
+    leak-sweep.private.txt|*/leak-sweep.private.txt) return 0 ;;
+  esac
+  return 1
+}
 
 RULE_NAMES=(windows-user-path unix-home-path email aws-access-key github-token generic-secret aws-account-id legacy-name model-pin)
 RULE_PATTERNS=(
@@ -36,7 +64,7 @@ RULE_PATTERNS=(
   'gh[pousr]_[A-Za-z0-9]{20,}'
   '(api[_-]?key|client[_-]?secret|access[_-]?token)[[:space:]]*[:=][[:space:]]*[^[:space:]]+'
   '\<[0-9]{12}\>'
-  '\<pmc\>'
+  '\<pmc\>' # MC-LEAK-EXEMPT: the legacy-name rule's own pattern
   '\<(opus|sonnet|haiku|gpt|gemini|claude)[ -]?[0-9]+(\.[0-9]+)?\>|claude-[a-z]+-[0-9]'
 )
 RULE_ICASE=(0 0 0 0 0 1 0 1 1)
@@ -99,7 +127,43 @@ fi
 
 FILES=()
 MISSING=()
-for t in "${TARGETS[@]}"; do
+LISTED=""
+# What promote listed but did not read, counted so the clean line says so.
+NOT_BY_NAME=0
+NOT_BINARY=0
+NOT_DELETED=0
+if [ "$MODE" = "promote" ]; then
+  add_promote() {
+    if skip_in_promote "$1"; then NOT_BY_NAME=$((NOT_BY_NAME + 1)); return 0; fi
+    # Tracked, but deleted in this work tree.
+    if [ ! -e "$ROOT/$1" ]; then NOT_DELETED=$((NOT_DELETED + 1)); return 0; fi
+    # grep -I reads a file with a NUL byte as binary and finds no match in it,
+    # so a binary file, or an empty one, which holds no text, is left out here
+    # rather than read line by line. An unreadable file goes on to fail below.
+    if [ -r "$ROOT/$1" ]; then
+      status=0
+      grep -Iq . "$ROOT/$1" || status=$?
+      if [ "$status" -eq 1 ]; then NOT_BINARY=$((NOT_BINARY + 1)); return 0; fi
+      if [ "$status" -gt 1 ]; then
+        echo "LEAK-SWEEP ERROR: grep exit $status on '$1' while telling text from binary." >&2
+        exit 2
+      fi
+    fi
+    FILES+=("$ROOT/$1")
+  }
+  if git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    LISTED="every file git lists"
+    while IFS= read -r -d '' rel; do
+      add_promote "$rel"
+    done < <(git -C "$ROOT" ls-files -z --cached --others --exclude-standard)
+  else
+    LISTED="every file under the root"
+    while IFS= read -r -d '' f; do
+      add_promote "${f#"$ROOT"/}"
+    done < <(find "$ROOT" \( -path "$ROOT/.git" -o -path "$ROOT/_command" \) -prune -o -type f -print0)
+  fi
+fi
+for t in ${TARGETS[@]+"${TARGETS[@]}"}; do
   full="$ROOT/$t"
   if [ -d "$full" ]; then
     before=${#FILES[@]}
@@ -128,7 +192,7 @@ fi
 
 # Backstop for the whole-set case.
 if [ ${#FILES[@]} -eq 0 ]; then
-  echo "LEAK-SWEEP ERROR: no files under '$ROOT' for mode=${MODE} (targets: ${TARGETS[*]})." >&2
+  echo "LEAK-SWEEP ERROR: no files under '$ROOT' for mode=${MODE} (${LISTED:-targets: ${TARGETS[*]}})." >&2
   exit 2
 fi
 
@@ -223,7 +287,9 @@ if [ ${#HITS[@]} -gt 0 ]; then
   exit 1
 fi
 if [ "$MODE" = "promote" ]; then
-  echo "LEAK-SWEEP CLEAN: 0 hits across ${#FILES[@]} file(s). Mode=${MODE}. PrivateTerms=${#PRIVATE_TERMS[@]} from ${PRIVATE_LIST}."
+  NOT_READ="${NOT_BINARY} binary or empty, ${NOT_BY_NAME} skipped by name"
+  [ "$NOT_DELETED" -gt 0 ] && NOT_READ="${NOT_READ}, ${NOT_DELETED} deleted from the work tree"
+  echo "LEAK-SWEEP CLEAN: 0 hits across ${#FILES[@]} file(s), ${LISTED}; not read: ${NOT_READ}. Mode=${MODE}. PrivateTerms=${#PRIVATE_TERMS[@]} from ${PRIVATE_LIST}."
 else
   echo "LEAK-SWEEP CLEAN: 0 hits across ${#FILES[@]} file(s). Mode=${MODE}. The deny-list is for what ships, so this mode does not read it."
 fi

@@ -20,9 +20,12 @@ t() { local name="$1" want="$2" text="$3"; shift 4; local out got
   fi; }
 
 W="$(mktemp -d)"; trap 'rm -rf "$W"' EXIT
+# The portfolios below are plain folders. A git repository above the temp
+# folder would hand the sweep its file list instead, so git stops looking here.
+export GIT_CEILING_DIRECTORIES="$W"
 
 # A portfolio as the sweep sees one: the script in tools/, the instance in
-# _command/ beside it, and every promote target present.
+# _command/ beside it, and a few files that ship.
 portfolio() { local p="$1"; mkdir -p "$p/tools" "$p/_command" "$p/framework" "$p/.claude/skills/demo"
   cp "$SWEEP" "$p/tools/leak-sweep.sh"
   printf '%s\n' '# Framework' 'Plain text.' > "$p/framework/a.md"
@@ -60,6 +63,37 @@ portfolio "$W/g"
 printf '%s\n' 'zebracorp' > "$W/g/_command/leak-sweep.private.txt"
 printf '%s\n' '# Hub' 'The zebracorp front.' > "$W/g/_command/hub.md"
 t "instance mode does not read the deny-list: an instance names its own fronts" 0 "does not read it" -- bash "$W/g/tools/leak-sweep.sh" instance "$W/g"
+
+# promote reads every file that ships, not a list of folders. A list once left
+# tools/ unread, so real names in its tests and comments passed.
+portfolio "$W/h"
+printf '%s\n' 'zebracorp' > "$W/h/_command/leak-sweep.private.txt"
+mkdir -p "$W/h/tools/mods/demo"
+printf '%s\n' "test('x', () => {" "  expect(seat('console-zebracorp')).toBe(1)" '})' > "$W/h/tools/mods/demo/demo.test.ts"
+t "a term in tools/, outside every folder the old list named, fails by file, line and term" 1 "tools/mods/demo/demo.test.ts:2: [private-term] zebracorp" -- bash "$W/h/tools/leak-sweep.sh" promote "$W/h"
+
+portfolio "$W/i"
+printf '%s\n' 'zebracorp' > "$W/i/_command/leak-sweep.private.txt"
+printf '%s\n' '# Hub' 'The zebracorp front.' > "$W/i/_command/hub.md"
+t "promote does not read the instance, which names its own fronts" 0 "every file under the root" -- bash "$W/i/tools/leak-sweep.sh" promote "$W/i"
+
+portfolio "$W/j"
+printf '%s\n' 'zebracorp' > "$W/j/_command/leak-sweep.private.txt"
+printf 'PNG\000zebracorp\n' > "$W/j/framework/shot.png"
+t "a binary file is not read, and the clean line counts it" 0 "not read: 1 binary or empty, 0 skipped by name" -- bash "$W/j/tools/leak-sweep.sh" promote "$W/j"
+
+portfolio "$W/k"
+printf '%s\n' 'zebracorp' > "$W/k/_command/leak-sweep.private.txt"
+mkdir -p "$W/k/tools/tests/fixtures/dirty"
+printf '%s\n' 'Planted: zebracorp.' > "$W/k/tools/tests/fixtures/dirty/planted.md"
+t "the fixtures that plant a leak on purpose are skipped, and counted" 0 "0 binary or empty, 1 skipped by name" -- bash "$W/k/tools/leak-sweep.sh" promote "$W/k"
+
+# The locale is forced here because the failure lives in one: under UTF-8, the
+# BSD grep macOS ships matches nothing on a line holding a Windows-1252 byte.
+portfolio "$W/l"
+printf '%s\n' 'zebracorp' > "$W/l/_command/leak-sweep.private.txt"
+printf 'Plain text.\nIt\222s the zebracorp report.\n' > "$W/l/framework/cp1252.md"
+t "a term on a line that is not UTF-8 still fails the sweep" 1 "framework/cp1252.md:2: [private-term] zebracorp" -- env LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 bash "$W/l/tools/leak-sweep.sh" promote "$W/l"
 
 echo "---"; echo "leak-sweep tests: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

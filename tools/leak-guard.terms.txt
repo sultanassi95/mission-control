@@ -31,8 +31,8 @@
 \bthe orchestrator (decided|dispatched|integrated|held|holds)\b
 \b(dispatch(ed|es)?|brief(ed)?) (a |the )?sub-?agents?\b
 # NOT \bpause point\b. "insert a pause point at the marker" is ordinary video
-# editing vocabulary, and ytkit is a video tool. The phrase is also obsolete:
-# MC-006 removed pause points from the flow.
+# editing vocabulary, and a front can be a video tool. The phrase is also
+# obsolete: MC-006 removed pause points from the flow.
 \bthe gate (passed|failed)\b
 \bgate-locked\b
 \bfan-?out budget\b

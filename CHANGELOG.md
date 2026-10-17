@@ -6,7 +6,25 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
-- 2026-10-17 (latest): the leak sweep's deny-list moves into the instance
+- 2026-10-17 (latest): the leak sweep reads every file that ships, and CI
+  runs it (MC-146). `promote` read a fixed list of folders
+  (`framework/`, `.claude/skills/` and four root files), so nothing under
+  `tools/` was checked, and private front names in the mod tests, the app
+  and a comment shipped. It now reads each file git tracks or would add
+  (outside a git work tree, every file under the root but `.git` and
+  `_command/`), skips binary, vendored and generated files and the planted
+  test fixtures, and counts each kind in the clean line. Those names are
+  now invented (acme, globex, initech), and the code lines the generic
+  rules flag on purpose carry the exempt marker. The shell twin matches
+  bytes (`LC_ALL=C`): under a UTF-8 locale macOS's grep matched nothing on
+  a line holding a byte that is not UTF-8, so a name there passed.
+  `.github/workflows/leak-sweep.yml` runs promote and both test suites on
+  every push and pull request, on Linux and Windows. CI has no deny-list,
+  so it checks the generic rules; the private names stay a local check,
+  promote with the operator's list, before a push. The app now shows every
+  profile name with a plain leading capital.
+
+- 2026-10-17: the leak sweep's deny-list moves into the instance
   (MC-137). `tools/leak-sweep.sh promote` reads
   `_command/leak-sweep.private.txt`, or the file `LEAK_SWEEP_PRIVATE_LIST`
   names, and exits 2 when there is none. It used to read

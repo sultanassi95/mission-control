@@ -34,7 +34,7 @@ Assert "flags aws access key"              (($out | Select-String '\[aws-access-
 Assert "flags generic secret"              (($out | Select-String '\[generic-secret\]').Count -ge 1)
 Assert "flags aws account id"              (($out | Select-String '\[aws-account-id\]').Count -ge 1)
 Assert "flags github token"                (($out | Select-String '\[github-token\]').Count -ge 1)
-Assert "flags legacy name pmc"             (($out | Select-String '\[legacy-name\]').Count -ge 1)
+Assert "flags the legacy name"(($out | Select-String '\[legacy-name\]').Count -ge 1)
 Assert "flags version-pinned model"        (($out | Select-String '\[model-pin\]').Count -ge 2)
 Assert "flags private term Zoltan"         (($out | Select-String '\[private-term\] Zoltan').Count -ge 1)
 Assert "exempt line not flagged"           (($out | Select-String 'exempt\.md').Count -eq 0)
@@ -83,6 +83,37 @@ $env:LEAK_SWEEP_PRIVATE_LIST = $privList
 $r = Sweep (Join-Path $p "tools\leak-sweep.ps1") @("-Root", $dirty, "-Path", ".", "-Mode", "promote")
 Remove-Item Env:LEAK_SWEEP_PRIVATE_LIST
 Assert "LEAK_SWEEP_PRIVATE_LIST names a list outside the instance" (($r.Code -eq 1) -and $r.Text.Contains("[private-term] Zoltan"))
+
+# promote with no -Path reads every file that ships, not a list of folders. A
+# list once left tools/ unread, so real names in its tests and comments passed.
+# The portfolios are plain folders, so git stops looking above the sandbox.
+$env:GIT_CEILING_DIRECTORIES = $sandbox
+$p = Portfolio "full"
+"Zoltan" | Set-Content (Join-Path $p "_command\leak-sweep.private.txt") -Encoding utf8
+New-Item -ItemType Directory -Force (Join-Path $p "tools\mods\demo") | Out-Null
+@("test('x', () => {", "  expect(seat('console-zoltan')).toBe(1)", "})") | Set-Content (Join-Path $p "tools\mods\demo\demo.test.ts") -Encoding utf8
+$r = Sweep (Join-Path $p "tools\leak-sweep.ps1") @("-Mode", "promote")
+Assert "no -Path: a term in tools/ fails by file, line and term" (($r.Code -eq 1) -and $r.Text.Contains("demo.test.ts:2: [private-term] Zoltan"))
+
+$p = Portfolio "instance-unread"
+"Zoltan" | Set-Content (Join-Path $p "_command\leak-sweep.private.txt") -Encoding utf8
+@("# Hub", "The Zoltan front.") | Set-Content (Join-Path $p "_command\hub.md") -Encoding utf8
+$r = Sweep (Join-Path $p "tools\leak-sweep.ps1") @("-Mode", "promote")
+Assert "no -Path: promote does not read the instance" (($r.Code -eq 0) -and $r.Text.Contains("every file under the root"))
+
+$p = Portfolio "binary"
+"Zoltan" | Set-Content (Join-Path $p "_command\leak-sweep.private.txt") -Encoding utf8
+[System.IO.File]::WriteAllBytes((Join-Path $p "tools\shot.png"), [byte[]](80, 78, 71, 0, 90, 111, 108, 116, 97, 110, 10))
+$r = Sweep (Join-Path $p "tools\leak-sweep.ps1") @("-Mode", "promote")
+Assert "no -Path: a binary file is not read, and the clean line counts it" (($r.Code -eq 0) -and $r.Text.Contains("not read: 1 binary or empty, 0 skipped by name"))
+
+$p = Portfolio "planted"
+"Zoltan" | Set-Content (Join-Path $p "_command\leak-sweep.private.txt") -Encoding utf8
+New-Item -ItemType Directory -Force (Join-Path $p "tools\tests\fixtures\dirty") | Out-Null
+"Planted: Zoltan." | Set-Content (Join-Path $p "tools\tests\fixtures\dirty\planted.md") -Encoding utf8
+$r = Sweep (Join-Path $p "tools\leak-sweep.ps1") @("-Mode", "promote")
+Assert "no -Path: the fixtures that plant a leak are skipped, and counted" (($r.Code -eq 0) -and $r.Text.Contains("0 binary or empty, 1 skipped by name"))
+Remove-Item Env:GIT_CEILING_DIRECTORIES
 
 Remove-Item $sandbox -Recurse -Force
 
