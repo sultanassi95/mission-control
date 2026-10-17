@@ -26,7 +26,9 @@
   const models = () => fleet().models ?? ['haiku', 'sonnet', 'opus', 'fable']
   const efforts = () => fleet().efforts ?? ['low', 'medium', 'high', 'xhigh', 'max']
   let seenOp = 0
-  const TABS = [['flight', 'Flight'], ['consoles', 'Consoles'], ['poll', 'Poll'], ['loops', 'Loops']]
+  // Op ids a toast already summed up; the fleet's echo of each (lastOp, same id) is not toasted over it.
+  const summed = new Set()
+  const TABS =[['flight', 'Flight'], ['consoles', 'Consoles'], ['poll', 'Poll'], ['loops', 'Loops']]
 
   // The remembered profile (localStorage mcapp-profile) is a wish, not the state: nothing is named or
   // connected until the first listing of live profiles decides which one opens (loadFlights).
@@ -301,7 +303,7 @@
         <p class="hint">Flight keeps running in the terminal either way.</p>`
     } else if (S.sheet === 'stop') {
       head = 'Dismiss every console?'
-      body = `<p>Every staffed console ends now, with nothing written. Uncommitted work stays in each repo.</p><div class="btnrow two"><button class="ghost" type="button" data-a="close">Keep them</button><button class="danger" type="button" data-a="stopyes">Dismiss all</button></div>`
+      body = `<p>A dismissal for each staffed console goes to Flight and runs once Flight is free, ending the console with nothing written. Uncommitted work stays in each repo.</p><div class="btnrow two"><button class="ghost" type="button" data-a="close">Keep them</button><button class="danger" type="button" data-a="stopyes">Dismiss all</button></div>`
     } else if (S.sheet === 'appstop') {
       head = 'Stop the app server?'
       body = `<p>This page stops working until <code>/console app</code> runs again at the terminal, with a new link.</p><div class="btnrow two"><button class="ghost" type="button" data-a="close">Keep it</button><button class="danger" type="button" data-a="appstopyes">Stop it</button></div>`
@@ -430,25 +432,32 @@
     toastTimer = setTimeout(() => { t.hidden = true }, kind === 'error' ? 8000 : 2600)
   }
 
+  // What one Dismiss all tap did: how many dismissals reached Flight, then each console not sent and why.
+  function dismissalsSent(n, failed, why) {
+    if (!n && !failed.length) return 'No console is staffed, so nothing was sent.'
+    const sent =n === 1 ? '1 dismissal sent to Flight; it runs once Flight is free.' : `${n} dismissals sent to Flight; they run once Flight is free.`
+    const not = `Not sent: ${failed.join(', ')}. ${why}`
+    return !failed.length ? sent : n ? `${sent} ${not}` : not
+  }
+
   const STILL_CONNECTING = 'Still connecting to Flight. Try again in a moment.'
-  async function send(op, text) {
+  // One op, toasting nothing: { id } once the server has it (the fleet's result returns as lastOp with that id), or { error }.
+  async function post(op, text) {
     // Before the first listing the request would reach the front door's own profile, which may not be the one about to open.
-    if (!S.resolved) {
-      toast(STILL_CONNECTING)
-      return false
-    }
+    if (!S.resolved) return { error: STILL_CONNECTING }
     try {
       const headers = { 'Content-Type': 'application/json', ...authHeaders() }
       const r = await fetch(`${base()}/op`, { method: 'POST', headers, body: JSON.stringify({ op, text }) })
-      if (!r.ok) {
-        toast(r.status === 401 ? "Couldn't send: this link has expired. Open the new link from your Mac." : "Couldn't send that. Try again in a moment.", 'error')
-        return false
-      }
-      return true
+      if (!r.ok) return { error: r.status === 401 ? "Couldn't send: this link has expired. Open the new link from your Mac." : "Couldn't send that. Try again in a moment." }
+      return { id: (await r.json().catch(() => null))?.id ?? 0 }
     } catch {
-      toast("Couldn't reach Flight. Check that the Mac is awake and connected.", 'error')
-      return false
+      return { error: "Couldn't reach Flight. Check that the Mac is awake and connected." }
     }
+  }
+  async function send(op, text) {
+    const { error } = await post(op, text)
+    if (error) toast(error, error === STILL_CONNECTING ? 'info' : 'error')
+    return !error
   }
 
   // ---------- events ----------
@@ -507,7 +516,25 @@
       case 'filter': S.filter = v; break
       case 'expand': S.open.has(v) ? S.open.delete(v) : S.open.add(v); break
       case 'stopask': S.sheet = 'stop'; break
-      case 'stopyes': for (const c of consoles().filter(x => x.status !== 'stood-down')) await send('console', `dismiss ${c.callSign}`); toast('Every console is dismissed.'); S.sheet = null; break
+      case 'stopyes': {
+        // A dismissal is relayed and runs once Flight's turn ends, so the toast says what was sent, never what is done.
+        let sent = 0
+        let why = ''
+        const failed = []
+        for (const c of consoles().filter(x => x.status !== 'stood-down')) {
+          const r = await post('console', `dismiss ${c.callSign}`)
+          if (r.error) {
+            failed.push(c.callSign)
+            why = r.error
+          } else {
+            sent++
+            if (r.id) summed.add(r.id)
+          }
+        }
+        toast(dismissalsSent(sent, failed, why), failed.length ? 'error' : 'info')
+        S.sheet = null
+        break
+      }
       case 'appstopask': S.sheet = 'appstop'; break
       case 'appstopyes': await send('console', 'app stop'); S.sheet = null; break
       default: return
@@ -684,7 +711,9 @@
       if (first && op) seenOp = Number(op.id) || 0
       else if (op && op.id && op.id > seenOp) {
         seenOp = op.id
-        if (op.text && !/^Sent to Flight\.$/.test(op.text)) toast(str(op.text).split('\n').slice(0, 3).join(' · ').slice(0, 220))
+        const echo = summed.has(op.id)
+        for (const id of summed) if (id <= op.id) summed.delete(id)
+        if (op.text && !echo && !/^Sent to Flight\.$/.test(op.text)) toast(str(op.text).split('\n').slice(0, 3).join(' · ').slice(0, 220))
       }
       const said = new Set((fleet().flight?.messages ?? []).filter(x => x.role === 'user').map(x => typed(x.text)))
       for (const q of S.queued) if (q.sent && said.has(q.text) && q.preview) URL.revokeObjectURL(q.preview)
@@ -751,6 +780,7 @@
     // a profile picked in the sheet closes it in the click handler.
     if (S.sheet !== 'profiles') S.sheet = null
     seenOp = 0
+    summed.clear()
     connect()
     render()
   }

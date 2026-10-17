@@ -102,11 +102,23 @@ moves under `prefers-reduced-motion: reduce`.
 | Call-sign chip | slot 1 to 8, no slot (idle fill), Loops filter (outlined in the slot colour; pressed, filled) | identity chip: one colour per person, as in chat and calendar apps | `.call` plus `.slot-N`; wherever the app names a Controller: Flight message headers, Consoles rows and sheets, Poll cards and decided rows, Loops filters and rows. The colour comes from the snapshot's `slots`, which the fleet keeps per call sign in its store: given at staffing, kept across reloads and sessions, and never shared by two live Controllers. A Flight message carries chips only when its first line is the marker (`public/badge.js`): its call signs in bold, joined by a middle dot or a space, every one known to the fleet, the marker ending at a space, a colon or the line's end; a bold call sign run into a word, or one named in the body, stays text. The label carries the identity; the colour only helps the eye find it |
 | State chip | five states | tinted pill | label carries the state |
 | Loop row | status, call, decision, advisory | timeline row | advisory rows tinted `--wait-tint` |
-| Toast | info, error | snackbar | announced via `role="status"` |
+| Toast | info, error | snackbar | announced via `role="status"`; an op Flight runs later reads as sent, never done (Relayed console actions, below) |
 | Profile switcher | hidden (before the first listing, while fewer than two profiles are listed, or while the Mac cannot be reached), current, attention dot, sheet open, not answering | header button + bottom sheet of `.prof` rows | shows the current Claude profile, always a listed one, while another is running to switch to: the app names and connects to none until the first listing, and the first listing that names a profile opens the remembered profile if it is listed, else the front door's own (the profile whose server holds 4777), else the first listed; the dot means another profile has an open gate (`busy` colour) or is working (`live`); each row carries a state chip; the choice is remembered per device, and so is an automatic move; a long name ends in an ellipsis in the button and wraps in its row |
 | Photo attach | empty, picked (thumbnail + Remove photo), uploading, refused (toast) | camera button beside `/` + a preview row above the composer | downscaled on the device to 1600 px JPEG; the sent bubble shows the photo above the text; the stored path line is never shown |
 | Theme choice | System (default), Light, Dark | a segmented control in the menu sheet | kept per device in localStorage; `public/theme.js` sets `data-theme` on `<html>` before first paint (the CSP allows no inline script); `tokens.css` applies the dark palette for a dark device unless Light is chosen, and always for Dark |
 | Markdown reply | default, badged (a first-line call-sign marker) | rendered by `public/md.js` | headings, emphasis, code, lists, quotes, http(s) links in a new tab, tables in their own horizontal scroll; text escaped before markup; a first-line marker becomes Call-sign chips beside FLIGHT and leaves the text |
+
+## Relayed console actions
+
+A staffing, call, GO, NO-GO, Retry, dismissal or stand-down sent from the app
+reaches Flight as a prompt and runs once Flight's current turn ends, so the app
+never reports one as done: its words are "sent to Flight" and "runs once Flight
+is free", as on a decision card and in the fleet's own result toast. Dismissing
+a gate, retuning and stopping the app run at once. A tap that sends several ops
+says what it sent in one toast: Dismiss all reads "2 dismissals sent to Flight;
+they run once Flight is free.", and when an op is not sent the toast is an error
+naming each console left out, with the reason. The fleet's toast for each op
+that summary covers is not shown over it.
 
 ## State matrix
 
