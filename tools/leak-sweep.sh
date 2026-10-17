@@ -1,12 +1,21 @@
 #!/usr/bin/env bash
 # leak-sweep.sh - bash twin of leak-sweep.ps1.
 # Usage: tools/leak-sweep.sh [promote|instance] [root]
+#
+# promote reads the operator's deny-list from the instance,
+# _command/leak-sweep.private.txt beside this tools/ folder (gitignored with
+# the rest of _command/), or from the file LEAK_SWEEP_PRIVATE_LIST names, for
+# a run from a clone or worktree with no instance of its own. With no list
+# it exits 2: a sweep that never checked the operator's own names is not clean.
 set -eu
 
 MODE="${1:-promote}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="${2:-$(cd "$SCRIPT_DIR/.." && pwd)}"
-PRIVATE_LIST="$SCRIPT_DIR/leak-sweep.private.txt"
+PRIVATE_LIST="${LEAK_SWEEP_PRIVATE_LIST:-$(cd "$SCRIPT_DIR/.." && pwd)/_command/leak-sweep.private.txt}"
+# Where the list used to live; read never, named in the error so a list left
+# there is moved rather than silently skipped.
+LEGACY_LIST="$SCRIPT_DIR/leak-sweep.private.txt"
 EXEMPT_MARKER='MC-LEAK-EXEMPT:'
 
 if [ "$MODE" != "promote" ] && [ "$MODE" != "instance" ]; then
@@ -31,10 +40,11 @@ RULE_PATTERNS=(
 )
 RULE_ICASE=(0 0 0 0 0 1 0 1 1)
 
-# Instance mode guards a PRIVATE instance: leftover template placeholders +
-# the operator's deny-list (if present). The generic identity rules guard the
-# PUBLIC repo only - an instance legitimately contains its own founder's
-# paths and email.
+# Instance mode guards a PRIVATE instance: leftover template placeholders and
+# live secrets. The generic identity rules and the deny-list guard the PUBLIC
+# repo only - an instance legitimately contains its own founder's paths and
+# email, and names the fronts and the employer the deny-list keeps out of
+# what ships.
 #
 # It also reads a different tree: the instance (_command/ plus the operating
 # CLAUDE.md), matching `leak-sweep.ps1 -Mode instance -Path _command,CLAUDE.md`.
@@ -62,13 +72,26 @@ fi
 
 PRIVATE_TERMS=()
 PRIVATE_PATTERNS=()
-if [ -f "$PRIVATE_LIST" ]; then
+if [ "$MODE" = "promote" ]; then
+  # A missing list used to pass with PrivateTerms=0, so the operator's own
+  # names went unchecked while the sweep reported clean. An empty list is a
+  # choice someone made; a missing one is not.
+  if [ ! -r "$PRIVATE_LIST" ] || [ -d "$PRIVATE_LIST" ]; then
+    echo "LEAK-SWEEP ERROR: no private deny-list at '$PRIVATE_LIST', so the operator's own names cannot be checked." >&2
+    if [ -f "$LEGACY_LIST" ]; then
+      echo "  A list sits at the old path '$LEGACY_LIST': move it into the instance, to the path above." >&2
+    else
+      echo "  Create it with one term per line ('#' starts a comment), or set LEAK_SWEEP_PRIVATE_LIST to a list elsewhere." >&2
+    fi
+    exit 2
+  fi
   while IFS= read -r term || [ -n "$term" ]; do
     case "$term" in
       ''|'#'*) continue ;;
     esac
     PRIVATE_TERMS+=("$term")
-    # Escaped once here, not once per line of every file.
+    # Escaped once here, not once per line of every file. Matched without
+    # regard to case: a name is the same name capitalised.
     PRIVATE_PATTERNS+=("\<$(printf '%s' "$term" | sed -e 's/[][\.*^$()+?{}|]/\\&/g')\>")
   done < "$PRIVATE_LIST"
 fi
@@ -149,7 +172,7 @@ for file in "${FILES[@]}"; do
   j=0
   while [ $j -lt ${#PRIVATE_TERMS[@]} ]; do
     status=0
-    grep -Eq -- "${PRIVATE_PATTERNS[$j]}" "$file" || status=$?
+    grep -Eqi -- "${PRIVATE_PATTERNS[$j]}" "$file" || status=$?
     if [ "$status" -eq 0 ]; then
       ACTIVE_TERMS+=("$j")
     elif [ "$status" -gt 1 ]; then
@@ -184,7 +207,7 @@ for file in "${FILES[@]}"; do
       fi
     done
     for j in ${ACTIVE_TERMS[@]+"${ACTIVE_TERMS[@]}"}; do
-      if printf '%s' "$line" | grep -Eq -- "${PRIVATE_PATTERNS[$j]}"; then
+      if printf '%s' "$line" | grep -Eqi -- "${PRIVATE_PATTERNS[$j]}"; then
         HITS+=("$rel:$lineno: [private-term] ${PRIVATE_TERMS[$j]}")
       fi
     done
@@ -198,5 +221,9 @@ if [ ${#HITS[@]} -gt 0 ]; then
   echo "LEAK-SWEEP FAILED: ${#HITS[@]} hit(s). Mode=${MODE}."
   exit 1
 fi
-echo "LEAK-SWEEP CLEAN: 0 hits across ${#FILES[@]} file(s). Mode=${MODE}. PrivateTerms=${#PRIVATE_TERMS[@]}."
+if [ "$MODE" = "promote" ]; then
+  echo "LEAK-SWEEP CLEAN: 0 hits across ${#FILES[@]} file(s). Mode=${MODE}. PrivateTerms=${#PRIVATE_TERMS[@]} from ${PRIVATE_LIST}."
+else
+  echo "LEAK-SWEEP CLEAN: 0 hits across ${#FILES[@]} file(s). Mode=${MODE}. The deny-list is for what ships, so this mode does not read it."
+fi
 exit 0

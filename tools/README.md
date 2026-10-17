@@ -43,22 +43,25 @@ Windows, and a tool listed with only one form has no twin yet.
 The personalization firewall. It scans text for anything that identifies the
 operator (names, emails, paths, secrets, old brand names) before it ships.
 
-The two scripts enforce the same rules. One platform note: on user-path rules
-the .ps1 uses a lookahead and the .sh an equivalent character class, so
-templated examples like `C:\Users\<NAME>` pass both; prefer `~/` style paths
-in shipped examples anyway.
+The two scripts enforce the same rules, except where they read the deny-list
+(below). One platform note: on user-path rules the .ps1 uses a lookahead and
+the .sh an equivalent character class, so templated examples like
+`C:\Users\<NAME>` pass both; prefer `~/` style paths in shipped examples
+anyway.
 
 Two run-sites, two rule sets:
 - **promote mode** - before anything is published: the generic identity
   rules (paths, emails, keys, the legacy name) + your deny-list. Guards
-  the PUBLIC repo.
+  the PUBLIC repo, and does not run without the deny-list (below).
 - **instance mode** - at the end of LIFTOFF Stage 4 and inside
   `/preflight`: leftover template placeholders (`<PLACEHOLDER-...>`,
-  `{{TOKEN}}`, `TODO-INIT`) + your deny-list if present. It does NOT run
-  the identity rules - a private instance legitimately contains its own
-  founder's paths and email. It reads `_command/` and the operating
-  `CLAUDE.md`, not `framework/`, whose kit templates carry placeholders on
-  purpose. The brace token must be a bare identifier, so a Mermaid hexagon
+  `{{TOKEN}}`, `TODO-INIT`) and live secrets (AWS and GitHub keys, a
+  secret or token assigned in the clear). It does NOT run the identity
+  rules or the deny-list - a private instance legitimately contains its
+  own founder's paths and email, and names the fronts and the employer
+  the deny-list keeps out of what ships. It reads `_command/` and the
+  operating `CLAUDE.md`, not `framework/`, whose kit templates carry
+  placeholders on purpose. The brace token must be a bare identifier, so a Mermaid hexagon
   node (`A{{"label"}}`) is not mistaken for an unfilled blank; an unquoted
   one (`A{{plain}}`) still needs the exempt marker.
 
@@ -86,8 +89,27 @@ there is no `_command/` to check yet.
 A line intentionally naming the operator can be exempted with a trailing
 `MC-LEAK-EXEMPT: <reason>` marker.
 
-`tools/leak-sweep.private.txt` is the operator's own deny-list, one term per
-line, gitignored so it never ships. Cloners of this repo create their own.
+**The deny-list** is the operator's own: the names that must never ship
+(the employer, its repositories and ticket keys, colleagues, private
+fronts), one term per line, `#` starting a comment. Each term matches as a
+whole word, in any case. It lives in the instance, at
+`_command/leak-sweep.private.txt`, gitignored with the rest of `_command/`
+(`check-ignores` proves it). A clone starts without one, so create yours
+before the first promote. `LEAK_SWEEP_PRIVATE_LIST=<file>` points a run at
+a list elsewhere, which is how a clone or worktree with no instance beside
+it is swept.
+
+promote exits 2 when the list is missing: a sweep that never checked the
+operator's own names is not a pass. An empty list is a choice, so it runs,
+and the clean line names the list it read (`PrivateTerms=N from <path>`).
+The list used to live at `tools/leak-sweep.private.txt`; a list left there
+is not read, and the error says to move it. Tests:
+`tests/leak-sweep.tests.sh`, 8 cases, with the missing list as the
+negative control.
+
+The `.ps1` twin has not caught up: it still reads
+`tools/leak-sweep.private.txt` and runs without a list. On Windows, read
+the clean line's `PrivateTerms` count before trusting a promote run.
 
 ## check-refs
 
