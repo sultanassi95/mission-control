@@ -6,7 +6,15 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
-- 2026-10-17 (latest): the leak sweep reads every file that ships, and CI
+- 2026-10-17 (latest): the license changes from PolyForm Noncommercial 1.0.0
+  to PolyForm Shield 1.0.0 (MC-145). Any purpose, use at work included, is
+  now permitted except one: providing a product that competes with Mission
+  Control, or with any product its author provides using it, whether sold or
+  given away. The README's license section says this in plain words; the
+  `LICENSE` text is what binds. Its `Required Notice:` line is unchanged and
+  must still reach everyone who gets a copy.
+
+- 2026-10-17: the leak sweep reads every file that ships, and CI
   runs it (MC-146). `promote` read a fixed list of folders
   (`framework/`, `.claude/skills/` and four root files), so nothing under
   `tools/` was checked, and private front names in the mod tests, the app

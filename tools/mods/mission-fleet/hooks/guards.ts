@@ -242,7 +242,7 @@ const LEVER_REFUSAL = 'On a line that names git or gh, nothing sets HOME, PATH, 
  */
 export type Word = { text: string; dynamic: boolean; glob: boolean; quoted?: boolean; heredoc?: true; body?: string; splits?: true }
 export type Simple = { words: Word[]; redirects: Word[]; sep: string }
-export type Parsed = { commands: Simple[]; opaque: boolean; bodies: string[] }
+export type Parsed = { commands: Simple[]; opaque: boolean; bodies: string[]; unread: string[] }
 
 /**
  * The `$(cat <<'EOF' ... EOF)` (quoted delimiter only) that starts at `at`: where it ends, just past
@@ -285,6 +285,13 @@ export function tokenize(text: string): Parsed {
     if (cur) (redirecting ? redirects : words).push(cur)
     if (cur) redirecting = false
     cur = undefined
+  }
+  // Expansions the guard cannot read: a word holding one is a variable, and a line that runs git or gh refuses it.
+  const unread: string[] = []
+  const note = (at: number, quoted: boolean) => {
+    const x = unreadExpansion(text, at, quoted)
+    if (x !== undefined) unread.push(x)
+    return x !== undefined
   }
   // An fd number written against a redirect operator (2>&1, 1>f) is part of the redirect, not a word.
   // Only an UNQUOTED bare digit is an fd: '2'>f, "2">f and \2>f are the word 2 plus a redirect.
@@ -431,7 +438,11 @@ export function tokenize(text: string): Parsed {
         } else if (d === '$' && /[A-Za-z_{@*#?$!0-9]/.test(ch(j + 1))) {
           cur.dynamic = true
           cur.text += d
-        } else cur.text += d
+          note(j, true)
+        } else {
+          if (d === '$' && note(j, true)) cur.dynamic = true
+          cur.text += d
+        }
       }
       i = j
       continue
@@ -460,13 +471,47 @@ export function tokenize(text: string): Parsed {
         i++
         continue
       }
-      if (/[A-Za-z_{@*#?$!0-9]/.test(ch(i + 1))) cur.dynamic = true
+      if (note(i, false) || /[A-Za-z_{@*#?$!0-9]/.test(ch(i + 1))) cur.dynamic = true
     }
+    // zsh reads a word opening with an unquoted = as =cmd, the path of that command.
+    if (c === '=' && cur.text === '' && note(i, false)) cur.dynamic = true
     if (c === '*' || c === '?' || c === '[' || c === '{' || c === '~') cur.glob = true
     cur.text += c
   }
   flush()
-  return { commands, opaque, bodies }
+  return { commands, opaque, bodies, unread }
+}
+
+/**
+ * The expansion at `text[at]` the guard cannot read, if any: after a `$`, anything but a plain `$NAME`,
+ * `${NAME}` or `$?` (zsh's `$=X`, `$^X`, `$~X`, `${=X}` and `${(s:,:)X}`, the special parameters, `$'...'`);
+ * and zsh's `=cmd` for a word that opens with `=`. Undefined for those and for a `$` or `=` that expands
+ * nothing. `quoted` is true inside double quotes, where `$'` and `$"` are literal.
+ */
+export function unreadExpansion(text: string, at: number, quoted: boolean): string | undefined {
+  const next = text[at + 1] ?? ''
+  // zsh takes the rest of the word, quotes removed, as the command name (='git' too); == and =~ name no real command.
+  if (text[at] === '=') return next === '' || /[\s;|&<>()=~]/.test(next) ? undefined : `=${/^(?:'[^']*'|"(?:\\.|[^"\\])*"|\\.|[^\s;|&<>()'"\\])*/.exec(text.slice(at + 1))?.[0] ?? ''}`
+  if (text[at] !== '$' || next === '' || next === '(' || next === '[' || next === '?' || /[\s;|&<>)A-Za-z_]/.test(next)) return undefined
+  if (quoted && (next === '"' || next === "'")) return undefined
+  if (next === '{') {
+    // A well-formed ${NAME} never spans a newline; stop there so an unbalanced ${ is not a full-text scan.
+    let depth = 0
+    let k = at + 1
+    for (; k < text.length && text[k] !== '\n'; k++) {
+      if (text[k] === '{') depth++
+      else if (text[k] === '}' && --depth === 0) break
+    }
+    const braced = text.slice(at, k + 1)
+    return /^\$\{[A-Za-z_][A-Za-z0-9_]*\}$/.test(braced) ? undefined : braced
+  }
+  if (next === "'" || next === '"') {
+    const close = text.indexOf(next, at + 2)
+    return text.slice(at, close < 0 ? text.length : close + 1)
+  }
+  // zsh leaves $ literal unless a special parameter ($$ $! $# $- $* $@ $0-$9) or a flag ($= $^ $~ $+) follows.
+  if (!/[=^~+$!#\-*@0-9]/.test(next)) return undefined
+  return `$${next}${/^[=^~+#]*[A-Za-z0-9_]*/.exec(text.slice(at + 2))?.[0] ?? ''}`
 }
 
 /** The command a simple command runs: keywords, assignments and wrappers skipped. */
@@ -743,6 +788,13 @@ export function shellRefusal(role: Role, command: string, protectedBranches: str
   if (/_command\/fleet\b/.test(normalisePath(command)) || /\.claude[^/\s]*\/projects\b/.test(command)) return 'The fleet folder and Claude session transcripts are Flight\'s: fleet agents do not read them.'
   const parsed = tokenize(command)
   if (parsed.commands.some(s => [...s.words, ...s.redirects].some(w => APP_HOME.test(w.text)))) return APP_HOME_REFUSAL
+  // The Bash tool's shell is zsh: its $=X, $^X, ${=X} and =cmd expand to words the guard would read as text.
+  // A quote-spelled name (g''it) runs git with no literal "git" in the text, so gate on the parsed head too.
+  const runsGitGh = parsed.commands.some(s => ['git', 'gh'].includes(baseName(headOf(s).head?.text ?? ''))) || /\b(git|gh)\b/i.test(command)
+  if (!parsed.opaque && parsed.unread.length && runsGitGh) {
+    const names = [...new Set(parsed.unread)]
+    return `${names.join(', ')} ${names.length > 1 ? 'are shell expansions' : 'is a shell expansion'} the guard cannot read: on a line that runs git or gh, write the value literally, in single quotes, or as a plain $NAME or \${NAME}.`
+  }
   // A heredoc read by an interpreter is a program: its words are checked like the command line's.
   if (parsed.bodies.length && parsed.commands.some(s => INTERPRETER.test(baseName(headOf(s).head?.text ?? '')))) {
     for (const body of parsed.bodies) {
