@@ -202,25 +202,25 @@ test('environment prefixes and pager options cannot redirect git', () => {
 })
 
 test('every fleet git and gh call pins its repo inside the console directory', () => {
-  const P = (cmd: string) => shellRefusal('controller', cmd, [], '/w/fronts/karnak')
+  const P = (cmd: string) => shellRefusal('controller', cmd, [], '/w/fronts/acme')
   expect(P('git status')).toContain('Pin the repo')
   expect(P('gh pr list')).toContain('Pin the repo')
-  expect(P('cd /w/fronts/karnak && git status')).toBeUndefined()
-  expect(P('git -C /w/fronts/karnak status')).toBeUndefined()
-  expect(P('cd /w/fronts/karnak && cd sub && git status')).toBeUndefined()
-  expect(P('cd /w/fronts/karnak && gh pr checks 3')).toBeUndefined()
+  expect(P('cd /w/fronts/acme && git status')).toBeUndefined()
+  expect(P('git -C /w/fronts/acme status')).toBeUndefined()
+  expect(P('cd /w/fronts/acme && cd sub && git status')).toBeUndefined()
+  expect(P('cd /w/fronts/acme && gh pr checks 3')).toBeUndefined()
   expect(P('cd /w && git status')).toContain('outside your console')
-  expect(P('cd /w/fronts/karnak/../tascode && git push -u origin feat/x')).toContain('outside your console')
-  expect(P('git -C /w/fronts/karnakX status')).toContain('outside your console')
+  expect(P('cd /w/fronts/acme/../globex && git push -u origin feat/x')).toContain('outside your console')
+  expect(P('git -C /w/fronts/acmeX status')).toContain('outside your console')
   expect(P('cd $REPO && git status')).toContain('Pin the repo')
-  expect(P('cd fronts/karnak && git status')).toContain('Pin the repo')
+  expect(P('cd fronts/acme && git status')).toContain('Pin the repo')
   expect(P('npm test')).toBeUndefined()
-  expect(P('git -C /w/fronts/karnak -C /w/fronts/tascode status')).toContain('Pin the repo')
-  expect(P('cd /w/fronts/karnak && git --git-dir=/w/fronts/tascode/.git status')).toContain('Pin the repo')
-  expect(P('cd /w/fronts/karnak && git --work-tree /x status')).toContain('Pin the repo')
-  expect(P('cd /w/fronts/karnak && pushd /w/fronts/tascode && git status')).toContain('Pin the repo')
+  expect(P('git -C /w/fronts/acme -C /w/fronts/globex status')).toContain('Pin the repo')
+  expect(P('cd /w/fronts/acme && git --git-dir=/w/fronts/globex/.git status')).toContain('Pin the repo')
+  expect(P('cd /w/fronts/acme && git --work-tree /x status')).toContain('Pin the repo')
+  expect(P('cd /w/fronts/acme && pushd /w/fronts/globex && git status')).toContain('Pin the repo')
   expect(pinnedDir(tokenize('cd /a && cd ../b && git log').commands, 2)).toBe('/b')
-  expect(toolRefusal('controller', 'Bash', { command: 'git status' }, [], '/w/fronts/karnak')).toContain('Pin the repo')
+  expect(toolRefusal('controller', 'Bash', { command: 'git status' }, [], '/w/fronts/acme')).toContain('Pin the repo')
 })
 
 test('a fleet agent cannot start another Claude session', () => {
@@ -229,20 +229,20 @@ test('a fleet agent cannot start another Claude session', () => {
 })
 
 test('a pin counts only for a directly preceding cd chain, with no options or subshells', () => {
-  const P = (cmd: string) => shellRefusal('controller', cmd, [], '/w/fronts/karnak')
-  expect(P('false && cd /w/fronts/karnak; git status')).toContain('Pin the repo')
-  expect(P('(cd /w/fronts/karnak); git status')).toContain('Pin the repo')
-  expect(P('cd /w/fronts/karnak | cat; git status')).toContain('Pin the repo')
-  expect(P('cd -P /w/fronts/karnak && git status')).toContain('Pin the repo')
-  expect(P('cd /w/fronts/karnak && npm test && git status')).toContain('Pin the repo')
-  expect(P('cd /w/fronts/karnak/ && git status')).toBeUndefined()
-  expect(P('cd /w/fronts/karnak && gh -R other/repo pr list')).toContain('gh -R')
+  const P = (cmd: string) => shellRefusal('controller', cmd, [], '/w/fronts/acme')
+  expect(P('false && cd /w/fronts/acme; git status')).toContain('Pin the repo')
+  expect(P('(cd /w/fronts/acme); git status')).toContain('Pin the repo')
+  expect(P('cd /w/fronts/acme | cat; git status')).toContain('Pin the repo')
+  expect(P('cd -P /w/fronts/acme && git status')).toContain('Pin the repo')
+  expect(P('cd /w/fronts/acme && npm test && git status')).toContain('Pin the repo')
+  expect(P('cd /w/fronts/acme/ && git status')).toBeUndefined()
+  expect(P('cd /w/fronts/acme && gh -R other/repo pr list')).toContain('gh -R')
 })
 
 test('gh repo overrides in any form are refused', () => {
-  const P = (cmd: string) => shellRefusal('controller', cmd, [], '/w/fronts/karnak')
-  expect(P('cd /w/fronts/karnak && gh pr list -Rother/repo')).toContain('gh -R')
-  expect(P('cd /w/fronts/karnak && gh pr list --repo=other/repo')).toContain('gh -R')
+  const P = (cmd: string) => shellRefusal('controller', cmd, [], '/w/fronts/acme')
+  expect(P('cd /w/fronts/acme && gh pr list -Rother/repo')).toContain('gh -R')
+  expect(P('cd /w/fronts/acme && gh pr list --repo=other/repo')).toContain('gh -R')
   expect(P('export GH_REPO=other/repo')).toContain('GH_')
   expect(P('export GIT_DIR=/x')).toContain('GIT_')
   expect(P('export NODE_ENV=test')).toBeUndefined()
@@ -265,35 +265,35 @@ test('the fleet folder (audit log, app state) is Flight-only', () => {
   expect(isFlightOnly('/p/_command/fleet/app-state.json')).toBe(true)
   expect(C('tail -5 /p/_command/fleet/audit.log')).toContain('Flight')
   expect(toolRefusal('controller', 'Read', { file_path: '/p/_command/fleet/app-url' }, [])).toContain('Flight')
-  expect(C('grep -r token /Users/x/.claude-tascode/projects/abc/')).toContain('transcripts')
-  expect(toolRefusal('back room', 'Grep', { pattern: 't=', path: '/Users/x/.claude/projects' }, [])).toContain('transcripts')
+  expect(C('grep -r token /Users/x/.claude-globex/projects/abc/')).toContain('transcripts') // MC-LEAK-EXEMPT: a placeholder home folder
+  expect(toolRefusal('back room', 'Grep', { pattern: 't=', path: '/Users/x/.claude/projects' }, [])).toContain('transcripts') // MC-LEAK-EXEMPT: a placeholder home folder
 })
 
 test('fleet agents cannot read the app token or the profile registry', () => {
   expect(C('cat ~/.mission-control/app-token')).toContain('app')
   expect(C('cat $HOME/.mission-control/app-token')).toContain('app')
-  expect(B('ls /Users/x/.mission-control/flights')).toContain('app')
+  expect(B('ls /Users/x/.mission-control/flights')).toContain('app') // MC-LEAK-EXEMPT: a placeholder home folder
   expect(C('cd ~/.mission-control && cat app-token')).toContain('app')
-  expect(toolRefusal('controller', 'Read', { file_path: '/Users/x/.mission-control/app-token' }, [])).toContain('app')
+  expect(toolRefusal('controller', 'Read', { file_path: '/Users/x/.mission-control/app-token' }, [])).toContain('app') // MC-LEAK-EXEMPT: a placeholder home folder
   expect(toolRefusal('back room', 'Grep', { pattern: 'x', path: '~/.mission-control' }, [])).toContain('app')
-  expect(toolRefusal('controller', 'Glob', { pattern: '**/*', path: '/Users/x/.mission-control/flights' }, [])).toContain('app')
+  expect(toolRefusal('controller', 'Glob', { pattern: '**/*', path: '/Users/x/.mission-control/flights' }, [])).toContain('app') // MC-LEAK-EXEMPT: a placeholder home folder
   // The workspace folder named mission-control (no leading dot) stays readable.
-  expect(C('cat /Users/x/Desktop/mission-control/README.md')).toBeUndefined()
-  expect(toolRefusal('controller', 'Read', { file_path: '/Users/x/Desktop/mission-control/README.md' }, [])).toBeUndefined()
+  expect(C('cat /Users/x/Desktop/mission-control/README.md')).toBeUndefined() // MC-LEAK-EXEMPT: a placeholder home folder
+  expect(toolRefusal('controller', 'Read', { file_path: '/Users/x/Desktop/mission-control/README.md' }, [])).toBeUndefined() // MC-LEAK-EXEMPT: a placeholder home folder
 })
 
 test('the app-home guard sees case, quoting, braces, separators and the token by name', () => {
   const R = 'profile registry'
   expect(C('cat ~/.Mission-Control/app-token')).toContain(R)
-  expect(toolRefusal('controller', 'Read', { file_path: '/Users/x/.MISSION-CONTROL/app-token' }, [])).toContain(R)
+  expect(toolRefusal('controller', 'Read', { file_path: '/Users/x/.MISSION-CONTROL/app-token' }, [])).toContain(R) // MC-LEAK-EXEMPT: a placeholder home folder
   expect(C("cat ~/.mission''-control/app-token")).toContain(R)
   expect(C('cat ~/."mission-control"/app-token')).toContain(R)
   expect(C('cat ~/.mission\\-control/app-token')).toContain(R)
   expect(C('cat ~/{.mission-control,x}/app-token')).toContain(R)
   expect(C('cd ~;cat<.mission-control/app-token')).toContain(R)
-  expect(toolRefusal('controller', 'Glob', { pattern: '{.mission-control,x}/**', path: '/Users/x' }, [])).toContain(R)
+  expect(toolRefusal('controller', 'Glob', { pattern: '{.mission-control,x}/**', path: '/Users/x' }, [])).toContain(R) // MC-LEAK-EXEMPT: a placeholder home folder
   expect(C('find ~ -name app-token -exec cat {} +')).toContain(R)
-  expect(toolRefusal('controller', 'Glob', { pattern: '**/app-token', path: '/Users/x' }, [])).toContain(R)
+  expect(toolRefusal('controller', 'Glob', { pattern: '**/app-token', path: '/Users/x' }, [])).toContain(R) // MC-LEAK-EXEMPT: a placeholder home folder
   // Still readable: the app's own localStorage key, and a domain that merely contains the name.
   expect(C('grep -n mcapp-token tools/app/public/app.js')).toBeUndefined()
   expect(C('curl -s https://docs.mission-control.dev/')).toBeUndefined()
@@ -327,7 +327,7 @@ test('command names are matched in any case, as a case-insensitive disk runs the
 test('the fleet approves its own send only to an agent it has on record', () => {
   const seats = [
     { callSign: 'MISSION-CONTROL', agentId: 'a1', name: 'console-mission-control', status: 'staffed' },
-    { callSign: 'KARNAK', agentId: '', name: 'console-karnak', status: 'staffing' },
+    { callSign: 'ACME', agentId: '', name: 'console-acme', status: 'staffing' },
   ]
   expect(fleetSelfApproval('SendMessage', { to: 'a1', message: 'go' }, seats)).toBe('MISSION-CONTROL')
   expect(fleetSelfApproval('SendMessage', { to: 'someone-else', message: 'go' }, seats)).toBeUndefined()
@@ -337,17 +337,17 @@ test('the fleet approves its own send only to an agent it has on record', () => 
 })
 
 test('the fleet approves its own spawn only of a Controller under a reserved console name', () => {
-  const seats = [{ callSign: 'KARNAK', agentId: '', name: 'console-karnak', status: 'staffing' }]
-  expect(fleetSelfApproval('Agent', { subagent_type: 'mission-fleet:controller', name: 'console-karnak' }, seats)).toBe('KARNAK')
-  expect(fleetSelfApproval('Agent', { subagent_type: 'general-purpose', name: 'console-karnak' }, seats)).toBeUndefined()
+  const seats = [{ callSign: 'ACME', agentId: '', name: 'console-acme', status: 'staffing' }]
+  expect(fleetSelfApproval('Agent', { subagent_type: 'mission-fleet:controller', name: 'console-acme' }, seats)).toBe('ACME')
+  expect(fleetSelfApproval('Agent', { subagent_type: 'general-purpose', name: 'console-acme' }, seats)).toBeUndefined()
   expect(fleetSelfApproval('Agent', { subagent_type: 'mission-fleet:controller', name: 'console-other' }, seats)).toBeUndefined()
-  expect(fleetSelfApproval('Agent', { subagent_type: 'mission-fleet:controller', name: 'console-karnak' }, [{ ...seats[0]!, status: 'staffed', agentId: 'a2' }])).toBeUndefined()
+  expect(fleetSelfApproval('Agent', { subagent_type: 'mission-fleet:controller', name: 'console-acme' }, [{ ...seats[0]!, status: 'staffed', agentId: 'a2' }])).toBeUndefined()
   expect(fleetSelfApproval('Bash', { command: 'ls' }, seats)).toBeUndefined()
 })
 
 test('app console ops that message or start an agent are relayed through Flight', () => {
-  for (const a of ['staff karnak', 'call KARNAK hi', 'go MI8', 'nogo MI8 not now', 'no-go MI8', 'dismiss KARNAK', 'stand-down KARNAK']) expect(isRelayedVerb(a)).toBe(true)
-  for (const a of ['list', 'poll', 'loops KARNAK', 'retune KARNAK haiku', 'dismiss-gate MI8', '']) expect(isRelayedVerb(a)).toBe(false)
+  for (const a of ['staff acme', 'call ACME hi', 'go MI8', 'nogo MI8 not now', 'no-go MI8', 'dismiss ACME', 'stand-down ACME']) expect(isRelayedVerb(a)).toBe(true)
+  for (const a of ['list', 'poll', 'loops ACME', 'retune ACME haiku', 'dismiss-gate MI8', '']) expect(isRelayedVerb(a)).toBe(false)
 })
 
 test('a relay code is split off the end of the args, and only a well-formed one', () => {
@@ -366,8 +366,8 @@ test('a relay code works once, for exactly the args it was minted for, within it
   expect(spendRelayCode(codes, 'c3', 'go MI8', 1000 + RELAY_TTL + 1)).toBe(false)
   expect(spendRelayCode(codes, undefined, 'go MI8', 2000)).toBe(false)
   expect(spendRelayCode(codes, 'never-minted', 'go MI8', 2000)).toBe(false)
-  codes.set('c4', { args: 'call KARNAK line one\nline two', at: 1000 })
-  expect(spendRelayCode(codes, 'c4', 'call KARNAK line one line  two', 2000)).toBe(true)
+  codes.set('c4', { args: 'call ACME line one\nline two', at: 1000 })
+  expect(spendRelayCode(codes, 'c4', 'call ACME line one line  two', 2000)).toBe(true)
 })
 
 test('a decision sent to Flight holds its gate for the code lifetime, then frees it', () => {

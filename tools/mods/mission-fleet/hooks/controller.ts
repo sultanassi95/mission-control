@@ -4,10 +4,10 @@ export const DEFAULT_BUDGET = 4
 
 /** Model aliases a console takes, and the ids a request names. */
 export const MODEL_IDS: Record<string, string> = {
-  haiku: 'claude-haiku-5-5',
-  sonnet: 'claude-sonnet-5-5',
-  opus: 'claude-opus-5-5',
-  fable: 'claude-fable-5-1',
+  haiku: 'claude-haiku-5-5', // MC-LEAK-EXEMPT: an API model id
+  sonnet: 'claude-sonnet-5-5', // MC-LEAK-EXEMPT: an API model id
+  opus: 'claude-opus-5-5', // MC-LEAK-EXEMPT: an API model id
+  fable: 'claude-fable-5-1', // MC-LEAK-EXEMPT: an API model id
 }
 
 export const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
