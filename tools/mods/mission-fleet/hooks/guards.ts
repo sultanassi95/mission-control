@@ -59,7 +59,7 @@ const READERS = new Set(['cat', 'grep', 'rg', 'head', 'tail', 'less', 'more', 'w
 /** Shells and interpreters that read a program from stdin or a heredoc when given no script file. */
 const READS_STDIN = /^(sh|bash|zsh|dash|ksh|fish|csh|tcsh|python[0-9.]*|perl|ruby|node|deno|bun|php|lua|osascript)$/
 
-export type Word = { text: string; dynamic: boolean; glob: boolean }
+export type Word = { text: string; dynamic: boolean; glob: boolean; quoted?: boolean }
 export type Simple = { words: Word[]; redirects: Word[]; sep: string }
 export type Parsed = { commands: Simple[]; opaque: boolean; bodies: string[] }
 
@@ -106,6 +106,9 @@ export function tokenize(input: string): Parsed {
     if (cur) redirecting = false
     cur = undefined
   }
+  // An fd number written against a redirect operator (2>&1, 1>f) is part of the redirect, not a word.
+  // Only an UNQUOTED bare digit is an fd: '2'>f, "2">f and \2>f are the word 2 plus a redirect.
+  const dropFd = () => { if (cur && !redirecting && !cur.quoted && /^[0-9]+$/.test(cur.text)) cur = undefined }
   const flush = (sep = ';') => {
     end()
     if (words.length || redirects.length) commands.push({ words, redirects, sep })
@@ -142,6 +145,16 @@ export function tokenize(input: string): Parsed {
     // Arithmetic ((...)) and $[...] read << as a shift, not a heredoc: the guard cannot follow it.
     if (c === '(' && ch(i + 1) === '(') opaque = true
     if (c === '$' && ch(i + 1) === '[') opaque = true
+    // `&>` and `&>>` redirect both streams: one redirect operator, not a separator.
+    // No dropFd here: bash keeps a digit written against `&>` as a word while zsh drops it,
+    // so keep it a word and let the guard read the command as the stricter shell would.
+    if (c === '&' && ch(i + 1) === '>') {
+      end()
+      i++
+      if (ch(i + 1) === '>') i++
+      redirecting = true
+      continue
+    }
     if (c === ';' || c === '|' || c === '&' || c === '(' || c === ')') {
       const two = (c === '|' || c === '&') && ch(i + 1) === c
       flush(two ? c + c : c)
@@ -156,10 +169,13 @@ export function tokenize(input: string): Parsed {
     if (c === '<' && ch(i + 1) === '<') {
       // Inside ${...} a << is pattern text, not a heredoc.
       if (cur && cur.text.lastIndexOf('${') > cur.text.lastIndexOf('}')) opaque = true
+      dropFd()
       end()
       let j = i + 2
       if (ch(j) === '<') {
+        // `<<<` is a here-string: its target is a redirect, not a word.
         i = j
+        redirecting = true
         continue
       }
       if (ch(j) === '-') j++
@@ -172,9 +188,11 @@ export function tokenize(input: string): Parsed {
       continue
     }
     if (c === '>' || c === '<') {
+      // An input redirect's target is a redirect too, so both directions set `redirecting`.
+      dropFd()
       end()
       if (ch(i + 1) === '>' || ch(i + 1) === '&' || ch(i + 1) === '|') i++
-      redirecting = c === '>'
+      redirecting = true
       continue
     }
     if (c === '\\' && ch(i + 1) === '\n') {
@@ -188,16 +206,19 @@ export function tokenize(input: string): Parsed {
     }
     cur ??= { text: '', dynamic: false, glob: false }
     if (c === '\\') {
+      cur.quoted = true
       cur.text += ch(++i)
       continue
     }
     if (c === "'") {
+      cur.quoted = true
       const close = text.indexOf("'", i + 1)
       cur.text += text.slice(i + 1, close < 0 ? text.length : close)
       i = close < 0 ? text.length : close
       continue
     }
     if (c === '"') {
+      cur.quoted = true
       let j = i + 1
       for (; j < text.length && ch(j) !== '"'; j++) {
         const d = ch(j)
