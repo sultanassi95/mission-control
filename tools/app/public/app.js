@@ -693,7 +693,7 @@
     }
   }
   // The live profiles, refreshed every few seconds. The first listing that names a profile decides which one opens:
-  // the remembered one when it is listed, else this Mac's own, else the first listed; until then the front door's own
+  // the remembered one when it is listed, else the front door's own, else the first listed; until then the front door's own
   // Flight is shown unnamed. A profile missing from two timed listings in a row is left the same way; a listing a tap
   // asks for refreshes the list but never counts as a miss, so a restarting profile keeps its grace. Every move is
   // remembered, so a profile that stopped never pulls the app back when it runs again.

@@ -79,7 +79,10 @@ spoke's `path:` records where the repo actually lives (`fronts/<front>/<repo>`,
 or the external path). A worktree for work on a front's repo stays inside the
 front's folder as well: beside the repo (`fronts/<front>/<repo>-<slug>`), or
 inside the repo where the CLI's worktree tool puts it (`.claude/worktrees/`),
-never at the top of `fronts/`, where it reads as a front of its own.
+never at the top of `fronts/`, where it reads as a front of its own. A
+Controller's git runs only inside its console's directory, which for a
+project's console, or a front's with one repo, is the repo itself, so a
+Controller puts its worktrees inside the repo.
 `/preflight` reports either drift with its fix (`tools/check-fronts.sh`).
 
 ## The ticket - a folder (the truth)

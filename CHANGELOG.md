@@ -60,6 +60,22 @@ changes should never reach you silently.
   root, such as a front's repo, loads them only once you approve imports
   from outside its folder.
 
+- 2026-10-17: the fleet skill and `framework/remote-access.md` describe the
+  fleet as it now runs (MC-123). The fleet approves its own Controller
+  spawns and messages under auto mode and logs each approval, so Flight no
+  longer leaves auto mode to staff. A decision sent from the app reaches
+  Flight as a prompt with a one-time code to pass back; the skill says how
+  long a GO, NO-GO or Retry card stays held and how undelivered and held
+  decisions are retried or cleared. The commands table gains `retry`, and
+  the guard section lists the clone rules.
+
+- 2026-10-16: a message from Flight in the app names the Controllers it is
+  about (MC-129). When its first line is a marker, call signs in bold
+  joined by a middle dot, each call sign shows as a chip beside FLIGHT and
+  the marker leaves the text. Each live Controller holds one of eight
+  colours, kept per call sign across reloads and sessions, and every call
+  sign the app draws on Consoles, Poll and Loops is a chip in that colour.
+
 - 2026-10-16: every front is a folder holding its repos, `fronts/<front>/<repo>`,
   even when it has only one (MC-130). `/new-front` and LIFTOFF used to move a
   repo so that it became the front's folder (`mv <path> ./fronts/<front>`),
@@ -73,6 +89,37 @@ changes should never reach you silently.
   `/preflight`: moving them is yours to do, and a moved repo's linked
   worktrees need `git worktree repair`.
 
+- 2026-10-16: a Controller may clone its own front's repositories (MC-126).
+  The source is a literal github.com URL, HTTPS or SSH, whose owner a
+  spoke of that front names in its `remote:` line (the exact forms are in
+  the fleet skill), and the clone lands at `fronts/<front>/<REPO>`.
+  Options are taken by exact spelling from a short list; everything else,
+  `-c` and `--template` included, is refused. A console staffed before
+  this change has no owners recorded and clones nothing until it is
+  staffed again. `/console call`, `go` and `no-go` take the message or
+  note whole, so words that start with two dashes reach the Controller.
+  The guard reads a `$(cat <<'EOF' ... EOF)` substitution where the shell
+  reads it and allows one only as a double-quoted git commit, tag, notes
+  or merge message or a gh title or body. On a line that names git or gh
+  it refuses setting a variable that git reads for its config or runs as
+  a program, such as `HOME`, `PATH` or a `GIT_*` name.
+
+- 2026-10-16: the app opens on a profile that is running (MC-120). It used
+  to restore the last profile chosen on the device, even one whose session
+  had stopped. It now names and connects to none until the first listing,
+  then opens the remembered profile when it runs, else the profile whose
+  server holds the front door, else the first listed, and says so in one
+  line when the remembered one was not running. The profile switcher
+  shows only while two or more profiles run.
+
+- 2026-10-16: a GO or NO-GO for a Controller that was stood down or
+  dismissed is held instead of sent (MC-122); it used to resume the old
+  agent. The decision waits for the next Controller staffed under that
+  call sign, which receives it with the report it answers. `/console poll`
+  and the app show it as held, and `/console dismiss-gate` clears it.
+  Under auto mode the fleet approves its own messages only to a staffed
+  console.
+
 - 2026-10-16: the console skill is now `fleet` (`.claude/skills/fleet/SKILL.md`,
   MC-121). The skill and the mission-fleet mod's `/console` command shared one
   name, so the engine refused the mod's command at every session start, and a
@@ -82,7 +129,15 @@ changes should never reach you silently.
   `~/.claude/skills/`, delete the old `console` folder there, or the clash
   stays.
 
-- 2026-10-15 (latest): the spend recorder (MC-069), a Claude Code mod at
+- 2026-10-16: a decision the Poll could not deliver can be retried or
+  dismissed (MC-119). Its card used to stay red for good, quoting the
+  engine's refusal. It now says why in one plain sentence, keeps the
+  engine's words behind Technical details, and offers Retry while the
+  Controller that raised it is staffed, and Dismiss. In a session,
+  `/console retry <id>` sends the decision again and
+  `/console dismiss-gate <id>` clears it.
+
+- 2026-10-15 (night): the spend recorder (MC-069), a Claude Code mod at
   `tools/mods/spend-recorder` that records the model, effort and token usage
   of every model call, per session and per agent, in the plugin's store (the
   last 30 sessions). `/spend-log` shows this session's table, and `/spend`
