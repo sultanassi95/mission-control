@@ -36,7 +36,7 @@ flowchart LR
 | 2 | Research & Validation | real-evidence-only; cited sources; no invented personas or claims |
 | 3 | UX | documented flows + wireframes; accessibility contract |
 | 4 | UI & Design System | tokens + components + brand; no one-off styling |
-| 5 | Architecture & API | system design + explicit contracts/interfaces; clear boundaries |
+| 5 | Architecture & API | system design + explicit contracts/interfaces; clear boundaries; an optional tool is a boundary with a tested absent path ([Optional augmentation](#optional-augmentation)) |
 | 6 | Data & Database | modeled schema; migrations; integrity + idempotency |
 | 7 | Frontend | implement-exactly; perf budgets (e.g. Core Web Vitals on web) |
 | 8 | Backend | services, jobs, queues; perf- and cost-accounted |
@@ -98,3 +98,39 @@ done.
    vocabulary.
 
 The full wording of each item is in the template, which is the single source.
+
+## Optional augmentation
+
+A tool a skill or a check can do without (a diagram renderer, a browser
+driver, an audit command one front lacks) is an optional augmentation. It
+binds this product's own skills and tools; in a partnered repository it is
+advisory, as the rest of this standard is. Four rules, each one checkable:
+
+1. **Removable.** The primary path completes without the tool. Its absence
+   takes a capability away; it never fails the run.
+2. **Declared.** Each optional tool is named in one place for its project,
+   with what is lost without it: a skill's own text, or the repository's
+   spoke for a front. An optional tool named nowhere is a hidden
+   requirement.
+3. **One named line, not silence and not prose.** When the tool is absent
+   the run prints one line in a fixed shape,
+   `DEGRADED: <tool> unavailable - <what was skipped>`, for example
+   `DEGRADED: mmdc unavailable - mermaid blocks served as source`. A fixed
+   prefix is what a check can assert and a reader can grep; prose can only
+   be read.
+4. **The absent path is tested.** A check runs the flow with the tool
+   absent and asserts both that the primary path completed and that the
+   named line appeared, and runs it once with the tool present, so a check
+   that never found the tool cannot pass as one that masked it. An untested
+   absent path does not satisfy this clause.
+
+A tool the flow cannot work without is required, not optional: `gh` is
+required wherever a pull request is opened, since mission-flow's Phase 7
+cannot open one without it. This clause never excuses a missing required
+tool; a check that cannot run for want of one is reported as not run.
+
+Worked example: the docs-viewer server renders mermaid blocks with `mmdc`
+from the project's `node_modules/.bin`. Without it, every document is still
+served, each mermaid block as its source, and the server prints the named
+line; `tools/tests/docs-viewer-degraded.tests.sh` proves both runs from the
+server the skill ships.

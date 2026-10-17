@@ -1070,7 +1070,9 @@ includes the deploy path's own dry checks - the validate script, `cdk diff`
 or the stack's equivalent, a lint of the changed workflow - BEFORE the PR
 exists. Like telemetry reads, these may need cloud access - confirm it up
 front (an interactive login is the founder's to run); a check that cannot run
-is reported, never silently skipped. Two lived defects rode this gap: a
+is reported, never silently skipped (the shape of that report, and the tested
+absent path an optional tool owes: `framework/engineering-standard.md`,
+Optional augmentation). Two lived defects rode this gap: a
 secret-hydration script that exited silently on an empty variable, and an
 empty DB_HOST caught only by a hand-run validate before merge.
 

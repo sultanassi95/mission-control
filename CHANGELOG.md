@@ -6,7 +6,22 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
-- 2026-10-17 (latest): a message from the app carries several files, photos
+- 2026-10-17 (latest): an optional tool is a contract with a tested absent
+  path (MC-052). `framework/engineering-standard.md` gains the Optional
+  augmentation clause, pointed at from layer 5: the primary path completes
+  without the tool, each optional tool is declared in one place, its absence
+  prints one line in the shape `DEGRADED: <tool> unavailable - <what was
+  skipped>`, and a check runs the flow with the tool absent and present. An
+  untested absent path does not satisfy it, and a required tool such as
+  `gh` is never excused by it. mission-flow's Phase 6 sentence on checks
+  that cannot run points at the clause. The docs-viewer server now prints
+  `DEGRADED: mmdc unavailable - mermaid blocks served as source` when
+  `mmdc` is not in the project's `node_modules/.bin`, then the install hint;
+  `tools/tests/docs-viewer-degraded.tests.sh` runs the server the skill
+  ships both ways and prints CANNOT VERIFY, exit 2, when `MC_MMDC` does not
+  name an `mmdc` to run the present case with.
+
+- 2026-10-17: a message from the app carries several files, photos
   and documents alike, and a slash command sent from it shows once, as typed
   (MC-134). The attach button takes up to ten files per message, 8 MB each
   and 32 MB in all: photos, scaled on the device to 1600 px JPEG, and PDF,
