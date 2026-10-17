@@ -73,6 +73,74 @@ test('git and gh run only at the head of a command', () => {
   expect(C('git send-pack origin main')).toContain('allowlist')
 })
 
+// ---- git's global options (MC-147) ----
+// git takes a value after some global options, so the subcommand is found only past options known by
+// exact spelling; any other word before it is refused by name.
+
+test('a git global option off the list is refused by name, since its value could pass for the subcommand', () => {
+  const OFF = 'is not an allowed git global option'
+  // git takes `status` as --attr-source's value and runs the push.
+  expect(C('git --attr-source status push origin main')).toContain(`--attr-source ${OFF}`)
+  expect(C('git -C /w/fronts/acme/api --attr-source status push origin main')).toContain(`--attr-source ${OFF}`)
+  expect(B('git --attr-source log push origin feat/x')).toContain(`--attr-source ${OFF}`)
+  expect(toolRefusal('controller', 'Bash', { command: 'git -C /w/fronts/acme/api --attr-source status push origin main' }, [], '/w/fronts/acme/api')).toContain(`--attr-source ${OFF}`)
+  // Its = form, abbreviations, attached or clustered short forms, and options git has that the list leaves out.
+  for (const opt of [
+    '--attr-source=HEAD', '--attr-sour', '--no-pag', '--no-pager=1', '-Cdir', '-pP', '--C', '--git-dir-x=/w', '--bare', '--versions', '-vh',
+    '--help=x', '-H', '--html-path', '--list-cmds=main', '--super-prefix=x/', '--shallow-file', '--literal-pathspec', '-', '--',
+  ]) expect(`${opt} -> ${C(`git ${opt} status`) ?? 'allowed'}`).toContain(`${opt} ${OFF}`)
+  // One built from a variable cannot be read at all.
+  expect(C('git -$X status')).toContain(OFF)
+})
+
+test('every listed git global option still reaches the subcommand, which is checked as before', () => {
+  const FLAGS = ['-p', '--paginate', '-P', '--no-pager', '--no-replace-objects', '--no-lazy-fetch', '--no-optional-locks', '--no-advice', '--literal-pathspecs', '--no-literal-pathspecs', '--glob-pathspecs', '--noglob-pathspecs', '--icase-pathspecs']
+  const VALUED = ['-C /w/fronts/acme/api', '--git-dir /w/fronts/acme/api/.git', '--work-tree /w/fronts/acme/api', '--namespace scratch', '--git-dir=/w/fronts/acme/api/.git', '--work-tree=/w/fronts/acme/api', '--namespace=scratch']
+  for (const opt of [...FLAGS, ...VALUED]) {
+    expect(`${opt} -> ${C(`git ${opt} status`) ?? 'allowed'}`).toBe(`${opt} -> allowed`)
+    expect(`${opt} -> ${C(`git ${opt} push origin main`) ?? 'allowed'}`).toContain('base or deploy branch')
+    expect(`${opt} -> ${C(`git ${opt} stash`) ?? 'allowed'}`).toContain('never stashes')
+  }
+  // Several in a row, as git reads them.
+  expect(C('git --no-pager -C /w/fronts/acme/api --namespace scratch -P log -1')).toBeUndefined()
+  expect(C('git --no-pager -C /w/fronts/acme/api --namespace=scratch -P push origin main')).toContain('base or deploy branch')
+  // A valued option takes the next word whatever it holds, as git does: `--namespace -c log` runs log.
+  expect(C('git --namespace -c status')).toBeUndefined()
+  expect(C('git --namespace -c push origin main')).toContain('base or deploy branch')
+  expect(C("git --namespace '' status")).toBeUndefined()
+  expect(C('git --namespace a --namespace b push origin main')).toContain('base or deploy branch')
+})
+
+test('git --version, -v, --help and -h are the version and help commands, as git runs them', () => {
+  for (const opt of ['--version', '-v', '--help', '-h']) {
+    expect(`${opt} -> ${C(`git ${opt}`) ?? 'allowed'}`).toBe(`${opt} -> allowed`)
+    expect(`${opt} -> ${C(`git -C /w/fronts/acme/api --no-pager ${opt}`) ?? 'allowed'}`).toBe(`${opt} -> allowed`)
+    // git ends its options there: `git --version push origin main` runs `version push origin main`, never a push.
+    expect(`${opt} -> ${C(`git ${opt} push origin main`) ?? 'allowed'}`).toBe(`${opt} -> allowed`)
+  }
+  expect(toolRefusal('controller', 'Bash', { command: 'git -C /w/fronts/acme/api --version' }, [], '/w/fronts/acme/api')).toBeUndefined()
+})
+
+test('a listed git global option takes only a literal value, since the shell can make it several words', () => {
+  const LIT = 'must be literal'
+  // The shell makes the brace four words: git takes x as the namespace and runs push origin main.
+  expect(C('git --namespace {x,push,origin,main} status')).toContain(`git --namespace ${LIT}`)
+  expect(toolRefusal('controller', 'Bash', { command: 'git -C /w/fronts/acme/api --namespace {x,push,origin,main} status' }, [], '/w/fronts/acme/api')).toContain(`git --namespace ${LIT}`)
+  for (const [opt, name] of [
+    ['-C $D', '-C'], ['-C ~/w', '-C'], ['--git-dir $D', '--git-dir'], ['--git-dir=$D', '--git-dir'], ['--work-tree "$D"', '--work-tree'],
+    ['--work-tree=/w/*', '--work-tree'], ['--namespace $X', '--namespace'], ['--namespace=$X', '--namespace'], ['--namespace *', '--namespace'], ['--namespace={a,b}', '--namespace'],
+  ] as const) expect(`${opt} -> ${C(`git ${opt} status`) ?? 'allowed'}`).toContain(`git ${name} ${LIT}`)
+  // A quoted value is one word, whatever it holds.
+  expect(C("git --namespace 'x push origin main' status")).toBeUndefined()
+  expect(C('git --namespace "{x,push}" status')).toBeUndefined()
+})
+
+test('git -c, --config-env and --exec-path keep their own refusal in every spelling', () => {
+  for (const opt of ['-c core.pager=x', '--config-env=core.pager=X', '--config-env core.pager=X', '--exec-path=/tmp/x', '--exec-path']) {
+    expect(`${opt} -> ${C(`git ${opt} status`) ?? 'allowed'}`).toContain('git -c, --config-env and --exec-path are not allowed')
+  }
+})
+
 test('an interpreter fed by a heredoc or a pipe cannot carry a git command', () => {
   expect(C('bash <<EOF\ngit push origin main\nEOF')).toContain('bash on the same line')
   expect(C("sh <<'X'\ngit stash\nX")).toContain('sh on the same line')
@@ -203,25 +271,25 @@ test('environment prefixes and pager options cannot redirect git', () => {
 })
 
 test('every fleet git and gh call pins its repo inside the console directory', () => {
-  const P = (cmd: string) => shellRefusal('controller', cmd, [], '/w/fronts/karnak')
+  const P = (cmd: string) => shellRefusal('controller', cmd, [], '/w/fronts/acme')
   expect(P('git status')).toContain('Pin the repo')
   expect(P('gh pr list')).toContain('Pin the repo')
-  expect(P('cd /w/fronts/karnak && git status')).toBeUndefined()
-  expect(P('git -C /w/fronts/karnak status')).toBeUndefined()
-  expect(P('cd /w/fronts/karnak && cd sub && git status')).toBeUndefined()
-  expect(P('cd /w/fronts/karnak && gh pr checks 3')).toBeUndefined()
+  expect(P('cd /w/fronts/acme && git status')).toBeUndefined()
+  expect(P('git -C /w/fronts/acme status')).toBeUndefined()
+  expect(P('cd /w/fronts/acme && cd sub && git status')).toBeUndefined()
+  expect(P('cd /w/fronts/acme && gh pr checks 3')).toBeUndefined()
   expect(P('cd /w && git status')).toContain('outside your console')
-  expect(P('cd /w/fronts/karnak/../tascode && git push -u origin feat/x')).toContain('outside your console')
-  expect(P('git -C /w/fronts/karnakX status')).toContain('outside your console')
+  expect(P('cd /w/fronts/acme/../globex && git push -u origin feat/x')).toContain('outside your console')
+  expect(P('git -C /w/fronts/acmeX status')).toContain('outside your console')
   expect(P('cd $REPO && git status')).toContain('Pin the repo')
-  expect(P('cd fronts/karnak && git status')).toContain('Pin the repo')
+  expect(P('cd fronts/acme && git status')).toContain('Pin the repo')
   expect(P('npm test')).toBeUndefined()
-  expect(P('git -C /w/fronts/karnak -C /w/fronts/tascode status')).toContain('Pin the repo')
-  expect(P('cd /w/fronts/karnak && git --git-dir=/w/fronts/tascode/.git status')).toContain('Pin the repo')
-  expect(P('cd /w/fronts/karnak && git --work-tree /x status')).toContain('Pin the repo')
-  expect(P('cd /w/fronts/karnak && pushd /w/fronts/tascode && git status')).toContain('Pin the repo')
+  expect(P('git -C /w/fronts/acme -C /w/fronts/globex status')).toContain('Pin the repo')
+  expect(P('cd /w/fronts/acme && git --git-dir=/w/fronts/globex/.git status')).toContain('Pin the repo')
+  expect(P('cd /w/fronts/acme && git --work-tree /x status')).toContain('Pin the repo')
+  expect(P('cd /w/fronts/acme && pushd /w/fronts/globex && git status')).toContain('Pin the repo')
   expect(pinnedDir(tokenize('cd /a && cd ../b && git log').commands, 2)).toBe('/b')
-  expect(toolRefusal('controller', 'Bash', { command: 'git status' }, [], '/w/fronts/karnak')).toContain('Pin the repo')
+  expect(toolRefusal('controller', 'Bash', { command: 'git status' }, [], '/w/fronts/acme')).toContain('Pin the repo')
 })
 
 test('a fleet agent cannot start another Claude session', () => {
@@ -230,20 +298,20 @@ test('a fleet agent cannot start another Claude session', () => {
 })
 
 test('a pin counts only for a directly preceding cd chain, with no options or subshells', () => {
-  const P = (cmd: string) => shellRefusal('controller', cmd, [], '/w/fronts/karnak')
-  expect(P('false && cd /w/fronts/karnak; git status')).toContain('Pin the repo')
-  expect(P('(cd /w/fronts/karnak); git status')).toContain('Pin the repo')
-  expect(P('cd /w/fronts/karnak | cat; git status')).toContain('Pin the repo')
-  expect(P('cd -P /w/fronts/karnak && git status')).toContain('Pin the repo')
-  expect(P('cd /w/fronts/karnak && npm test && git status')).toContain('Pin the repo')
-  expect(P('cd /w/fronts/karnak/ && git status')).toBeUndefined()
-  expect(P('cd /w/fronts/karnak && gh -R other/repo pr list')).toContain('gh -R')
+  const P = (cmd: string) => shellRefusal('controller', cmd, [], '/w/fronts/acme')
+  expect(P('false && cd /w/fronts/acme; git status')).toContain('Pin the repo')
+  expect(P('(cd /w/fronts/acme); git status')).toContain('Pin the repo')
+  expect(P('cd /w/fronts/acme | cat; git status')).toContain('Pin the repo')
+  expect(P('cd -P /w/fronts/acme && git status')).toContain('Pin the repo')
+  expect(P('cd /w/fronts/acme && npm test && git status')).toContain('Pin the repo')
+  expect(P('cd /w/fronts/acme/ && git status')).toBeUndefined()
+  expect(P('cd /w/fronts/acme && gh -R other/repo pr list')).toContain('gh -R')
 })
 
 test('gh repo overrides in any form are refused', () => {
-  const P = (cmd: string) => shellRefusal('controller', cmd, [], '/w/fronts/karnak')
-  expect(P('cd /w/fronts/karnak && gh pr list -Rother/repo')).toContain('gh -R')
-  expect(P('cd /w/fronts/karnak && gh pr list --repo=other/repo')).toContain('gh -R')
+  const P = (cmd: string) => shellRefusal('controller', cmd, [], '/w/fronts/acme')
+  expect(P('cd /w/fronts/acme && gh pr list -Rother/repo')).toContain('gh -R')
+  expect(P('cd /w/fronts/acme && gh pr list --repo=other/repo')).toContain('gh -R')
   expect(P('export GH_REPO=other/repo')).toContain('GH_')
   expect(P('export GIT_DIR=/x')).toContain('GIT_')
   expect(P('export NODE_ENV=test')).toBeUndefined()
@@ -266,35 +334,35 @@ test('the fleet folder (audit log, app state) is Flight-only', () => {
   expect(isFlightOnly('/p/_command/fleet/app-state.json')).toBe(true)
   expect(C('tail -5 /p/_command/fleet/audit.log')).toContain('Flight')
   expect(toolRefusal('controller', 'Read', { file_path: '/p/_command/fleet/app-url' }, [])).toContain('Flight')
-  expect(C('grep -r token /Users/x/.claude-tascode/projects/abc/')).toContain('transcripts')
-  expect(toolRefusal('back room', 'Grep', { pattern: 't=', path: '/Users/x/.claude/projects' }, [])).toContain('transcripts')
+  expect(C('grep -r token /Users/x/.claude-globex/projects/abc/')).toContain('transcripts') // MC-LEAK-EXEMPT: a placeholder home folder
+  expect(toolRefusal('back room', 'Grep', { pattern: 't=', path: '/Users/x/.claude/projects' }, [])).toContain('transcripts') // MC-LEAK-EXEMPT: a placeholder home folder
 })
 
 test('fleet agents cannot read the app token or the profile registry', () => {
   expect(C('cat ~/.mission-control/app-token')).toContain('app')
   expect(C('cat $HOME/.mission-control/app-token')).toContain('app')
-  expect(B('ls /Users/x/.mission-control/flights')).toContain('app')
+  expect(B('ls /Users/x/.mission-control/flights')).toContain('app') // MC-LEAK-EXEMPT: a placeholder home folder
   expect(C('cd ~/.mission-control && cat app-token')).toContain('app')
-  expect(toolRefusal('controller', 'Read', { file_path: '/Users/x/.mission-control/app-token' }, [])).toContain('app')
+  expect(toolRefusal('controller', 'Read', { file_path: '/Users/x/.mission-control/app-token' }, [])).toContain('app') // MC-LEAK-EXEMPT: a placeholder home folder
   expect(toolRefusal('back room', 'Grep', { pattern: 'x', path: '~/.mission-control' }, [])).toContain('app')
-  expect(toolRefusal('controller', 'Glob', { pattern: '**/*', path: '/Users/x/.mission-control/flights' }, [])).toContain('app')
+  expect(toolRefusal('controller', 'Glob', { pattern: '**/*', path: '/Users/x/.mission-control/flights' }, [])).toContain('app') // MC-LEAK-EXEMPT: a placeholder home folder
   // The workspace folder named mission-control (no leading dot) stays readable.
-  expect(C('cat /Users/x/Desktop/mission-control/README.md')).toBeUndefined()
-  expect(toolRefusal('controller', 'Read', { file_path: '/Users/x/Desktop/mission-control/README.md' }, [])).toBeUndefined()
+  expect(C('cat /Users/x/Desktop/mission-control/README.md')).toBeUndefined() // MC-LEAK-EXEMPT: a placeholder home folder
+  expect(toolRefusal('controller', 'Read', { file_path: '/Users/x/Desktop/mission-control/README.md' }, [])).toBeUndefined() // MC-LEAK-EXEMPT: a placeholder home folder
 })
 
 test('the app-home guard sees case, quoting, braces, separators and the token by name', () => {
   const R = 'profile registry'
   expect(C('cat ~/.Mission-Control/app-token')).toContain(R)
-  expect(toolRefusal('controller', 'Read', { file_path: '/Users/x/.MISSION-CONTROL/app-token' }, [])).toContain(R)
+  expect(toolRefusal('controller', 'Read', { file_path: '/Users/x/.MISSION-CONTROL/app-token' }, [])).toContain(R) // MC-LEAK-EXEMPT: a placeholder home folder
   expect(C("cat ~/.mission''-control/app-token")).toContain(R)
   expect(C('cat ~/."mission-control"/app-token')).toContain(R)
   expect(C('cat ~/.mission\\-control/app-token')).toContain(R)
   expect(C('cat ~/{.mission-control,x}/app-token')).toContain(R)
   expect(C('cd ~;cat<.mission-control/app-token')).toContain(R)
-  expect(toolRefusal('controller', 'Glob', { pattern: '{.mission-control,x}/**', path: '/Users/x' }, [])).toContain(R)
+  expect(toolRefusal('controller', 'Glob', { pattern: '{.mission-control,x}/**', path: '/Users/x' }, [])).toContain(R) // MC-LEAK-EXEMPT: a placeholder home folder
   expect(C('find ~ -name app-token -exec cat {} +')).toContain(R)
-  expect(toolRefusal('controller', 'Glob', { pattern: '**/app-token', path: '/Users/x' }, [])).toContain(R)
+  expect(toolRefusal('controller', 'Glob', { pattern: '**/app-token', path: '/Users/x' }, [])).toContain(R) // MC-LEAK-EXEMPT: a placeholder home folder
   // Still readable: the app's own localStorage key, and a domain that merely contains the name.
   expect(C('grep -n mcapp-token tools/app/public/app.js')).toBeUndefined()
   expect(C('curl -s https://docs.mission-control.dev/')).toBeUndefined()
@@ -328,7 +396,7 @@ test('command names are matched in any case, as a case-insensitive disk runs the
 test('the fleet approves its own send only to an agent it has on record', () => {
   const seats = [
     { callSign: 'MISSION-CONTROL', agentId: 'a1', name: 'console-mission-control', status: 'staffed' },
-    { callSign: 'KARNAK', agentId: '', name: 'console-karnak', status: 'staffing' },
+    { callSign: 'ACME', agentId: '', name: 'console-acme', status: 'staffing' },
   ]
   expect(fleetSelfApproval('SendMessage', { to: 'a1', message: 'go' }, seats)).toBe('MISSION-CONTROL')
   expect(fleetSelfApproval('SendMessage', { to: 'someone-else', message: 'go' }, seats)).toBeUndefined()
@@ -340,24 +408,24 @@ test('the fleet approves its own send only to an agent it has on record', () => 
 test('the fleet never approves its own send to a console that is stood down', () => {
   const seats = [
     { callSign: 'MISSION-CONTROL', agentId: 'a1', name: 'console-mission-control', status: 'stood-down' },
-    { callSign: 'KARNAK', agentId: 'k1', name: 'console-karnak', status: 'staffed' },
+    { callSign: 'ACME', agentId: 'k1', name: 'console-acme', status: 'staffed' },
   ]
   expect(fleetSelfApproval('SendMessage', { to: 'a1', message: 'go' }, seats)).toBeUndefined()
-  expect(fleetSelfApproval('SendMessage', { to: 'k1', message: 'go' }, seats)).toBe('KARNAK')
+  expect(fleetSelfApproval('SendMessage', { to: 'k1', message: 'go' }, seats)).toBe('ACME')
 })
 
 test('the fleet approves its own spawn only of a Controller under a reserved console name', () => {
-  const seats = [{ callSign: 'KARNAK', agentId: '', name: 'console-karnak', status: 'staffing' }]
-  expect(fleetSelfApproval('Agent', { subagent_type: 'mission-fleet:controller', name: 'console-karnak' }, seats)).toBe('KARNAK')
-  expect(fleetSelfApproval('Agent', { subagent_type: 'general-purpose', name: 'console-karnak' }, seats)).toBeUndefined()
+  const seats = [{ callSign: 'ACME', agentId: '', name: 'console-acme', status: 'staffing' }]
+  expect(fleetSelfApproval('Agent', { subagent_type: 'mission-fleet:controller', name: 'console-acme' }, seats)).toBe('ACME')
+  expect(fleetSelfApproval('Agent', { subagent_type: 'general-purpose', name: 'console-acme' }, seats)).toBeUndefined()
   expect(fleetSelfApproval('Agent', { subagent_type: 'mission-fleet:controller', name: 'console-other' }, seats)).toBeUndefined()
-  expect(fleetSelfApproval('Agent', { subagent_type: 'mission-fleet:controller', name: 'console-karnak' }, [{ ...seats[0]!, status: 'staffed', agentId: 'a2' }])).toBeUndefined()
+  expect(fleetSelfApproval('Agent', { subagent_type: 'mission-fleet:controller', name: 'console-acme' }, [{ ...seats[0]!, status: 'staffed', agentId: 'a2' }])).toBeUndefined()
   expect(fleetSelfApproval('Bash', { command: 'ls' }, seats)).toBeUndefined()
 })
 
 test('app console ops that message or start an agent are relayed through Flight', () => {
-  for (const a of ['staff karnak', 'call KARNAK hi', 'go MI8', 'nogo MI8 not now', 'no-go MI8', 'retry MI8', 'dismiss KARNAK', 'stand-down KARNAK']) expect(isRelayedVerb(a)).toBe(true)
-  for (const a of ['list', 'poll', 'loops KARNAK', 'retune KARNAK haiku', 'dismiss-gate MI8', '']) expect(isRelayedVerb(a)).toBe(false)
+  for (const a of ['staff acme', 'call ACME hi', 'go MI8', 'nogo MI8 not now', 'no-go MI8', 'retry MI8', 'dismiss ACME', 'stand-down ACME']) expect(isRelayedVerb(a)).toBe(true)
+  for (const a of ['list', 'poll', 'loops ACME', 'retune ACME haiku', 'dismiss-gate MI8', '']) expect(isRelayedVerb(a)).toBe(false)
 })
 
 test('a relay code is split off the end of the args, and only a well-formed one', () => {
@@ -376,8 +444,8 @@ test('a relay code works once, for exactly the args it was minted for, within it
   expect(spendRelayCode(codes, 'c3', 'go MI8', 1000 + RELAY_TTL + 1)).toBe(false)
   expect(spendRelayCode(codes, undefined, 'go MI8', 2000)).toBe(false)
   expect(spendRelayCode(codes, 'never-minted', 'go MI8', 2000)).toBe(false)
-  codes.set('c4', { args: 'call KARNAK line one\nline two', at: 1000 })
-  expect(spendRelayCode(codes, 'c4', 'call KARNAK line one line  two', 2000)).toBe(true)
+  codes.set('c4', { args: 'call ACME line one\nline two', at: 1000 })
+  expect(spendRelayCode(codes, 'c4', 'call ACME line one line  two', 2000)).toBe(true)
 })
 
 test('a decision sent to Flight holds its gate for the code lifetime, then frees it', () => {
@@ -600,7 +668,8 @@ test('the clone rule reaches toolRefusal with the console\'s folder and fronts',
 })
 
 test('git takes no global option before a clone but -C', () => {
-  expect(K(`git --bare -C /w/fronts/acme clone ${WEB}`)).toContain('git takes no option before clone but -C <dir> (here: --bare -C /w/fronts/acme)')
+  // --bare is off git's list of global options, so that list refuses it before the clone rule reads the call.
+  expect(K(`git --bare -C /w/fronts/acme clone ${WEB}`)).toContain('--bare is not an allowed git global option')
   expect(K(`${AT_HOME}git --no-pager clone ${WEB}`)).toContain('git takes no option before clone but -C <dir> (here: --no-pager)')
   expect(K(`${AT_HOME}git -p clone ${WEB}`)).toContain('git takes no option before clone')
 })
@@ -687,7 +756,8 @@ test('a $(cat <<EOF) value hides nothing from the push, command-name and gh rule
   expect(C(`gh pr create ${sub('--repo other/repo')}`)).toContain('stands only as a --title or --body')
   expect(C(`git fetch ${sub('--upload-pack=x /tmp/r')}`)).toContain('stands only as a commit, tag, note or merge message')
   expect(C(`git remote ${sub('set-url origin x')}`)).toContain('stands only as a commit, tag, note or merge message')
-  expect(C(`git -C ${sub('/tmp/r')} status`)).toContain('stands only as a commit, tag, note or merge message')
+  // A -C value is read with git's global options, which take only a literal value.
+  expect(C(`git -C ${sub('/tmp/r')} status`)).toContain('The value of git -C must be literal')
   expect(K(`${AT_HOME}git clone -b ${sub('main --config=core.sshCommand=x --separate-git-dir=/tmp/g')} ${WEB}`)).toContain('stands only as a commit, tag, note or merge message')
   // Off a message option it is refused too: -F names a file, --grep a pattern.
   expect(C(`git commit -F "${sub('x')}"`)).toContain('stands only as a commit, tag, note or merge message')
@@ -774,4 +844,69 @@ test('on a line that names git or gh, nothing sets a variable that moves what gi
   expect(P('export PATH=/opt/homebrew/bin:/usr/bin && node -v')).toBeUndefined()
   expect(P('HOME=/tmp/h npm test')).toBeUndefined()
   expect(P(`export NODE_ENV=test; ${AT}git status`)).toBeUndefined()
+})
+
+// ---- redirects read as the shell reads them (MC-151) ----
+// The Bash tool runs zsh; an fd number, an input target or `&>` must not shift the git call the guard checks.
+
+test('an fd number, an input target and the and-redirect are redirects, never words that shift the command', () => {
+  const words = (cmd: string) => tokenize(cmd).commands[0]?.words.map(w => w.text)
+  const reds = (cmd: string) => tokenize(cmd).commands[0]?.redirects.map(w => w.text)
+  expect(words('git log 2>&1')).toEqual(['git', 'log'])
+  expect(words('git log 2>/dev/null')).toEqual(['git', 'log'])
+  // a space before the operator keeps the number a word
+  expect(words('echo 2 >f')).toEqual(['echo', '2'])
+  // input redirect targets are redirects, not words
+  expect(words('git log </dev/null')).toEqual(['git', 'log'])
+  expect(reds('git log </dev/null')).toContain('/dev/null')
+  expect(words('cat <&0')).toEqual(['cat'])
+  expect(words('cat <<<here')).toEqual(['cat'])
+  expect(reds('cat <<<here')).toContain('here')
+  // `&>` and `&>>` stay one command
+  expect(tokenize('git log &>/dev/null').commands).toHaveLength(1)
+  expect(words('git log &>/dev/null')).toEqual(['git', 'log'])
+  expect(tokenize('git log &>>/dev/null').commands).toHaveLength(1)
+})
+
+test('a quoted or escaped digit is a word, and a digit against &> is kept, so neither frees a push or stash', () => {
+  const S = '/w/fronts/acme/api'
+  const words = (cmd: string) => tokenize(cmd).commands[0]?.words.map(w => w.text)
+  // The shell makes an fd only from an UNQUOTED digit written against the operator; a quoted or escaped
+  // digit is an ordinary word (echo A '2'>&1 prints "A 2" in bash and zsh), so it must not be dropped.
+  for (const d of ["'2'", '"2"', '\\2', "2''"]) {
+    expect(words(`git --namespace ${d}>/dev/null stash`)).toContain('2')
+    expect(C(`git -C ${S} --namespace ${d}>/dev/null stash`)).toContain('stash')
+    expect(C(`git -C ${S} --namespace ${d}>/dev/null push --force`)).toContain('force')
+    expect(C(`git -C ${S} --namespace ${d}</dev/null push --force`)).toContain('force')
+  }
+  // an unquoted digit against the operator IS an fd and is dropped, so the real redirect case stays intact
+  expect(words('git --namespace 2>/dev/null log')).toEqual(['git', '--namespace', 'log'])
+  // bash and zsh disagree on a digit written against `&>`, so keep it a word and refuse (fail closed)
+  expect(words(`git -C ${S} --namespace 2&>/dev/null push --force`)).toContain('2')
+  expect(C(`git -C ${S} --namespace 2&>/dev/null push --force`)).toContain('force')
+  expect(C(`git -C ${S} --namespace 2&>>/dev/null stash`)).toContain('stash')
+})
+
+test('a phantom redirect word cannot hide the git subcommand the guard checks', () => {
+  const S = '/w/fronts/acme/api'
+  // --namespace consumes the fd or target on the old code, so the guard read `status` while git ran push.
+  for (const op of ['2>&1', '2>/dev/null', '</dev/null', '<<<x', '<>f']) {
+    expect(C(`git -C ${S} --namespace ${op} status push origin main`, ['main'])).toContain('main is a base or deploy branch')
+  }
+  // `&>` split the command on the old code, hiding the push behind a headless first command.
+  expect(C(`git -C ${S} &>/dev/null push origin main`, ['main'])).toContain('main is a base or deploy branch')
+  expect(C(`git -C ${S} &>>/dev/null push origin main`, ['main'])).toContain('main is a base or deploy branch')
+  expect(toolRefusal('controller', 'Bash', { command: `git -C ${S} --namespace 2>&1 status push origin main` }, ['main'], S)).toContain('main is a base or deploy branch')
+  // a back-room agent cannot hide a stash behind `&>>` either
+  expect(B('git -C /w/fronts/acme/api &>>/dev/null stash')).toContain('stash')
+})
+
+test('redirects do not change ordinary commands, and a Flight-only file is seen as an input target', () => {
+  expect(C('git -C /w/fronts/acme/api log > /tmp/out.txt')).toBeUndefined()
+  expect(C('git -C /w/fronts/acme/api log 2>&1 | grep fix')).toBeUndefined()
+  expect(C('echo hi > out 2> err')).toBeUndefined()
+  // an input redirect whose target is a Flight-only file is classified as a redirect and still caught
+  expect(tokenize('cat < _command/daily/today.md').commands[0]?.redirects.map(w => w.text)).toContain('_command/daily/today.md')
+  expect(C('cat < _command/daily/today.md')).toContain("Flight's to write")
+  expect(C('echo x > _command/trackers/fronts.md')).toContain("Flight's to write")
 })

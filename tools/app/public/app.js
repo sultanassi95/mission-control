@@ -36,8 +36,7 @@
   // Every request goes to the chosen profile's Flight through the front door.
   const base = () => (S.profile ? `/p/${encodeURIComponent(S.profile)}` : '')
   const authHeaders = () => (token ? { 'x-mcapp-token': token } : {})
-  const NAMES = { tascode: 'TasCode' }
-  const label = p => NAMES[p] ?? str(p).charAt(0).toUpperCase() + str(p).slice(1)
+  const label = p => str(p).charAt(0).toUpperCase() + str(p).slice(1)
   // Claude Code records its own notices (a background task finishing, a system reminder) as user
   // messages; they show as a quiet line, never as the founder's words. null: not a notice.
   const stripReminders = t => str(t).replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, '').trim()

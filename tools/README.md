@@ -58,7 +58,15 @@ style paths in shipped examples anyway.
 Two run-sites, two rule sets:
 - **promote mode** - before anything is published: the generic identity
   rules (paths, emails, keys, the legacy name) + your deny-list. Guards
-  the PUBLIC repo, and does not run without the deny-list (below).
+  the PUBLIC repo, and does not run without the deny-list (below). It
+  reads every file that ships: in a git work tree, each file git tracks
+  and each new one it would add; outside one, every file under the root
+  but `.git` and `_command/`. It does not read binary files, vendored or
+  generated ones (`node_modules/`, `vendor/`, lockfiles, minified bundles)
+  or the fixtures that plant a leak on purpose
+  (`tests/fixtures/dirty/`), and the clean line counts each kind. A
+  deny-list among the files that ship fails it. It used to read a fixed
+  list of folders, and `tools/` was not on it.
 - **instance mode** - at the end of LIFTOFF Stage 4 and inside
   `/preflight`: leftover template placeholders (`<PLACEHOLDER-...>`,
   `{{TOKEN}}`, `TODO-INIT`) and live secrets (AWS and GitHub keys, a
@@ -73,7 +81,8 @@ Two run-sites, two rule sets:
   one (`A{{plain}}`) still needs the exempt marker.
 
 Usage. **The first positional argument is the MODE in both entry points**, and
-each mode picks its own targets, so a bare mode is the normal invocation:
+each mode picks what it reads, so a bare mode is the normal invocation. The
+`.ps1` twin's `-Path` reads only the files or folders it names:
 
 - `tools/leak-sweep.sh [promote|instance] [root]`
 - From a PowerShell session: `.\tools\leak-sweep.ps1 [promote|instance] [-Path <p1>,<p2>] [-PrivateList <file>] [-Root <dir>]`
@@ -93,13 +102,27 @@ target that is absent or empty, a file it cannot open, or a rule whose pattern
 grep rejected. `instance` on a pre-liftoff clone exits 2 for that reason, since
 there is no `_command/` to check yet.
 
-A line intentionally naming the operator can be exempted with a trailing
-`MC-LEAK-EXEMPT: <reason>` marker.
+A line can be exempted from the generic rules with a trailing
+`MC-LEAK-EXEMPT: <reason>` marker, matched with case. Code meets those rules
+too: a model id a request names, or a placeholder home folder in a test,
+carries one. No marker exempts a deny-list term, which never belongs in
+what ships. The email rule does not count the `git` user of an SSH remote
+(`git@github.com:...`) or a domain reserved for examples and tests
+(`example.com`, `.org`, `.net` and their subdomains, `.example`, `.test`,
+`.invalid`, `.localhost`).
+
+The shell twin matches bytes, not characters (`LC_ALL=C`). Under a UTF-8
+locale the BSD grep macOS ships matches nothing on a line that holds a byte
+which is not UTF-8, such as a Windows-1252 quote, so a name on that line
+passed. Under C a letter outside ASCII is neither a word character nor
+folded to its other case, so a term holding one is matched a second time
+in a UTF-8 locale; with none available, promote exits 2.
 
 **The deny-list** is the operator's own: the names that must never ship
 (the employer, its repositories and ticket keys, colleagues, private
 fronts), one term per line, `#` starting a comment. Each term matches as a
-whole word, in any case. It lives in the instance, at
+whole word, in any case; the space around it and a Windows line ending are
+not part of it. It lives in the instance, at
 `_command/leak-sweep.private.txt`, gitignored with the rest of `_command/`
 (`check-ignores` proves it). A clone starts without one, so create yours
 before the first promote. `LEAK_SWEEP_PRIVATE_LIST=<file>` points a run at
@@ -112,8 +135,15 @@ and the clean line names the list it read (`PrivateTerms=N from <path>`).
 The list used to live at `tools/leak-sweep.private.txt`; a list left there
 is not read, and the error says to move it. The `.ps1` twin also takes
 `-PrivateList <file>`, which wins over the variable. Tests:
-`tests/leak-sweep.tests.sh`, 8 cases, and `tests/leak-sweep.tests.ps1`,
+`tests/leak-sweep.tests.sh`, 19 cases, and `tests/leak-sweep.tests.ps1`,
 each with the missing list as the negative control.
+
+CI (`.github/workflows/leak-sweep.yml`) runs promote and the tests on every
+push and pull request: the shell twin on Linux, the PowerShell twin on
+Windows. The deny-list never reaches the public repository, so CI runs with
+an empty one (`PrivateTerms=0`) and checks the generic rules only. The
+private names are checked by promote on the operator's machine, with their
+list, before a push.
 
 ## check-refs
 

@@ -12,6 +12,8 @@
 # the README's banner, icons and app screenshots
 !/docs/
 !/.gitignore
+# CI: the leak sweep on every push and pull request
+!/.github/
 
 # .claude ships ONLY its skills (auto-discovered on clone); session-local
 # files (settings.local.json, caches) must never be tracked.

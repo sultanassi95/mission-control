@@ -398,16 +398,16 @@ test('dismiss-gate still refuses a decision that was delivered', async ($, on) =
 
 test('the poll says in plain words why a decision was not delivered, and to staff the console only when it is gone', async ($, on) => {
   portfolio(on)
-  seed(on, { poll: [MI1, { ...MI1, id: 'KA1', from: 'KARNAK', agentId: 'k1', at: '2026-10-16T00:31:00.000Z' }], consoles: [MC, { ...MC, callSign: 'KARNAK', front: 'karnak', name: 'console-karnak', agentId: 'k1', status: 'stood-down' }] })
+  seed(on, { poll: [MI1, { ...MI1, id: 'AC1', from: 'ACME', agentId: 'k1', at: '2026-10-16T00:31:00.000Z' }], consoles: [MC, { ...MC, callSign: 'ACME', front: 'acme', name: 'console-acme', agentId: 'k1', status: 'stood-down' }] })
   const listed = (await person($, 'poll')).text ?? ''
   expect(listed).not.toContain('Issue the action again')
   const mi1 = listed.split('\n').find(l => l.includes('MI1')) ?? ''
-  const ka1 = listed.split('\n').find(l => l.includes('KA1')) ?? ''
+  const ac1 = listed.split('\n').find(l => l.includes('AC1')) ?? ''
   expect(mi1).toContain('Auto mode blocked the message.')
   expect(mi1).toContain('/console retry MI1')
   expect(mi1).not.toMatch(/staff the console again/i)
-  expect(ka1).toMatch(/staff the console again/i)
-  expect(ka1).not.toContain('/console retry KA1')
+  expect(ac1).toMatch(/staff the console again/i)
+  expect(ac1).not.toContain('/console retry AC1')
 })
 
 test('a GO that is refused frees its card at once, so Retry is offered without waiting out the app\'s hold', async ($, on) => {
@@ -439,7 +439,7 @@ const DOWN: Console = { ...MC, status: 'stood-down' }
 // The call sign staffed again: a2 is the next MISSION-CONTROL Controller.
 const NEXT: Console = { ...MC, agentId: 'a2', staffedAt: '2026-10-16T01:00:00.000Z' }
 const HELD: PollItem = { ...OPEN, state: 'go', decidedAt: '2026-10-16T00:58:00.000Z', held: '2026-10-16T00:58:00.000Z' }
-const ADVISORY: PendingAdvisory = { id: 'p1', front: 'mission-control', text: 'Advisory from Flight: KARNAK reports a contract change: /v1 ids.', at: '2026-10-16T00:40:00.000Z' }
+const ADVISORY: PendingAdvisory = { id: 'p1', front: 'mission-control', text: 'Advisory from Flight: ACME reports a contract change: /v1 ids.', at: '2026-10-16T00:40:00.000Z' }
 
 // Every value the plugin writes under each given state key, in order. One handler records them all:
 // the kit loads a test's hooks only when each event has a single handler, so this never runs beside pollWrites.
@@ -510,7 +510,7 @@ test('a held GO goes once to the Controller staffed now under that call sign, wi
   expect(sent[0]?.to).not.toContain('a1')
   expect(sent[0]?.text).toContain('GO on MI2: ship it')
   expect(sent[0]?.text).toContain('blocked on you: merge the fix')
-  expect(sent[0]?.text).toContain('KARNAK reports a contract change: /v1 ids.')
+  expect(sent[0]?.text).toContain('ACME reports a contract change: /v1 ids.')
   expect(r.text).toContain('MI2: GO recorded and handed to the MISSION-CONTROL Controller staffed now')
   const after = polls.at(-1)?.find(p => p.id === 'MI2')
   expect(after?.state).toBe('go')

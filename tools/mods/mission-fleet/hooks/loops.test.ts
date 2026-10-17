@@ -10,7 +10,7 @@ const item = (over: Partial<PollItem>): PollItem => ({ id: 'MI1', at: '2026-10-1
 // One entry per call sign, as staffing writes them: MISSION-CONTROL was staffed again (a1 replaced a0).
 const SEATS = [
   { callSign: 'MISSION-CONTROL', agentId: 'a1', status: 'staffed' },
-  { callSign: 'KARNAK', agentId: 'k1', status: 'stood-down' },
+  { callSign: 'ACME', agentId: 'k1', status: 'stood-down' },
 ]
 
 test('a status check is read wherever its lines sit, bullets allowed', () => {
@@ -30,7 +30,7 @@ test('nothing-values do not open a gate', () => {
 
 test('poll ids are short and stable, dependents come from other fronts\' maps', () => {
   expect(pollId('FIELDKIT-API', 3)).toBe('FI3')
-  expect(dependentsOf('api', [{ front: 'fieldkit', text: 'api --> web' }, { front: 'shelf', text: 'uses fieldkit api for media' }, { front: 'ytkit', text: 'nothing' }], 'fieldkit')).toEqual(['shelf'])
+  expect(dependentsOf('api', [{ front: 'fieldkit', text: 'api --> web' }, { front: 'shelf', text: 'uses fieldkit api for media' }, { front: 'initech', text: 'nothing' }], 'fieldkit')).toEqual(['shelf'])
 })
 
 test('PRs named in a report are found, and a PR signature changes when checks or comments do', () => {
@@ -47,13 +47,13 @@ test('a decision reaches only the staffed console of the agent that raised it', 
   expect(liveSeat(item({ agentId: 'a1' }), SEATS)?.agentId).toBe('a1')
   // An older agent under the same call sign is not reached through the console staffed now.
   expect(liveSeat(item({ agentId: 'a0' }), SEATS)).toBeUndefined()
-  expect(liveSeat(item({ agentId: 'k1', from: 'KARNAK' }), SEATS)).toBeUndefined()
+  expect(liveSeat(item({ agentId: 'k1', from: 'ACME' }), SEATS)).toBeUndefined()
   // An item opened before agent ids were recorded goes to the console staffed under its call sign.
   expect(liveSeat(item({ agentId: '' }), SEATS)?.agentId).toBe('a1')
-  expect(liveSeat(item({ agentId: '', from: 'KARNAK' }), SEATS)).toBeUndefined()
+  expect(liveSeat(item({ agentId: '', from: 'ACME' }), SEATS)).toBeUndefined()
   expect(seatState(item({ agentId: 'a1' }), SEATS)).toBe('live')
   expect(seatState(item({ agentId: 'a0' }), SEATS)).toBe('replaced')
-  expect(seatState(item({ agentId: 'k1', from: 'KARNAK' }), SEATS)).toBe('gone')
+  expect(seatState(item({ agentId: 'k1', from: 'ACME' }), SEATS)).toBe('gone')
 })
 
 test('only a go or no-go that was not delivered is undelivered', () => {
@@ -80,7 +80,7 @@ test('the app gets the plain reason and where the Controller stands for an undel
   expect(live.seat).toBe('live')
   expect(live.undelivered).toBe(AUTO_MODE)
   expect(cardFacts(item({ agentId: 'a0', undelivered: AUTO_MODE }), SEATS).seat).toBe('replaced')
-  expect(cardFacts(item({ agentId: 'k1', from: 'KARNAK', undelivered: AUTO_MODE }), SEATS).seat).toBe('gone')
+  expect(cardFacts(item({ agentId: 'k1', from: 'ACME', undelivered: AUTO_MODE }), SEATS).seat).toBe('gone')
   const open = cardFacts(item({ state: 'open' }), SEATS)
   expect(open.why).toBeUndefined()
   expect(open.seat).toBeUndefined()
@@ -120,14 +120,14 @@ test('the app keeps every held decision, however much history follows it', () =>
 test('the next Controller is told each held decision with the report it answers, and each held advisory, in one message', () => {
   const go = item({ id: 'MI2', state: 'go', note: 'ship it', held: HELD_AT, detail: 'state: built\nblocked on you: merge the fix' })
   const nogo = item({ id: 'MI4', state: 'no-go', held: HELD_AT, title: 'drop the cache', detail: 'blocked on you: drop the cache' })
-  const advisory = { id: 'p1', front: 'mission-control', text: 'Advisory from Flight: KARNAK reports a contract change: /v1 ids.', at: '2026-10-16T00:40:00.000Z' }
+  const advisory = { id: 'p1', front: 'mission-control', text: 'Advisory from Flight: ACME reports a contract change: /v1 ids.', at: '2026-10-16T00:40:00.000Z' }
   const text = heldText('MISSION-CONTROL', [go, nogo], [advisory])
   expect(text).toContain('MISSION-CONTROL')
   expect(text).toContain('GO on MI2: ship it')
   expect(text).toContain('blocked on you: merge the fix')
   expect(text).toContain('NO-GO on MI4.')
   expect(text).toContain('blocked on you: drop the cache')
-  expect(text).toContain('KARNAK reports a contract change: /v1 ids.')
+  expect(text).toContain('ACME reports a contract change: /v1 ids.')
   expect(heldText('MISSION-CONTROL', [go], [])).not.toContain('Advisor')
   expect(heldText('MISSION-CONTROL', [], [])).toBe('')
 })

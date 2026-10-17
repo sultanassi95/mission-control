@@ -3,7 +3,7 @@
 // streams the fleet state to the browser, and hands the browser's actions to
 // the mod as one JSON line each on stdout. Node standard library only.
 //
-// One server runs per Claude profile (work, personal, tascode). Each registers in
+// One server runs per Claude profile (work, personal, or any other). Each registers in
 // ~/.mission-control/flights and also tries to hold the shared front-door port;
 // whichever holds it serves the app and routes /p/<profile>/* to that profile's
 // server, so the front door survives any one session closing.
