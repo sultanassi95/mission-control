@@ -72,6 +72,74 @@ test('git and gh run only at the head of a command', () => {
   expect(C('git send-pack origin main')).toContain('allowlist')
 })
 
+// ---- git's global options (MC-147) ----
+// git takes a value after some global options, so the subcommand is found only past options known by
+// exact spelling; any other word before it is refused by name.
+
+test('a git global option off the list is refused by name, since its value could pass for the subcommand', () => {
+  const OFF = 'is not an allowed git global option'
+  // git takes `status` as --attr-source's value and runs the push.
+  expect(C('git --attr-source status push origin main')).toContain(`--attr-source ${OFF}`)
+  expect(C('git -C /w/fronts/acme/api --attr-source status push origin main')).toContain(`--attr-source ${OFF}`)
+  expect(B('git --attr-source log push origin feat/x')).toContain(`--attr-source ${OFF}`)
+  expect(toolRefusal('controller', 'Bash', { command: 'git -C /w/fronts/acme/api --attr-source status push origin main' }, [], '/w/fronts/acme/api')).toContain(`--attr-source ${OFF}`)
+  // Its = form, abbreviations, attached or clustered short forms, and options git has that the list leaves out.
+  for (const opt of [
+    '--attr-source=HEAD', '--attr-sour', '--no-pag', '--no-pager=1', '-Cdir', '-pP', '--C', '--git-dir-x=/w', '--bare', '--versions', '-vh',
+    '--help=x', '-H', '--html-path', '--list-cmds=main', '--super-prefix=x/', '--shallow-file', '--literal-pathspec', '-', '--',
+  ]) expect(`${opt} -> ${C(`git ${opt} status`) ?? 'allowed'}`).toContain(`${opt} ${OFF}`)
+  // One built from a variable cannot be read at all.
+  expect(C('git -$X status')).toContain(OFF)
+})
+
+test('every listed git global option still reaches the subcommand, which is checked as before', () => {
+  const FLAGS = ['-p', '--paginate', '-P', '--no-pager', '--no-replace-objects', '--no-lazy-fetch', '--no-optional-locks', '--no-advice', '--literal-pathspecs', '--no-literal-pathspecs', '--glob-pathspecs', '--noglob-pathspecs', '--icase-pathspecs']
+  const VALUED = ['-C /w/fronts/acme/api', '--git-dir /w/fronts/acme/api/.git', '--work-tree /w/fronts/acme/api', '--namespace scratch', '--git-dir=/w/fronts/acme/api/.git', '--work-tree=/w/fronts/acme/api', '--namespace=scratch']
+  for (const opt of [...FLAGS, ...VALUED]) {
+    expect(`${opt} -> ${C(`git ${opt} status`) ?? 'allowed'}`).toBe(`${opt} -> allowed`)
+    expect(`${opt} -> ${C(`git ${opt} push origin main`) ?? 'allowed'}`).toContain('base or deploy branch')
+    expect(`${opt} -> ${C(`git ${opt} stash`) ?? 'allowed'}`).toContain('never stashes')
+  }
+  // Several in a row, as git reads them.
+  expect(C('git --no-pager -C /w/fronts/acme/api --namespace scratch -P log -1')).toBeUndefined()
+  expect(C('git --no-pager -C /w/fronts/acme/api --namespace=scratch -P push origin main')).toContain('base or deploy branch')
+  // A valued option takes the next word whatever it holds, as git does: `--namespace -c log` runs log.
+  expect(C('git --namespace -c status')).toBeUndefined()
+  expect(C('git --namespace -c push origin main')).toContain('base or deploy branch')
+  expect(C("git --namespace '' status")).toBeUndefined()
+  expect(C('git --namespace a --namespace b push origin main')).toContain('base or deploy branch')
+})
+
+test('git --version, -v, --help and -h are the version and help commands, as git runs them', () => {
+  for (const opt of ['--version', '-v', '--help', '-h']) {
+    expect(`${opt} -> ${C(`git ${opt}`) ?? 'allowed'}`).toBe(`${opt} -> allowed`)
+    expect(`${opt} -> ${C(`git -C /w/fronts/acme/api --no-pager ${opt}`) ?? 'allowed'}`).toBe(`${opt} -> allowed`)
+    // git ends its options there: `git --version push origin main` runs `version push origin main`, never a push.
+    expect(`${opt} -> ${C(`git ${opt} push origin main`) ?? 'allowed'}`).toBe(`${opt} -> allowed`)
+  }
+  expect(toolRefusal('controller', 'Bash', { command: 'git -C /w/fronts/acme/api --version' }, [], '/w/fronts/acme/api')).toBeUndefined()
+})
+
+test('a listed git global option takes only a literal value, since the shell can make it several words', () => {
+  const LIT = 'must be literal'
+  // The shell makes the brace four words: git takes x as the namespace and runs push origin main.
+  expect(C('git --namespace {x,push,origin,main} status')).toContain(`git --namespace ${LIT}`)
+  expect(toolRefusal('controller', 'Bash', { command: 'git -C /w/fronts/acme/api --namespace {x,push,origin,main} status' }, [], '/w/fronts/acme/api')).toContain(`git --namespace ${LIT}`)
+  for (const [opt, name] of [
+    ['-C $D', '-C'], ['-C ~/w', '-C'], ['--git-dir $D', '--git-dir'], ['--git-dir=$D', '--git-dir'], ['--work-tree "$D"', '--work-tree'],
+    ['--work-tree=/w/*', '--work-tree'], ['--namespace $X', '--namespace'], ['--namespace=$X', '--namespace'], ['--namespace *', '--namespace'], ['--namespace={a,b}', '--namespace'],
+  ] as const) expect(`${opt} -> ${C(`git ${opt} status`) ?? 'allowed'}`).toContain(`git ${name} ${LIT}`)
+  // A quoted value is one word, whatever it holds.
+  expect(C("git --namespace 'x push origin main' status")).toBeUndefined()
+  expect(C('git --namespace "{x,push}" status')).toBeUndefined()
+})
+
+test('git -c, --config-env and --exec-path keep their own refusal in every spelling', () => {
+  for (const opt of ['-c core.pager=x', '--config-env=core.pager=X', '--config-env core.pager=X', '--exec-path=/tmp/x', '--exec-path']) {
+    expect(`${opt} -> ${C(`git ${opt} status`) ?? 'allowed'}`).toContain('git -c, --config-env and --exec-path are not allowed')
+  }
+})
+
 test('an interpreter fed by a heredoc or a pipe cannot carry a git command', () => {
   expect(C('bash <<EOF\ngit push origin main\nEOF')).toContain('bash on the same line')
   expect(C("sh <<'X'\ngit stash\nX")).toContain('sh on the same line')

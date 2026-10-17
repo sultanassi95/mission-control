@@ -326,18 +326,46 @@ export function pushRefusal(args: Word[], protectedBranches: string[]): string |
   return undefined
 }
 
-function gitRefusal(role: Role, rest: Word[], protectedBranches: string[]): string | undefined {
+// git's global options by exact spelling, as git 2.55 reads them: flags, and options whose value is the
+// next word (or follows `=`, for the long ones). Any other word before the subcommand is refused, since
+// git may take the next word as its value and run another subcommand than the one read here
+// (`git --attr-source status push origin main` runs the push), and a later git may expand an abbreviation.
+// A value must be literal: the shell can turn a variable, glob or brace into several words
+// (`--namespace {x,push,origin,main} status` runs the push).
+const GIT_GLOBAL_FLAGS = new Set(['-p', '--paginate', '-P', '--no-pager', '--no-replace-objects', '--no-lazy-fetch', '--no-optional-locks', '--no-advice', '--literal-pathspecs', '--no-literal-pathspecs', '--glob-pathspecs', '--noglob-pathspecs', '--icase-pathspecs'])
+const GIT_GLOBAL_VALUED = new Set(['-C', '--git-dir', '--work-tree', '--namespace'])
+const GIT_GLOBALS = '-C <dir>, --git-dir, --work-tree and --namespace with their value (the last three also as --option=value), -p, --paginate, -P, --no-pager, --no-replace-objects, --no-lazy-fetch, --no-optional-locks, --no-advice, --literal-pathspecs, --no-literal-pathspecs, --glob-pathspecs, --noglob-pathspecs, --icase-pathspecs'
+// git ends its options at these and runs them as its version and help commands (`git --version log` runs `version log`).
+const GIT_COMMAND_OPTIONS = new Map([['--version', 'version'], ['-v', 'version'], ['--help', 'help'], ['-h', 'help']])
+
+/** Where a git call's subcommand sits past its global options, or why a global option before it is refused. */
+function gitGlobals(rest: Word[]): { at: number; refusal?: string } {
   let i = 0
   for (; i < rest.length; i++) {
     const t = rest[i]?.text ?? ''
-    if (t === '-c' || t.startsWith('--config-env') || t.startsWith('--exec-path')) return 'git -c, --config-env and --exec-path are not allowed: they can alias or redirect a command.'
-    if (t === '-C' || t === '--git-dir' || t === '--work-tree' || t === '--namespace') i++
-    else if (!t.startsWith('-')) break
+    if (!t.startsWith('-') || GIT_COMMAND_OPTIONS.has(t)) break
+    if (t === '-c' || t.startsWith('--config-env') || t.startsWith('--exec-path')) return { at: i, refusal: 'git -c, --config-env and --exec-path are not allowed: they can alias or redirect a command.' }
+    if (GIT_GLOBAL_FLAGS.has(t)) continue
+    const eq = t.indexOf('=')
+    const joined = eq > 2 && t.startsWith('--') && GIT_GLOBAL_VALUED.has(t.slice(0, eq))
+    if (!joined && !GIT_GLOBAL_VALUED.has(t)) {
+      return { at: i, refusal: `${t} is not an allowed git global option (before the subcommand: ${GIT_GLOBALS}): git may take the next word as its value and run another subcommand than the one read here.` }
+    }
+    const value = joined ? rest[i] : rest[++i]
+    if (value && (value.dynamic || value.glob)) {
+      return { at: i, refusal: `The value of git ${joined ? t.slice(0, eq) : t} must be literal (no variables, globs or braces): the shell can make it several words, and git would run another subcommand than the one read here.` }
+    }
   }
+  return { at: i }
+}
+
+function gitRefusal(role: Role, rest: Word[], protectedBranches: string[]): string | undefined {
+  const { at: i, refusal } = gitGlobals(rest)
+  if (refusal) return refusal
   const sub = rest[i]
   if (!sub) return undefined
   if (sub.dynamic || sub.glob) return 'The git subcommand must be literal.'
-  const name = sub.text
+  const name = GIT_COMMAND_OPTIONS.get(sub.text) ?? sub.text
   if (!GIT_ALLOWED[role].has(name)) {
     if (name === 'stash') return role === 'controller' ? 'A Controller never stashes: the tree may hold someone else\'s work. Commit to your branch instead.' : 'A back-room agent never runs git stash; report to your Controller instead.'
     return role === 'controller' ? `git ${name} is not on a Controller's allowlist.` : `A back-room agent never runs git ${name}; report to your Controller instead.`
