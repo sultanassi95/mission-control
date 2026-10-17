@@ -60,7 +60,7 @@ disappears because this session happened not to touch that front, which is the
 was inferred rather than given, the report says so, and it footers the count it
 left out with the command that shows them:
 
-    Scope inferred from this session: smileshape, mission-control.
+    Scope inferred from this session: acme, mission-control.
     4 items on 2 other fronts fall in this window and are not shown - /standup --all
 
 Counting the exclusions means reading the other fronts' records too. That is the
@@ -90,7 +90,7 @@ appear again. Treating both ends as inclusive duplicates every boundary event,
 and boundary events are not rare - a report is usually generated right after a
 merge, which puts that merge on the boundary.
 
-**The ledger is per SCOPE, never global.** A `--front smileshape` report at
+**The ledger is per SCOPE, never global.** A `--front acme` report at
 10:00 says nothing about what an unscoped report should cover: if the next
 unscoped run started from that 10:00 mark, every other front's morning would
 vanish silently. So rule 2 matches on the scope key, and a scope with no
@@ -106,13 +106,13 @@ durable append-only line per run goes to
     <to, ISO 8601 with offset>  <scope key>  <item count>  <report filename>
 
 Scope keys are normalised so they compare exactly: `all`,
-`front:smileshape`, `front:smileshape+mission-control` (sorted, `+` joined),
-`project:smart-data`. Append AFTER the report is successfully written, never
+`front:acme`, `front:acme+mission-control` (sorted, `+` joined),
+`project:api`. Append AFTER the report is successfully written, never
 before - a ledger line for a report that failed to render moves the next
 window forward over work nobody has seen.
 
 **Say the window out loud, and say where it came from.** "29 Sep 14:12 -> 30 Sep
-14:41, continuing the last smileshape report" is checkable; a bare date range is
+14:41, continuing the last acme report" is checkable; a bare date range is
 not. And when rule 2 produces an unusually long window - more than about a week
 - say that too, because it usually means a report failed, not that nothing
 happened.
@@ -220,9 +220,9 @@ window and are not the founder's work, so they do not get a row. The item begins
 at the founder's first action on it.
 
 This is easy to get wrong because the tracker records the filing as a state
-change in the window, and a naive read turns "Kody filed WB-758 to WB-761" into
-a `new` row under the founder's name. It reads as if he generated the work he
-was assigned. Check the actor on every state change, not just its timestamp.
+change in the window, and a naive read turns "a teammate filed ACME-101 to
+ACME-104" into a `new` row under the founder's name. It reads as if he
+generated the work he was assigned. Check the actor on every state change, not just its timestamp.
 
 **An empty window says so.** "Nothing falls in this window" is the correct
 output when the records return nothing. Never pad with older work and never
@@ -249,7 +249,7 @@ by repo; the talk track exists because a listener does not think in repos. Ask
 what each item DID: closed a compliance finding, made a pipeline faster, made a
 service survive a slow dependency, made a dashboard tell the truth. Items that
 answer the same way are one group, wherever their code lives, and the group
-names the repos it spans ("across Smart Data, Monitor and UI Kit") so the
+names the repos it spans ("across web, api and worker") so the
 spread is said once instead of item by item.
 
 **Shape:**
@@ -408,27 +408,27 @@ item is simply absent. A standup reports what happened, not what was considered.
 The page's own structure, days outermost and repo grouped within each day:
 
 ```
- smileshape                              29 Sep 16:00 -> 30 Sep 14:00  [inferred]
+ acme                                    29 Sep 16:00 -> 30 Sep 14:00  [inferred]
  6 items   5 done   1 in progress
 
  29 SEP
-   annotation-studio-3d
-     18:21  AI-2151  Done · merged       duplicate-aware import: honest counts on
-                                         the project import screen   ticket  PR #190
-     23:43  AI-2172  In progress         import progress for large archives
+   web
+     18:21  ACME-105  Done · merged      invoice CSV export: keeps the table's
+                                         filters and column order    ticket  PR #88
+     23:43  ACME-107  In progress        saved views for the invoices table
                                                                      ticket
-   smart-data
-     23:04  AI-2159  Done · merged       body limit sized to the maximum the
-                                         lookup advertises           ticket  PR #13
+   api
+     23:04  ACME-106  Done · merged      upload limit raised to the maximum
+                                         the settings page promises  ticket  PR #31
 
  30 SEP
-   smart-data
-     10:31  WB-761   Done · in PR        rds cpu / memory / storage / io alarms
-                                         (+ WB-758, WB-759, WB-760)  ticket  PR #15
-     13:35  -        Done · merged       minio withdrawn upstream; swapped to s3mock
-     13:53  WB-761   Done · in PR        memory threshold corrected after review
+   api
+     10:31  ACME-104  Done · in PR       queue depth / age / error / retry alarms
+                                         (+ ACME-101 to ACME-103)    ticket  PR #33
+     13:35  -         Done · merged      ci image withdrawn upstream; pinned a fork
+     13:53  ACME-104  Done · in PR       age threshold corrected after review
 
- Scope inferred from this session: smileshape.
+ Scope inferred from this session: acme.
  4 items on 2 other fronts fall in this window and are not shown - /standup --all
 ```
 
@@ -457,7 +457,7 @@ write it to the session scratchpad as
 `standup-<scope>-<YYYY-MM-DD>.html`. Then echo exactly one line - the path, the
 item count and the resolved window - and nothing else:
 
-    wrote standup-smileshape-2026-09-30.html
+    wrote standup-acme-2026-09-30.html
     (6 items, 29 Sep 16:00 -> 30 Sep 14:00)
 
 No commentary above or below it unless the founder asks. The report is the
@@ -491,7 +491,7 @@ does.
 
 1. **Header** - scope, the resolved window as an explicit range, whether the
    scope was GIVEN or INFERRED, and which rule produced the window
-   ("continuing the last smileshape report, 29 Sep 14:12" / "hub convention" /
+   ("continuing the last acme report, 29 Sep 14:12" / "hub convention" /
    "default 16:00 previous day"). A window whose origin is stated can be
    checked; one that just appears cannot.
 2. **Talk track** - the two-minute spoken summary, grouped by kind of work, with

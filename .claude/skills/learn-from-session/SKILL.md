@@ -184,7 +184,7 @@ stores above), then write it.
   where it should travel, not whether it deserves to. A lesson about METHOD
   that holds across fronts proposes `doctrine`. A lesson about how one
   front deploys, connects, authenticates or fails proposes that front's
-  context (`smileshape context`, `ytkit context`). `/promote-learnings`
+  context (`acme context` for a front named acme). `/promote-learnings`
   makes the final call and can re-route it.
 - **Most lessons have two halves, so split them.** The portable half is the
   method ("find how this codebase already performs a privileged bulk action
