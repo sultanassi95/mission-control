@@ -186,7 +186,8 @@ export const register: Register = on => {
       description: 'A front or project Controller. Staff it only through the mission-fleet console tool (/console staff), never with a direct Agent call.',
       prompt: CONTROLLER_PROMPT,
       background: true,
-      autoCompactWindow: 400000,
+      // No compaction window here: the engine's types declare none per agent type, only per
+      // session (CLAUDE_CODE_AUTO_COMPACT_WINDOW or the settings).
     }))
     // One watch loop per module environment; a reload starts a fresh one and drops the old one's timers.
     await step('watch.start', () => {
@@ -205,10 +206,13 @@ export const register: Register = on => {
       name: TOOL,
       description: `Flight's console fleet. Pass the same arguments as the /console command.\n${USAGE}\n${MARKER_RULE}`,
       inputSchema: { type: 'object', properties: { args: { type: 'string', description: 'e.g. "staff fieldkit --model sonnet"' } }, required: ['args'] },
-      isDeferred: false,
     }))
     return next(e)
   })
+
+  // Flight reaches for the console tool every turn, so its schema stays in the prompt's list rather
+  // than behind ToolSearch. Placement is tool.describe's answer; the register call takes none.
+  on('tool.describe', { tool: `mcp__mission-fleet__${TOOL}` }, async ($, e, next) => ({ ...(await next(e)), isDeferred: false }))
 
   // Guards: what a Controller and its back room may run. A guard that fails denies.
   on('tool.check', async ($, e, next) => {

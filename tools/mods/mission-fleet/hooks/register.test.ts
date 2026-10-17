@@ -1,5 +1,5 @@
 import { expect, mock, test } from 'claude-code/testing'
-import type { Engine } from 'claude-code/testing'
+import type { Engine, TestBody } from 'claude-code/testing'
 
 import type { Console, PendingAdvisory, PollItem } from '../types'
 import { parseArgs } from './register'
@@ -177,8 +177,9 @@ test('a refused console command still registers the controller type and the cons
   const registered: string[] = []
   const written: { path: string; text: string }[] = []
   on('command.register', () => ({ deny: '"/console" refused: it is the user\'s /console' }))
-  on('agent.register', (_$, e) => { registered.push(`agent:${e.name}`); return { value: undefined } })
-  on('tool.register', (_$, e) => { registered.push(`tool:${e.name}`); return { value: undefined } })
+  // Answered as the engine answers: the registered type's and tool's full names.
+  on('agent.register', (_$, e) => { registered.push(`agent:${e.name}`); return { value: { agent: `mission-fleet:${e.name}` } } })
+  on('tool.register', (_$, e) => { registered.push(`tool:${e.name}`); return { value: { tool: `mcp__mission-fleet__${e.name}` } } })
   on('session.start', () => ({ cwd: '/p' }))
   on('session.root', () => ({ value: '/p' }))
   on('fs.read', (_$, e) => (e.path === '/p/_command/trackers/fronts.md' ? { value: '# Fronts' } : { deny: `ENOENT ${e.path}` }))
@@ -190,6 +191,26 @@ test('a refused console command still registers the controller type and the cons
   expect(line).toContain('session.start')
   expect(line).toContain('command.register')
   expect(line).toContain('refused: it is the user')
+})
+
+// The engine may list a plugin's tool behind ToolSearch; tool.describe's answer decides. Each test
+// answers beneath the mod as the engine would when it defers a tool, before its first call on `$`.
+const deferBeneath = (on: Parameters<TestBody>[1]) => on('tool.describe', (_$, e) => ({ description: e.description, isDeferred: true }))
+const placement = ($: Engine, tool: string, description: string) =>
+  $.tool.describe({ tool, description } as Parameters<Engine['tool']['describe']>[0])
+
+test('the console tool stays in the prompt list where the engine would defer it', async ($, on) => {
+  deferBeneath(on)
+  const r = await placement($, 'mcp__mission-fleet__console', 'the console text')
+  expect(r.isDeferred).toBe(false)
+  expect(r.description).toBe('the console text')
+})
+
+// Another plugin's tool, and a name that only begins with the console tool's, keep the engine's placement.
+test('another tool the engine defers stays deferred', async ($, on) => {
+  deferBeneath(on)
+  expect((await placement($, 'mcp__other__tool', 'other')).isDeferred).toBe(true)
+  expect((await placement($, 'mcp__mission-fleet__consoles', 'consoles')).isDeferred).toBe(true)
 })
 
 test('a go through Flight\'s tool with a code the app never minted is refused', async ($, on) => {

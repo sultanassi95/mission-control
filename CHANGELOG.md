@@ -6,6 +6,21 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-10-17: the mission-fleet mod type-checks against the engine's current
+  plugin types, and `tools/check-mod-types.sh` runs that check where it can
+  fail (MC-128). An engine update rewrote the generated types: they no
+  longer declare the agent type's `autoCompactWindow` or the tool's
+  `isDeferred` as register options, and a register hook's answer now names
+  what it registered. `claude plugin test` does not type-check, so the four
+  errors passed every plugin test run.
+
+  The console tool's placement in Flight's prompt now comes from a
+  `tool.describe` hook, where the types put a tool's placement. The
+  Controller type sets no compaction window: the types declare none per
+  agent type, only per session (`CLAUDE_CODE_AUTO_COMPACT_WINDOW` or the
+  settings). A clone or worktree has no types folder of its own, so pass
+  `--types` with a loaded copy's, such as your workspace's. The spend
+  recorder mod still carries `isDeferred` and fails the same check.
 - 2026-10-17: the shipped `CLAUDE.md` is never edited in your clone (MC-104).
   LIFTOFF Stage 4 used to rewrite it into your operating instructions, which
   left a tracked file with a local edit: the first pull that updated it was

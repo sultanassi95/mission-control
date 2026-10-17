@@ -19,6 +19,7 @@ flowchart LR
   end
   subgraph FLEET[console fleet]
     MF[mods/mission-fleet] --> APP[app]
+    CMT[check-mod-types] -. type-checks .-> MF
   end
   subgraph METER[spend meter]
     SR[mods/spend-recorder] --> SPEND["/spend"]
@@ -36,6 +37,7 @@ flowchart LR
 | `status-after-pipe-guard`, `front-context` | settings hooks | `.sh` |
 | `token-lint` | the design-token ratchet | `.sh`, `.py` |
 | `mods/mission-fleet` | the console fleet, a Claude Code plugin | TypeScript |
+| `check-mod-types` | type-checks a mod against the plugin types its engine wrote | `.sh` |
 | `mods/spend-recorder` | records the tokens every model call used, for `/spend` | TypeScript |
 | `app/` | the Mission Control App | Node |
 
@@ -254,9 +256,28 @@ in the `env` block of the profile's `settings.json` to the absolute path of
 `claude --plugin-dir tools/mods/mission-fleet`. It needs a Claude Code build
 that supports mods.
 
-Tests: `claude plugin test tools/mods/mission-fleet` (47 tests across
-`controller`, `guards`, `loops` and `register` at the time of writing; the run
-prints the count).
+Tests: `claude plugin test tools/mods/mission-fleet` (the tests in
+`controller`, `guards`, `loops` and `register`; the run prints the count).
+The test run does not type-check; `check-mod-types` does.
+
+## check-mod-types
+
+`bash tools/check-mod-types.sh [MOD] [--types DIR]` runs a pinned TypeScript
+(5.6.3, through `npx`, so the first run fetches it and needs the network
+once) over a mod's `hooks`, `types` and `tests` with the compiler options of
+the plugin types the engine writes into `MOD/.claude-plugin/types` where it
+loads the mod. That folder is gitignored and the engine rewrites it on
+update, so a type error can arrive with an engine update and no commit.
+`MOD` defaults to `tools/mods/mission-fleet`. A clone or worktree the engine
+has not loaded has no types folder: pass `--types` with a loaded copy's,
+such as the operating workspace's
+`tools/mods/mission-fleet/.claude-plugin/types`. Exit 0 clean; 1 on type
+errors in the mod's own files (tsc's lines, then a count); 2 when it cannot
+run (no mod, no types, `--types` with no folder, TypeScript did not start,
+or tsc stopped on its configuration or found no files), never a pass. The
+clean and failed lines name the engine version the types came from. Tests:
+`tests/check-mod-types.tests.sh` (fake engine types, a planted error, each
+cannot-run case, a folder name with a space and a quote).
 
 ## mods/spend-recorder
 
