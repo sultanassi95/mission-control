@@ -395,7 +395,7 @@
       $('profile-dot').hidden = !others.length
       $('composer').hidden = S.tab !== 'flight'
       paint($('quick'), 'quick', ['/console list', '/briefing', '/standup', '/debrief'].map(q => `<button type="button" data-a="quick" data-v="${esc(q)}">${esc(q)}</button>`).join(''))
-      const n = openGates().length
+      const n = openGates().length + pollItems().filter(undelivered).length
       paint($('tabs'), 'tabs', TABS.map(([k, l]) => `<button class="tab" type="button" role="tab" data-a="tab" data-v="${k}" aria-selected="${S.tab === k}">${ICONS[k]}${l}${k === 'poll' && n ? `<span class="badge" aria-label="${n} waiting">${n}</span>` : ''}</button>`).join(''))
       const wasOpen = last.sheet !== ''
       const repainted = paint($('sheet-root'), 'sheet', sheet())
