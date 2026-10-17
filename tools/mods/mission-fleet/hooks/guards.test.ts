@@ -16,6 +16,62 @@ test('the tokenizer resolves quotes and marks variables, globs and substitutions
   expect(tokenize('cat > f <<EOF\ngit push origin main\nEOF\nls').commands.map(c => c.words[0]?.text)).toEqual(['cat', 'ls'])
 })
 
+// ---- shell expansions the guard cannot read (MC-150) ----
+// The Bash tool runs zsh, where $=X, $^X, $~X, ${=X} and =cmd expand to text the guard would read as literal.
+
+test('on a line that runs git or gh, an expansion other than a plain $NAME, ${NAME} or $? is refused by name', () => {
+  const NOT = 'the guard cannot read'
+  // Each expands to main in zsh, so the push below is a push to main.
+  for (const [ref, name] of [
+    ['$=X', '$=X'], ['$^X', '$^X'], ['"$=X"', '$=X'], ['"$^X"', '$^X'], ['"$~X"', '$~X'], ['${(s:,:)X}', '${(s:,:)X}'], ['${=X}', '${=X}'],
+    ['$+X', '$+X'], ['${X:-main}', '${X:-main}'], ['$1', '$1'], ['$@', '$@'], ["$'x'", "$'x'"], ['${#X}', '${#X}'], ['$$', '$$'], ['$-', '$-'],
+  ] as const) {
+    expect(`${ref} -> ${C(`X=main; git -C /w/fronts/acme/api push origin ${ref}`, ['main']) ?? 'allowed'}`).toContain(`${name} is a shell expansion ${NOT}`)
+  }
+  expect(C('gh pr view $=X')).toContain(`$=X is a shell expansion ${NOT}`)
+  expect(toolRefusal('controller', 'Bash', { command: 'X=main; git -C /w/fronts/acme/api push origin $=X' }, ['main'], '/w/fronts/acme/api')).toContain(`$=X is a shell expansion ${NOT}`)
+  // zsh's =cmd is the command's path: =git runs git past every git rule.
+  expect(C('=git -C /w/fronts/acme/api push origin main')).toContain(`=git is a shell expansion ${NOT}`)
+  expect(C("''=git push origin main")).toContain(`=git is a shell expansion ${NOT}`)
+  // zsh removes the quotes from the name first: ='git', ="git" and =\git are the same path.
+  expect(C("='git' -C /w/fronts/acme/api push origin main")).toContain(`='git' is a shell expansion ${NOT}`)
+  expect(C('="git" -C /w/fronts/acme/api push origin main')).toContain(`="git" is a shell expansion ${NOT}`)
+  expect(C('=\\git -C /w/fronts/acme/api push origin main')).toContain(`=\\git is a shell expansion ${NOT}`)
+  // A quote- or backslash-spelled name runs git with no literal "git" in the text: the gate reads the parsed head too.
+  expect(C("X='n push origin main'; g''it -C /w/fronts/acme/api --namespace $=X log")).toContain(`$=X is a shell expansion ${NOT}`)
+  expect(C('X=main; "g"it -C /w/fronts/acme/api push origin $=X')).toContain(`$=X is a shell expansion ${NOT}`)
+  expect(C('X=pr; g\\h $=X view 34')).toContain(`$=X is a shell expansion ${NOT}`)
+})
+
+test('a plain $NAME, ${NAME} or $?, quoted text and a literal $ pass as before', () => {
+  // A plain variable is still a variable: allowed where it was, refused where a rule refuses one.
+  expect(C('git -C /w/fronts/acme/api log $X')).toBeUndefined()
+  expect(C('git -C /w/fronts/acme/api log "${X}"')).toBeUndefined()
+  expect(C('X=main; git push origin $X')).toContain('push arguments must be literal')
+  expect(C('git -C /w/fronts/acme/api status; echo "exit $?"')).toBeUndefined()
+  // What the shell does not expand is not counted.
+  expect(C("git commit -m 'costs $=X and ${=X}'")).toBeUndefined()
+  expect(C("git commit -F - <<'EOF'\nmentions $=X, ${=X} and =git\nEOF")).toBeUndefined()
+  expect(C('git commit -m "costs 5 $ each, or 6$"')).toBeUndefined()
+  expect(C(`echo '=git' "=git"`)).toBeUndefined()
+  // Inside [[ ]], == and =~ are operators; outside it they name no real command.
+  expect(C('[[ main == main ]] && [[ fix/a =~ ^fix/ ]] && git -C /w/fronts/acme/api status')).toBeUndefined()
+  // zsh leaves $ literal before . , / : ] } % and \, so a sed, grep or printf pattern on a git line is not an expansion.
+  expect(C('git -C /w/fronts/acme/api log | sed "s/a$//"')).toBeUndefined()
+  expect(C('git -C /w/fronts/acme/api log --oneline | grep "foo$."')).toBeUndefined()
+  expect(C('git -C /w/fronts/acme/api log | grep "a$\\|b"')).toBeUndefined()
+  expect(C('git -C /w/fronts/acme/api diff | sed -e "s/$/;/"')).toBeUndefined()
+  // A line that names neither git nor gh is not refused for an expansion in an argument.
+  expect(C('echo $=X ${=X} =ls')).toBeUndefined()
+})
+
+test('a word holding an expansion the guard cannot read is a variable, so it never names the command', () => {
+  // zsh assembles git from two split variables on a line that names neither git nor gh.
+  expect(C("X=gi; Y='t -C /w/fronts/acme/api push origin main'; $=X$=Y")).toContain('never a command name built from a variable')
+  expect(C('=ls -la')).toContain('never a command name built from a variable')
+  expect(tokenize('echo $=X ${=X} =ls $X').commands[0]?.words.slice(1).map(w => w.dynamic)).toEqual([true, true, true, true])
+})
+
 test('a spoke base line protects its first branch and any slashed deploy base it names', () => {
   expect(protectedFromSpoke('main')).toEqual(['main'])
   expect(protectedFromSpoke('"dev - promotion is dev -> test -> main"')).toEqual(['dev'])
