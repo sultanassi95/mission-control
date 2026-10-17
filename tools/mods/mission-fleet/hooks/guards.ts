@@ -42,8 +42,11 @@ const GIT_ALLOWED: Record<Role, Set<string>> = {
   'back room': new Set([...GIT_READS, 'add', 'commit']),
 }
 
-/** Where a Controller may clone from and into: its front's repository owners, and the front's own folder. */
-export type CloneScope = { owners: string[]; home: string }
+/**
+ * Where a Controller may clone into: one level under the folder of any front it was staffed with,
+ * `<fronts folder>/<front>/<repo>`, where the fronts folder holds its own front's folder (`home`).
+ */
+export type CloneScope = { home: string; fronts: string[] }
 
 // Clone options by exact spelling. git also takes any unique prefix of a long option (--temp is
 // --template), so a spelling off this list is refused, whatever git would expand it to. A value is
@@ -57,17 +60,111 @@ const CLONE_VALUED: Record<string, RegExp> = {
   '--origin': /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/,
 }
 const CLONE_OPTIONS = '--depth N, --branch NAME or -b NAME, --single-branch, --no-single-branch, --filter=blob:none, --origin NAME, -q or --quiet, --no-tags'
-// The two literal GitHub forms: OWNER as GitHub allows it, REPO without a path.
-const OWNER = '([A-Za-z0-9][A-Za-z0-9-]{0,38})'
-const SSH_REPO = new RegExp(`^git@github\\.com:${OWNER}/([A-Za-z0-9._-]+)\\.git$`)
-const HTTPS_REPO = new RegExp(`^https://github\\.com/${OWNER}/([A-Za-z0-9._-]+?)(?:\\.git)?$`)
+// A source git reads over the network, in a form this guard reads whole: a URL with a scheme, a host
+// and a path, or USER@HOST:PATH. Host and user start with a letter or digit (ssh takes a leading dash
+// as an option), and every path part is plain, so the folder git names for it is plain too.
+const HOST = '[A-Za-z0-9](?:[A-Za-z0-9._-]{0,251}[A-Za-z0-9])?'
+const USER = '[A-Za-z0-9_][A-Za-z0-9._-]{0,63}'
+const PATH = '[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*'
+const SCHEME_URL = new RegExp(`^(?:https?|ssh|git\\+ssh|ssh\\+git|git)://(?:${USER}@)?(${HOST})(?::[0-9]{1,5})?/(${PATH})/?$`)
+const SCP_URL = new RegExp(`^${USER}@(${HOST}):/?(${PATH})/?$`)
+const SOURCE_FORMS = 'https://HOST/PATH, http://, ssh://[USER@]HOST[:PORT]/PATH, git+ssh://, git:// or USER@HOST:PATH'
+// A name of dots alone is no folder of its own (`.`, `..`), and `.git`, in any case and with or
+// without trailing dots (which some disks drop), would turn a front's folder into a repository.
+const NO_NAME = /^(\.+|\.git\.*)$/i
+// The resolver reads a host written as a number loosely (127.1, 2130706433, 0x7f.0.0.1 and 0177.0.0.1
+// are all 127.0.0.1), so a numeric host passes only spelled a.b.c.d, and never in 127/8 or 0/8.
+const OCTET = '(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])'
+const QUAD = new RegExp(`^${OCTET}(?:\\.${OCTET}){3}$`)
+
+/** The fronts folder: the parent of the console's own front folder. */
+function frontsFolder(clone: CloneScope): string {
+  return foldPath(`${clone.home}/..`)
+}
+
+/** True when dir is the folder of a front the clone scope names, exactly `<fronts folder>/<front>`. */
+function isFrontFolder(dir: string, clone: CloneScope | undefined): boolean {
+  if (!clone) return false
+  const root = frontsFolder(clone)
+  return dir.startsWith(`${root}/`) && clone.fronts.includes(dir.slice(root.length + 1))
+}
 
 /**
- * Why a Controller may not run this clone, or undefined when it may: every option on the list,
- * the source a literal GitHub URL whose owner its front's spokes name, and the destination
- * (git's default, the repository's name, when none is given) exactly `<front folder>/<REPO>`.
+ * The folder git names for a clone of `source` when no destination is given, as git's
+ * guess_dir_name (builtin/clone.c) derives it: skip the scheme and any user, strip trailing
+ * slashes and a `/.git`, strip a port when there is no path, take the last part after `/` or
+ * `:`, and strip one `.git`.
  */
-export function cloneRefusal(args: Word[], pin: string | undefined, clone: CloneScope | undefined): string | undefined {
+function cloneFolder(source: string): string {
+  const scheme = source.indexOf('://')
+  let start = scheme < 0 ? 0 : scheme + 3
+  const slash = source.indexOf('/', start)
+  const at = source.lastIndexOf('@', slash < 0 ? source.length : slash)
+  if (at >= start) start = at + 1
+  let s = source.slice(start).replace(/\/+$/, '')
+  if (s.length > 5 && s.endsWith('/.git')) s = s.slice(0, -5).replace(/\/+$/, '')
+  if (!s.includes('/') && s.includes(':')) s = s.replace(/:[0-9]*$/, '')
+  const last = s.slice(Math.max(s.lastIndexOf('/'), s.lastIndexOf(':')) + 1)
+  return last.endsWith('.git') ? last.slice(0, -4) : last
+}
+
+/** Why git would not fetch `source` as a repository over the network, or undefined when it would. */
+function sourceRefusal(source: string): string | undefined {
+  if (/^[A-Za-z][A-Za-z0-9+.-]*::/.test(source)) return `${source} names a remote helper (HELPER::), which runs a program rather than fetch a repository`
+  if (/^file:\/\//i.test(source)) return `${source} is a file:// source, which reads this Mac's folders, other fronts' repositories included`
+  if (/(:\/\/|@)-/.test(source)) return `${source}: a host or user starting with - would reach ssh as an option`
+  // git reads a source with no `://` as a local path unless a `:` comes before any `/` (USER@HOST:PATH).
+  const colon = source.indexOf(':')
+  if (!source.includes('://') && (colon < 0 || source.slice(0, colon).includes('/'))) return `${source} is a local path, which reads this Mac's folders, other fronts' repositories included`
+  const [, host, path] = SCHEME_URL.exec(source) ?? SCP_URL.exec(source) ?? []
+  if (host === undefined || path === undefined) return `${source} is not a repository URL this guard can read: use ${SOURCE_FORMS}`
+  const onMac = hostRefusal(source, host)
+  if (onMac) return onMac
+  const folder = cloneFolder(source)
+  if (path.split('/').some(part => NO_NAME.test(part)) || !/^[A-Za-z0-9._-]+$/.test(folder) || NO_NAME.test(folder)) {
+    return `${source} leaves git no folder of its own: a path part is dots alone or .git`
+  }
+  if (folder.startsWith('.')) return `${source} would make the folder ${folder}, and a folder starting with . is one tools read as settings (a .claude folder's hooks run commands)`
+  return undefined
+}
+
+/** Why a clone source's host is this Mac, or may spell it, or undefined for a host on the network. */
+function hostRefusal(source: string, host: string): string | undefined {
+  const h = host.toLowerCase()
+  // As URL parsers read a host: when its last label is a number (decimal, or hex led by 0x), it is an address.
+  const numeric = /^(?:0x[0-9a-f]*|[0-9]+)$/.test(h.slice(h.lastIndexOf('.') + 1))
+  if (numeric && !QUAD.test(h)) return `${source} writes its host as a number other than a.b.c.d, a spelling that can name this Mac (127.1 is 127.0.0.1)`
+  if (h === 'localhost' || h.endsWith('.localhost') || (numeric && /^(?:127|0)\./.test(h))) {
+    return `${source} names this Mac (localhost, 127.x.x.x or 0.x.x.x): a clone from it reads this Mac's own folders and services`
+  }
+  return undefined
+}
+
+/** True when a path has a `..` after a folder name: the disk resolves that `..` from wherever a link there points. */
+function dotsAfterName(path: string): boolean {
+  let named = false
+  for (const part of path.split('/')) {
+    if (part === '..' && named) return true
+    if (part !== '' && part !== '.' && part !== '..') named = true
+  }
+  return false
+}
+
+/** The clone rule as a Controller's staffing order states it, in one line. */
+export function cloneRule(clone: CloneScope): string {
+  return `Clones: any repository URL (https://, http://, ssh://, git+ssh://, ssh+git://, git:// or USER@HOST:PATH) may land one level under a front's folder, ${frontsFolder(clone)}/<front>/<repo>, for ${clone.fronts.join(', ')};`
+    + ` run it from exactly a front's folder or your console's directory, named by its full path with no ..: \`cd ${foldPath(clone.home)} && git clone <url>\`.`
+    + ' Refused: a remote helper (HELPER::), a file:// or local-path source, this Mac as the host (localhost, 127.x.x.x, 0.x.x.x) or a host written as a number other than a.b.c.d,'
+    + ` a host or user starting with -, a folder starting with ., a .. after a folder name in the destination, a landing anywhere else, and any option but ${CLONE_OPTIONS}.`
+}
+
+/**
+ * Why a Controller may not run this clone, or undefined when it may: every option on the list, the
+ * source a repository URL git fetches over the network, and the destination (git's own folder name
+ * for the URL when none is given) exactly `<fronts folder>/<front>/<that name>` for a front the
+ * console was staffed with. With no pin, `unpinned` says why the folder it ran from does not pin it.
+ */
+export function cloneRefusal(args: Word[], pin: string | undefined, clone: CloneScope | undefined, unpinned = ''): string | undefined {
   if (!clone) return 'this console was staffed before clones were allowed: it can clone once it is stood down and staffed again'
   if (args.some(a => a.dynamic || a.glob)) return 'clone arguments must be literal (no variables, globs or substitutions)'
   const positional: string[] = []
@@ -87,20 +184,26 @@ export function cloneRefusal(args: Word[], pin: string | undefined, clone: Clone
   const [source, dest, ...extra] = positional
   if (source === undefined) return 'name the repository to clone'
   if (extra.length) return 'a clone takes the repository and at most one destination'
-  const m = SSH_REPO.exec(source) ?? HTTPS_REPO.exec(source)
-  const [, owner = '', repo = ''] = m ?? []
-  // A name of dots alone is no folder of its own (`.`, `..`), and `.git`, with or without trailing
-  // dots (which some disks drop), would turn the front's folder into a repository.
-  if (!m || /^(\.+|\.git\.*)$/i.test(repo)) return `${source} is not a GitHub repository URL: use git@github.com:OWNER/REPO.git or https://github.com/OWNER/REPO`
-  if (!clone.owners.includes(owner.toLowerCase())) return `${owner} is not an owner your front's spokes name${clone.owners.length ? ` (they name ${clone.owners.join(', ')})` : ' (they name none)'}`
+  const bad = sourceRefusal(source)
+  if (bad) return bad
+  const folder = cloneFolder(source)
   const home = foldPath(clone.home)
-  const want = `${home}/${repo}`
-  // Unpinned, or pinned by a relative cd that CDPATH can send elsewhere: the clone could land anywhere.
-  if (!pin) return `pin it to your front's folder by its full path: \`cd ${home} && git clone ${source}\``
+  // Unpinned, pinned by a relative cd that CDPATH can send elsewhere, or pinned where a link could lead out: it could land anywhere.
+  if (!pin) return `${unpinned}pin it to a front's folder by its full path: \`cd ${home} && git clone ${source}\``
   // Compared exactly, case included: an allowlist that matched loosely would admit a path the disk keeps apart.
-  const target = foldPath(dest === undefined ? `${pin}/${repo}` : dest.startsWith('/') ? dest : `${pin}/${dest}`)
-  if (target !== want) return `it would land in ${target}; a clone lands in ${want}, beside your front's repositories: \`cd ${home} && git clone ${source}\``
-  return undefined
+  const target = foldPath(dest === undefined ? `${pin}/${folder}` : dest.startsWith('/') ? dest : `${pin}/${dest}`)
+  const root = frontsFolder(clone)
+  const parts = target.startsWith(`${root}/`) ? target.slice(root.length + 1).split('/') : []
+  const front = parts[0] ?? ''
+  // Point at the front the target names when it is one, else the console's own.
+  const to = clone.fronts.includes(front) ? `${root}/${front}` : home
+  const use = `a clone lands one level under a front's folder, here ${to}/${folder}: \`cd ${to} && git clone ${source}\``
+  // The target is folded as text; the disk would resolve this `..` from wherever a link before it points.
+  if (dest !== undefined && dotsAfterName(dest)) return `${dest} has .. after a folder name, which a link inside the tree could carry elsewhere; ${use}`
+  if (parts.length === 2 && parts[1] === folder) {
+    return clone.fronts.includes(front) ? undefined : `${front} is not a front this console was staffed with (${clone.fronts.join(', ')})`
+  }
+  return `it would land in ${target}; ${use}`
 }
 
 const GH_ALLOWED: Record<string, Set<string> | 'any'> = {
@@ -438,7 +541,7 @@ function gitGlobals(rest: Word[]): { at: number; banned: boolean } {
   return { at: i, banned: false }
 }
 
-function gitRefusal(role: Role, rest: Word[], protectedBranches: string[], pin?: string, clone?: CloneScope): string | undefined {
+function gitRefusal(role: Role, rest: Word[], protectedBranches: string[], pin?: string, clone?: CloneScope, unpinned?: string): string | undefined {
   const { at: i, banned } = gitGlobals(rest)
   if (banned) return 'git -c, --config-env and --exec-path are not allowed: they can alias or redirect a command.'
   const sub = rest[i]
@@ -470,8 +573,8 @@ function gitRefusal(role: Role, rest: Word[], protectedBranches: string[], pin?:
     // Global options can move where a clone reads its config or writes (--bare, --git-dir): only -C pins it.
     const lead = rest.slice(0, i)
     const extra = clone && lead.length > 0 && !(lead.length === 2 && lead[0]?.text === '-C')
-    const why = extra ? `git takes no option before clone but -C <dir> (here: ${lead.map(w => w.text).join(' ')})` : cloneRefusal(args, pin, clone)
-    return why ? `A Controller clones only its own front's repositories, into its front's folder: ${why}.` : undefined
+    const why = extra ? `git takes no option before clone but -C <dir> (here: ${lead.map(w => w.text).join(' ')})` : cloneRefusal(args, pin, clone, unpinned)
+    return why ? `A Controller clones only into a front's folder, one level down (fronts/<front>/<repo>): ${why}.` : undefined
   }
   if (name === 'config' && !args.some(a => ['--get', '--get-all', '--list', '-l', '--get-regexp'].includes(a.text))) return 'git config is read-only here (--get or --list).'
   if (name === 'remote' && args.some(a => ['add', 'set-url', 'rename', 'remove', 'rm', 'set-head', 'prune'].includes(a.text))) return 'git remote is read-only here.'
@@ -577,6 +680,13 @@ export function pinnedDir(commands: Simple[], index: number): string | undefined
   return dir
 }
 
+/** The words that pin a git call: its `-C` value, else the `cd` chain run directly before it. */
+function pinWords(commands: Simple[], index: number): Word[] {
+  const { rest } = headOf(commands[index] as Simple)
+  const c = rest.findIndex(w => w.text === '-C')
+  return c >= 0 ? rest.slice(c + 1, c + 2) : cdChain(commands, index)
+}
+
 /** True when a git call's subcommand, past its global options, is a literal `clone`. */
 function isClone(rest: Word[]): boolean {
   const { at, banned } = gitGlobals(rest)
@@ -653,19 +763,28 @@ export function shellRefusal(role: Role, command: string, protectedBranches: str
       return `${name} runs here with no environment prefix (VAR=... or env): variables like GIT_SSH_COMMAND or GIT_CONFIG_PARAMETERS can redirect it.`
     }
     let pin: string | undefined
+    let unpinned: string | undefined
     if (scopeDir && (name === 'git' || name === 'gh')) {
       if (name === 'gh' && rest.some(w => /^-R/.test(w.text) || /^--repo(=|$)/.test(w.text) || (/^-[A-Za-z]+$/.test(w.text) && w.text.includes('R')))) return 'gh -R/--repo is not allowed here: pin the repo with `cd <your repo> && gh ...`.'
       const dir = pinnedDir(parsed.commands, k)
       const scope = foldPath(scopeDir)
       if (!dir) return `Pin the repo on every ${name} call: \`cd ${scope} && ${name} ...\`${name === 'git' ? ` or \`git -C ${scope} ...\`` : ''}. Your shell may start in another repo.`
-      // A Controller's clone may also run from its front's folder, where the clone lands; nothing else runs there.
-      const home = role === 'controller' && clone && name === 'git' && isClone(rest) ? foldPath(clone.home) : undefined
-      if (dir !== scope && !dir.startsWith(`${scope}/`) && dir !== home) return `${dir} is outside your console's directory (${scope}).`
-      // A clone's pin decides where it writes, so it must not hang on a cd that CDPATH could resolve elsewhere.
-      pin = home !== undefined && pinFollowsCdpath(parsed.commands, k) ? undefined : dir
+      // A Controller's clone may also run from a front's folder, where it lands one level down; nothing else runs there.
+      const cloning = role === 'controller' && clone !== undefined && name === 'git' && isClone(rest)
+      if (dir !== scope && !dir.startsWith(`${scope}/`) && !(cloning && isFrontFolder(dir, clone))) return `${dir} is outside your console's directory (${scope}).`
+      pin = dir
+      // A clone's pin decides where it writes, and the guard reads it as text while the disk follows links (a
+      // cloned repository can hold one). So it must not hang on a cd that CDPATH could resolve elsewhere, step
+      // back with `..`, or sit inside a folder a clone may run from rather than be that folder exactly.
+      if (cloning) {
+        if (pinFollowsCdpath(parsed.commands, k)) unpinned = ''
+        else if (pinWords(parsed.commands, k).some(w => w.text.split('/').includes('..'))) unpinned = 'its cd or -C path holds .., which a link could carry elsewhere; '
+        else if (dir !== scope && !isFrontFolder(dir, clone)) unpinned = `it runs from ${dir}, a folder inside one a clone may run from, where a link could carry it elsewhere; `
+        if (unpinned !== undefined) pin = undefined
+      }
     }
     if (name === 'git') {
-      const why = gitRefusal(role, rest, protectedBranches, pin, clone)
+      const why = gitRefusal(role, rest, protectedBranches, pin, clone, unpinned)
       if (why) return why
     } else if (name === 'gh') {
       const why = ghRefusal(rest)

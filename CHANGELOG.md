@@ -6,6 +6,27 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-10-17: a Controller may clone any repository into any front's folder
+  (MC-135), which widens the 2026-10-16 rule (MC-126). The source is any
+  repository URL git fetches over the network, from any owner or host:
+  `https://`, `http://`, `ssh://`, `git+ssh://`, `ssh+git://`, `git://` or
+  `USER@HOST:PATH`. The clone lands one level under the folder of any front
+  with a hub under `_command/portfolio/`, as `fronts/<front>/<repo>`, where
+  `<repo>` is the folder git names for the URL; a front whose folder is
+  itself a repository takes clones too. A remote helper (`HELPER::`), a
+  `file://` or local-path source, a host or user starting with `-`, a
+  landing anywhere else and an option off the list stay refused. Also
+  refused, because the guard reads paths as text while the disk follows the
+  links a cloned repository may hold: a clone run from a folder inside a
+  front's folder rather than the folder itself, a `..` in its `cd` or `-C`
+  path or after a folder name in its destination, and a folder name
+  starting with `.` (a `.claude` folder's hooks run commands). This Mac as
+  the host is refused too: `localhost`, `*.localhost`, `127.x.x.x`,
+  `0.x.x.x`, or a host written as a number other than `a.b.c.d`. Staffing
+  records the portfolio's fronts beside the front's folder, and the
+  staffing order states the rule in one line, so a Controller no longer
+  learns it from a refusal. A console staffed under the earlier rule keeps
+  cloning into its own front only until it is staffed again.
 - 2026-10-17: the mission-fleet mod type-checks against the engine's current
   plugin types, and `tools/check-mod-types.sh` runs that check where it can
   fail (MC-128). An engine update rewrote the generated types: they no

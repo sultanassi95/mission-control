@@ -131,24 +131,42 @@ stood-down consoles drop out of the watch.
 
 The mission-fleet guard refuses, for Controllers and their back rooms: unpinned git and gh calls (every call is `cd <repo> && git ...` or `git -C <repo> ...`), pushes to base or deploy branches, force pushes and deletions, stash, PR merges, writes to Flight's files, the Claude CLI, the app's port and other processes' environments. What a Controller may do inside its scope: commit, push its own feature branches and open PRs; it never merges a PR (`controller.ts`, `guards.ts`). In git, a back room may only read, add and commit. The guard is a text guard: it catches mistakes and steered agents, and it is **not a sandbox**. Base branches are held by server-side branch protection with administrators included (`framework/remote-access.md`).
 
-A Controller may also clone a repository of its own front:
+A Controller may also clone any repository into any front of the portfolio:
 
-- **Source**: a literal URL on github.com itself, `https://github.com/OWNER/REPO`
-  (with or without `.git`) or `git@github.com:OWNER/REPO.git`. <!-- MC-LEAK-EXEMPT: GitHub's SSH user, not an address -->
-- **Owner**: one that a spoke of the front names in its `remote:` line. A spoke's
-  remote may use github.com or an SSH host alias whose name contains github, such
-  as `personal-github`; the clone source may not use the alias.
-- **Where**: pinned to the front's folder by its full path
-  (`cd <front folder> && git clone <source>`), with nothing but `-C <dir>` before
-  `clone`. The clone lands at `fronts/<front>/<REPO>`, beside the front's other
-  repositories, and a destination that resolves anywhere else is refused.
+- **Source**: a repository URL git fetches over the network, from any owner or
+  host: `https://HOST/PATH` or `http://`, `ssh://[USER@]HOST[:PORT]/PATH` (or
+  `git+ssh://`, `ssh+git://`), `git://HOST/PATH`, or `USER@HOST:PATH`. Refused by
+  name: a remote helper (`HELPER::`, such as `ext::`), which runs a program; a
+  `file://` or local-path source, which reads this Mac's folders, other fronts'
+  repositories included; this Mac as the host (`localhost`, `*.localhost`,
+  `127.x.x.x`, `0.x.x.x`) or a host written as a number other than `a.b.c.d`
+  (`127.1` is `127.0.0.1`), which reads the same folders over ssh or reaches
+  this Mac's own services; and a host or user starting with `-`, which ssh
+  would take as an option. A name that resolves to this Mac by DNS is not
+  caught: the guard reads text.
+- **Where**: one level under a front's folder, `fronts/<front>/<repo>`, for any
+  front with a hub under `_command/portfolio/` when the console was staffed, its
+  own or another, whether or not that front's folder is itself a repository.
+  `<repo>` is the folder git names for the URL, usually its last path part less
+  `.git`, and never one starting with `.`, which tools read as their settings.
+  The clone runs from exactly a front's folder
+  (`cd <front folder> && git clone <source>`) or exactly the console's own
+  directory with a destination one level under a front's folder (`../<repo>`
+  from a repository there), named by its full path with no `..`, and with
+  nothing but `-C <dir>` before `clone`. In the destination a `..` may only
+  lead: after a folder name, it would step out through any link a cloned
+  repository holds there. A destination that resolves anywhere else, a front's
+  folder itself included, is refused, naming the command to use. A front's
+  folder takes nothing but a clone.
 - **Options**, by exact spelling only: `--depth N`, `--branch NAME` or `-b NAME`,
   `--single-branch`, `--no-single-branch`, `--filter=blob:none`, `--origin NAME`,
   `-q` or `--quiet`, `--no-tags`. Anything else is refused by name.
 - **Literal words**: no variables, globs or substitutions.
-- **Who**: a project console clones from its front's folder, the one command it
-  may run there. A console staffed before cloning was allowed is refused until it
-  is stood down and staffed again, and a back room never clones.
+- **Who**: any Controller, a project console included; its staffing order states
+  the rule in one line. A console staffed before cloning was allowed is refused
+  until it is stood down and staffed again, one staffed while a clone landed only
+  in its own front still lands only there (from any source) until then, and a
+  back room never clones.
 
 ## Remote
 

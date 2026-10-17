@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { commonDir, CONTROLLER_PROMPT, isInsideRelative, MODEL_IDS, remoteOwner, spokePath, staffingOrder } from './controller'
+import { commonDir, CONTROLLER_PROMPT, isInsideRelative, MODEL_IDS, spokePath, staffingOrder } from './controller'
 
 test('the controller prompt carries the status format and the hard limits', () => {
   for (const line of ['state:', 'shipped:', 'blocked on you:', 'next:']) expect(CONTROLLER_PROMPT).toContain(line)
@@ -11,18 +11,32 @@ test('the controller prompt carries the status format and the hard limits', () =
   expect(CONTROLLER_PROMPT).toContain('answer in one line')
 })
 
+const ORDER = {
+  front: 'fieldkit', project: 'api', callSign: 'FIELDKIT-API', root: '/p',
+  hub: '/p/_command/portfolio/fieldkit/_front.md', spokes: ['/p/_command/portfolio/fieldkit/api/api.md'],
+  cwd: '/p/fronts/fieldkit/api', budget: 2, progress: '/p/_command/portfolio/fieldkit/progress.md',
+  clone: { home: '/p/fronts/fieldkit', fronts: ['fieldkit', 'kiln', 'shelf'] },
+}
+
 test('the staffing order names the scope, the files, the directory and the budget', () => {
-  const order = staffingOrder({
-    front: 'fieldkit', project: 'api', callSign: 'FIELDKIT-API', root: '/p',
-    hub: '/p/_command/portfolio/fieldkit/_front.md', spokes: ['/p/_command/portfolio/fieldkit/api/api.md'],
-    cwd: '/p/fronts/fieldkit/api', budget: 2, progress: '/p/_command/portfolio/fieldkit/progress.md',
-  })
+  const order = staffingOrder(ORDER)
   expect(order).toContain('FIELDKIT-API console, owning the project "api" of front "fieldkit"')
   expect(order).toContain('Hub: /p/_command/portfolio/fieldkit/_front.md')
   expect(order).toContain('Your repo directory: /p/fronts/fieldkit/api')
   expect(order).toContain('cd /p/fronts/fieldkit/api && git')
   expect(order).toContain('Progress log: /p/_command/portfolio/fieldkit/progress.md')
   expect(order).toContain('up to 2 sub-agents')
+})
+
+test('the staffing order states the clone rule and its refusals in one line', () => {
+  const lines = staffingOrder(ORDER).split('\n').filter(l => /clone/i.test(l))
+  expect(lines).toEqual([
+    'Clones: any repository URL (https://, http://, ssh://, git+ssh://, ssh+git://, git:// or USER@HOST:PATH) may land one level under a front\'s folder, /p/fronts/<front>/<repo>, for fieldkit, kiln, shelf;'
+      + ' run it from exactly a front\'s folder or your console\'s directory, named by its full path with no ..: `cd /p/fronts/fieldkit && git clone <url>`.'
+      + ' Refused: a remote helper (HELPER::), a file:// or local-path source, this Mac as the host (localhost, 127.x.x.x, 0.x.x.x) or a host written as a number other than a.b.c.d,'
+      + ' a host or user starting with -, a folder starting with ., a .. after a folder name in the destination, a landing anywhere else,'
+      + ' and any option but --depth N, --branch NAME or -b NAME, --single-branch, --no-single-branch, --filter=blob:none, --origin NAME, -q or --quiet, --no-tags.',
+  ])
 })
 
 test('a spoke path is the first token of its frontmatter path line', () => {
@@ -48,22 +62,4 @@ test('only relative spoke paths with no parent segment are trusted', () => {
 test('every console model alias maps to a request id', () => {
   expect(Object.keys(MODEL_IDS).sort()).toEqual(['fable', 'haiku', 'opus', 'sonnet'])
   for (const id of Object.values(MODEL_IDS)) expect(id).toMatch(/^claude-[a-z]+-\d+-\d+$/)
-})
-
-test('a spoke remote names its owner over github.com, a GitHub host alias or https, in lower case', () => {
-  expect(remoteOwner('git@github.com:Acme-Org/api.git')).toBe('acme-org')
-  expect(remoteOwner('git@personal-github:FieldKit-Labs/web.git   (the partner key)')).toBe('fieldkit-labs')
-  expect(remoteOwner('https://github.com/acme-org/web.git')).toBe('acme-org')
-  expect(remoteOwner('"https://github.com/acme-org/web" (read-only mirror)')).toBe('acme-org')
-})
-
-test('a spoke remote on another host, in another form or N/A names no owner', () => {
-  for (const value of [
-    'N/A', '', 'git@gitlab.com:acme-org/web.git', 'https://gitlab.com/acme-org/web', 'ssh://git@github.com/acme-org/web.git',
-    'file:///srv/web.git', 'origin git@github.com:acme-org/web.git', 'https://github.com/acme-org', 'git@github.com:-acme/web.git',
-    'git@github.com-work:acme-org/web.git', 'git@gitlab-work:acme-org/web.git', 'git@bitbucket:acme-org/x.git',
-  ]) expect(`${value} -> ${remoteOwner(value) ?? 'none'}`).toBe(`${value} -> none`)
-  // An alias counts only when it names GitHub, in any case.
-  expect(remoteOwner('git@GitHub-Personal:acme-org/web.git')).toBe('acme-org')
-  expect(remoteOwner(undefined)).toBeUndefined()
 })

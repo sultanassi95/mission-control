@@ -22,7 +22,8 @@ test('parses verbs, positional words and flags', () => {
   expect(parseArgs('')).toEqual({ verb: '', rest: [], flags: {} })
 })
 
-// A fake portfolio: one front with two project spokes, and a second front, answered beneath the plugin.
+// A fake portfolio: one front with two project spokes, a second front, and a third whose folder is
+// itself its repository (kiln's spoke path is fronts/kiln), answered beneath the plugin.
 const FILES: Record<string, string> = {
   '/p/_command/trackers/fronts.md': '# Fronts',
   '/p/_command/portfolio/fieldkit/_front.md': '# fieldkit hub',
@@ -30,8 +31,18 @@ const FILES: Record<string, string> = {
   '/p/_command/portfolio/fieldkit/web/web.md': '---\nrepo: web\npath: fronts/fieldkit/web\nremote: git@personal-github:FieldKit-Labs/web.git   (the partner key)\n---',
   '/p/_command/portfolio/shelf/_front.md': '# shelf hub',
   '/p/_command/portfolio/shelf/shelf.md': '---\nrepo: shelf\npath: fronts/shelf/shelf\nremote: git@github.com:shelf-co/shelf.git\n---',
+  '/p/_command/portfolio/kiln/_front.md': '# kiln hub',
+  '/p/_command/portfolio/kiln/kiln.md': '---\nrepo: kiln\npath: fronts/kiln\nremote: https://codeberg.org/kiln/kiln.git\n---',
 }
 const DIRS: Record<string, { name: string; kind: 'file' | 'dir'; size: number }[]> = {
+  // Beside the three fronts: a folder whose name is no front's, one with no hub, and a file.
+  '/p/_command/portfolio': [
+    { name: 'fieldkit', kind: 'dir', size: 0 }, { name: 'kiln', kind: 'dir', size: 0 }, { name: 'shelf', kind: 'dir', size: 0 },
+    { name: '_archive', kind: 'dir', size: 0 }, { name: 'drafts', kind: 'dir', size: 0 }, { name: 'README.md', kind: 'file', size: 1 },
+  ],
+  '/p/_command/portfolio/_archive': [{ name: '_front.md', kind: 'file', size: 1 }],
+  '/p/_command/portfolio/drafts': [{ name: 'notes.md', kind: 'file', size: 1 }],
+  '/p/_command/portfolio/kiln': [{ name: '_front.md', kind: 'file', size: 1 }, { name: 'kiln.md', kind: 'file', size: 1 }],
   '/p/_command/portfolio/fieldkit': [
     { name: '_front.md', kind: 'file', size: 1 }, { name: 'api', kind: 'dir', size: 0 },
     { name: 'web', kind: 'dir', size: 0 }, { name: 'tasks', kind: 'dir', size: 0 },
@@ -40,14 +51,16 @@ const DIRS: Record<string, { name: string; kind: 'file' | 'dir'; size: number }[
   '/p/_command/portfolio/fieldkit/web': [{ name: 'web.md', kind: 'file', size: 1 }],
   '/p/_command/portfolio/shelf': [{ name: '_front.md', kind: 'file', size: 1 }, { name: 'shelf.md', kind: 'file', size: 1 }],
 }
+// With unlisted, the portfolio's own folder cannot be listed, as when its permissions shut a reader out.
 // deno-lint-ignore no-explicit-any
-const portfolio = (on: any) => {
+const portfolio = (on: any, unlisted = false) => {
   on('session.root', () => ({ value: '/p/fronts/somewhere' }))
   on('fs.read', (_$: unknown, e: { path: string }) => {
     const text = FILES[e.path]
     return text === undefined ? { deny: `ENOENT ${e.path}` } : { value: text }
   })
   on('fs.list', (_$: unknown, e: { path: string }) => {
+    if (unlisted && e.path === '/p/_command/portfolio') return { deny: `EACCES ${e.path}` }
     const list = DIRS[e.path]
     return list ? { value: list } : { deny: `ENOENT ${e.path}` }
   })
@@ -596,29 +609,36 @@ test('an item raised before agent ids were recorded is held when nothing is staf
   expect(after?.undelivered).toBeUndefined()
 })
 
-// ---- Clones and whole call text (MC-126) ----
+// ---- Clones and whole call text (MC-126, MC-135) ----
 
-// A staffed FIELDKIT Controller, its record as staffing writes it.
+// A staffed FIELDKIT Controller, its record as staffing writes it: its front's folder, and every front the portfolio has.
 const FK: Console = {
   callSign: 'FIELDKIT', front: 'fieldkit', name: 'console-fieldkit', agentId: 'f1', cwd: '/p/fronts/fieldkit', budget: 4, protectedBranches: [],
-  cloneOwners: ['fieldkit-labs', 'fieldkit-org'], cloneHome: '/p/fronts/fieldkit', model: 'opus', staffedAt: '2026-10-16T09:00:00.000Z', status: 'staffed',
+  cloneHome: '/p/fronts/fieldkit', cloneFronts: ['fieldkit', 'kiln', 'shelf'], model: 'opus', staffedAt: '2026-10-16T09:00:00.000Z', status: 'staffed',
 }
-// The record of a console staffed before clones were allowed: no owners or folder on it.
+// The record of a console staffed before clones were allowed: no folder or fronts on it.
 const legacy = (c: Console): Console => {
   const old = { ...c }
-  delete old.cloneOwners
   delete old.cloneHome
+  delete old.cloneFronts
   return old
 }
+// The record of a console staffed while a clone came only from its spokes' owners into its own front: the owners, and no fronts.
+const ownFrontOnly = (c: Console): Console => ({ ...legacy(c), cloneHome: c.cloneHome, cloneOwners: ['fieldkit-labs', 'fieldkit-org'] } as Console)
 
-test('staffing again replaces a stood-down record with one carrying its front\'s owners and folder, for a front and a project console', async ($, on) => {
+test('staffing again replaces a stood-down record with one carrying its front\'s folder and the portfolio\'s fronts, for a front and a project console', async ($, on) => {
   portfolio(on)
   // FIELDKIT was staffed before clones were allowed, then stood down.
   seed(on, { consoles: [{ ...legacy(FK), status: 'stood-down' }] })
   const seen = writes(on, 'consoles')
-  on('agent.spawn', () => ({ deny: 'stop here' }))
+  const prompts: string[] = []
+  on('agent.spawn', (_$, e) => {
+    prompts.push(e.prompt)
+    return { deny: 'stop here' }
+  })
   expect((await run($, 'staff fieldkit')).text).toContain('Could not staff FIELDKIT: stop here')
   expect((await run($, 'staff fieldkit --project web')).text).toContain('Could not staff FIELDKIT-WEB: stop here')
+  expect((await run($, 'staff kiln')).text).toContain('Could not staff KILN: stop here')
   // The kit strips a spawn's agentId, so the record is read from the reservation the staffing wrote.
   const written = seen.get('consoles') as Console[][]
   // The reservation is the first write: the stood-down record is replaced, never kept beside it.
@@ -626,16 +646,40 @@ test('staffing again replaces a stood-down record with one carrying its front\'s
   const reserved = written.flat().filter(c => c.status === 'staffing')
   const front = reserved.find(c => c.callSign === 'FIELDKIT')
   const web = reserved.find(c => c.callSign === 'FIELDKIT-WEB')
-  expect(front?.cloneOwners).toEqual(['fieldkit-labs', 'fieldkit-org'])
+  const kiln = reserved.find(c => c.callSign === 'KILN')
+  // Every portfolio folder with a hub is a front; _archive (no front's name), drafts (no hub) and README.md are not.
+  expect(front?.cloneFronts).toEqual(['fieldkit', 'kiln', 'shelf'])
   expect(front?.cloneHome).toBe('/p/fronts/fieldkit')
-  expect(web?.cloneOwners).toEqual(['fieldkit-labs', 'fieldkit-org'])
+  expect(web?.cloneFronts).toEqual(['fieldkit', 'kiln', 'shelf'])
   expect(web?.cloneHome).toBe('/p/fronts/fieldkit')
   expect(web?.cwd).toBe('/p/fronts/fieldkit/web')
+  // A front whose folder is its repository is staffed with clones like any other.
+  expect(kiln?.cwd).toBe('/p/fronts/kiln')
+  expect(kiln?.cloneHome).toBe('/p/fronts/kiln')
+  expect(kiln?.cloneFronts).toEqual(['fieldkit', 'kiln', 'shelf'])
+  // Each Controller reads the clone rule in its staffing order, not first in a refusal.
+  expect(prompts).toHaveLength(3)
+  for (const [k, home] of [[0, '/p/fronts/fieldkit'], [1, '/p/fronts/fieldkit'], [2, '/p/fronts/kiln']] as const) {
+    const line = prompts[k]?.split('\n').find(l => l.startsWith('Clones: ')) ?? `no clone line in order ${k}`
+    expect(line).toContain('any repository URL (https://, http://, ssh://, git+ssh://, ssh+git://, git:// or USER@HOST:PATH)')
+    expect(line).toContain('one level under a front\'s folder, /p/fronts/<front>/<repo>, for fieldkit, kiln, shelf')
+    expect(line).toContain(`\`cd ${home} && git clone <url>\``)
+    expect(line).toContain('Refused: a remote helper (HELPER::), a file:// or local-path source, this Mac as the host (localhost, 127.x.x.x, 0.x.x.x) or a host written as a number other than a.b.c.d, a host or user starting with -, a folder starting with ., a .. after a folder name in the destination, a landing anywhere else')
+  }
 })
-// A Bash call in the Controller's own loop, decided by the tool.check chain as a session decides it.
-const bashBy = ($: Engine, command: string) => $.tool.check({ tool: 'Bash', input: { command }, agentId: 'f1' } as Parameters<Engine['tool']['check']>[0])
+test('a console\'s own front stays on its record when the portfolio\'s folder cannot be listed', async ($, on) => {
+  portfolio(on, true)
+  const seen = writes(on, 'consoles')
+  on('agent.spawn', () => ({ deny: 'stop here' }))
+  expect((await run($, 'staff shelf')).text).toContain('Could not staff SHELF: stop here')
+  const reserved = (seen.get('consoles') as Console[][]).flat().find(c => c.callSign === 'SHELF' && c.status === 'staffing')
+  expect(reserved?.cloneHome).toBe('/p/fronts/shelf')
+  expect(reserved?.cloneFronts).toEqual(['shelf'])
+})
+// A Bash call in a Controller's own loop, decided by the tool.check chain as a session decides it.
+const bashBy = ($: Engine, command: string, agentId = 'f1') => $.tool.check({ tool: 'Bash', input: { command }, agentId } as Parameters<Engine['tool']['check']>[0])
 
-test('the tool.check hook judges a staffed Controller\'s clone by the owners and folder on its record', async ($, on) => {
+test('the tool.check hook judges a staffed Controller\'s clone by the folder and fronts on its record', async ($, on) => {
   portfolio(on)
   const audit = auditLines(on)
   seed(on, { consoles: [FK] })
@@ -646,19 +690,55 @@ test('the tool.check hook judges a staffed Controller\'s clone by the owners and
   const stash = await bashBy($, 'cd /p/fronts/fieldkit && git stash')
   expect(stash.decision).toBe('deny')
   expect(stash.reason).toContain('never stashes')
-  // The positive control: its own front's repository, into its front's folder.
-  expect((await bashBy($, 'cd /p/fronts/fieldkit && git clone --depth 1 git@github.com:fieldkit-org/api.git')).decision).toBe('allow')
-  expect((await bashBy($, 'cd /p/fronts/fieldkit && git clone https://github.com/FieldKit-Labs/web')).decision).toBe('allow')
+  // A third party's repository into its own front, and repositories into other fronts, pinned to either folder.
+  expect((await bashBy($, 'cd /p/fronts/fieldkit && git clone --depth 1 https://gitlab.com/maps-team/tiles.git')).decision).toBe('allow')
+  expect((await bashBy($, 'cd /p/fronts/fieldkit && git clone git@github.com:fieldkit-org/api.git /p/fronts/shelf/api')).decision).toBe('allow')
+  expect((await bashBy($, 'cd /p/fronts/shelf && git clone git@github.com:shelf-co/shelf.git')).decision).toBe('allow')
+  // kiln's folder is its repository; a clone into it is allowed all the same.
+  expect((await bashBy($, 'cd /p/fronts/kiln && git clone https://codeberg.org/kiln/glaze.git')).decision).toBe('allow')
   const upload = await bashBy($, 'cd /p/fronts/fieldkit && git clone -u x git@github.com:fieldkit-org/api.git')
   expect(upload.decision).toBe('deny')
   expect(upload.reason).toContain('-u is not an allowed clone option')
-  const other = await bashBy($, 'cd /p/fronts/fieldkit && git clone git@github.com:shelf-co/shelf.git')
-  expect(other.decision).toBe('deny')
-  expect(other.reason).toContain('shelf-co is not an owner your front\'s spokes name (they name fieldkit-labs, fieldkit-org)')
-  const away = await bashBy($, 'cd /p/fronts/fieldkit && git clone git@github.com:fieldkit-org/api.git /p/fronts/shelf/api')
+  const ghost = await bashBy($, 'cd /p/fronts/fieldkit && git clone git@github.com:fieldkit-org/api.git /p/fronts/ghost/api')
+  expect(ghost.decision).toBe('deny')
+  expect(ghost.reason).toContain('ghost is not a front this console was staffed with (fieldkit, kiln, shelf)')
+  const flat = await bashBy($, 'cd /p/fronts/fieldkit && git clone git@github.com:fieldkit-org/api.git /p/fronts/shelf')
+  expect(flat.decision).toBe('deny')
+  expect(flat.reason).toContain('it would land in /p/fronts/shelf; a clone lands one level under a front\'s folder, here /p/fronts/shelf/api')
+  const local = await bashBy($, 'cd /p/fronts/fieldkit && git clone /p/fronts/shelf/shelf')
+  expect(local.decision).toBe('deny')
+  expect(local.reason).toContain('/p/fronts/shelf/shelf is a local path')
+  expect(audit.join('\n')).toContain('\tguard\tFIELDKIT\tcontroller Bash denied: A Controller clones only into a front\'s folder, one level down (fronts/<front>/<repo>): -u is not an allowed clone option')
+})
+
+test('a Controller whose front\'s folder is its repository clones there and into other fronts like any other', async ($, on) => {
+  portfolio(on)
+  const KN: Console = { ...FK, callSign: 'KILN', front: 'kiln', name: 'console-kiln', agentId: 'k1', cwd: '/p/fronts/kiln', cloneHome: '/p/fronts/kiln' }
+  seed(on, { consoles: [KN] })
+  on('agent.list', () => ({ value: [] }))
+  on('tool.check', () => ({ decision: 'allow' as const }))
+  // The instrument: an ordinary git call in its folder passes as the KILN Controller's.
+  expect((await bashBy($, 'cd /p/fronts/kiln && git status', 'k1')).decision).toBe('allow')
+  expect((await bashBy($, 'cd /p/fronts/kiln && git clone https://codeberg.org/kiln/glaze.git', 'k1')).decision).toBe('allow')
+  expect((await bashBy($, 'cd /p/fronts/kiln && git clone https://codeberg.org/kiln/glaze.git /p/fronts/fieldkit/glaze', 'k1')).decision).toBe('allow')
+  // A folder inside its repository is two levels under the front's folder, and no folder a clone runs from.
+  const deep = await bashBy($, 'cd /p/fronts/kiln && git clone https://codeberg.org/kiln/glaze.git src/glaze', 'k1')
+  expect(deep.decision).toBe('deny')
+  expect(deep.reason).toContain('it would land in /p/fronts/kiln/src/glaze;')
+  const inside = await bashBy($, 'cd /p/fronts/kiln/src && git clone https://codeberg.org/kiln/glaze.git ../../fieldkit/glaze', 'k1')
+  expect(inside.decision).toBe('deny')
+  expect(inside.reason).toContain('it runs from /p/fronts/kiln/src, a folder inside one a clone may run from, where a link could carry it elsewhere; pin it to a front\'s folder by its full path: `cd /p/fronts/kiln && git clone https://codeberg.org/kiln/glaze.git`')
+})
+
+test('a Controller staffed when a clone landed only in its own front keeps cloning there, from any repository', async ($, on) => {
+  portfolio(on)
+  seed(on, { consoles: [ownFrontOnly(FK)] })
+  on('agent.list', () => ({ value: [] }))
+  on('tool.check', () => ({ decision: 'allow' as const }))
+  expect((await bashBy($, 'cd /p/fronts/fieldkit && git clone https://gitlab.com/maps-team/tiles.git')).decision).toBe('allow')
+  const away = await bashBy($, 'cd /p/fronts/fieldkit && git clone https://gitlab.com/maps-team/tiles.git /p/fronts/shelf/tiles')
   expect(away.decision).toBe('deny')
-  expect(away.reason).toContain('it would land in /p/fronts/shelf/api; a clone lands in /p/fronts/fieldkit/api')
-  expect(audit.join('\n')).toContain('\tguard\tFIELDKIT\tcontroller Bash denied: A Controller clones only its own front\'s repositories, into its front\'s folder: -u is not an allowed clone option')
+  expect(away.reason).toContain('shelf is not a front this console was staffed with (fieldkit)')
 })
 
 test('a Controller staffed before clones were allowed is refused a clone until it is stood down and staffed again', async ($, on) => {
@@ -723,7 +803,7 @@ const storeOf = (on: any, initial: Record<string, unknown> = {}) => {
 const slotWrites = (sets: { key: string; value: unknown }[]) => sets.filter(s => s.key === 'callSignSlots').map(s => s.value as Record<string, number>)
 // Staffed long before any staffing a test runs, so the reservation it writes comes after.
 const EARLY = '2026-01-01T00:00:00.000Z'
-const SH: Console = { ...FK, callSign: 'SHELF', front: 'shelf', name: 'console-shelf', agentId: 's1', cwd: '/p/fronts/shelf/shelf', cloneOwners: ['shelf-co'], cloneHome: '/p/fronts/shelf', staffedAt: EARLY }
+const SH: Console = { ...FK, callSign: 'SHELF', front: 'shelf', name: 'console-shelf', agentId: 's1', cwd: '/p/fronts/shelf/shelf', cloneHome: '/p/fronts/shelf', staffedAt: EARLY }
 
 test('staffing gives the new console a colour no staffed console holds, and keeps it in the plugin store', async ($, on) => {
   portfolio(on)

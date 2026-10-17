@@ -3,7 +3,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { AuditEntry, Console, Lineage, LoopEntry, PendingAdvisory, PollItem, PrWatch, Reservation, Slots } from '../types'
 
-import { commonDir, CONTROLLER_PROMPT, CONTROLLER_TYPE, DEFAULT_BUDGET, EFFORTS, isInsideRelative, MODEL_IDS, remoteOwner, spokeField, spokePath, staffingOrder } from './controller'
+import { commonDir, CONTROLLER_PROMPT, CONTROLLER_TYPE, DEFAULT_BUDGET, EFFORTS, isInsideRelative, MODEL_IDS, spokeField, spokePath, staffingOrder } from './controller'
 
 const APP_PORT = 4777
 const MODEL_LIST = Object.keys(MODEL_IDS).join(', ')
@@ -234,8 +234,9 @@ export const register: Register = on => {
     const role = await roleOf($, e.agentId)
     if (!role) return next(e)
     const c = role.console
-    // A console staffed before clones were allowed has no owners or folder on record, so it clones nothing.
-    const clone = c.cloneOwners && c.cloneHome ? { owners: c.cloneOwners, home: c.cloneHome } : undefined
+    // A console staffed before clones were allowed has no folder on record, so it clones nothing; one
+    // staffed while a clone landed only in its own front has no fronts on record, so it keeps that.
+    const clone = c.cloneHome ? { home: c.cloneHome, fronts: c.cloneFronts ?? [c.front] } : undefined
     const why = toolRefusal(role.kind, e.tool, e.input, c.protectedBranches, c.cwd, clone)
     if (!why) return next(e)
     await log($, 'guard', role.console.callSign, `${role.kind} ${e.tool} denied: ${why}`)
@@ -613,20 +614,15 @@ async function spokeCandidates($: EngineInterface, frontDir: string, project?: s
   return candidates
 }
 
-/** The repository owners every spoke of a front names in its `remote:` line, lower case, each once. */
-async function ownersOf($: EngineInterface, frontDir: string): Promise<string[]> {
-  const owners = new Set<string>()
-  for (const file of await spokeCandidates($, frontDir)) {
-    let text
-    try {
-      text = await $.fs.read(file)
-    } catch {
-      continue
-    }
-    const owner = remoteOwner(spokeField(text, 'remote'))
-    if (owner) owners.add(owner)
+/** The portfolio's fronts: each folder under _command/portfolio with a front's name and a hub, sorted. */
+async function frontsOf($: EngineInterface, root: string): Promise<string[]> {
+  const fronts: string[] = []
+  for (const e of await $.fs.list(`${root}/_command/portfolio`).catch(() => [])) {
+    if (e.kind !== 'dir' || !FRONT.test(e.name)) continue
+    const entries = await $.fs.list(`${root}/_command/portfolio/${e.name}`).catch(() => [])
+    if (entries.some(x => x.kind === 'file' && x.name === '_front.md')) fronts.push(e.name)
   }
-  return [...owners].sort()
+  return fronts.sort()
 }
 
 async function spokesOf($: EngineInterface, frontDir: string, project: string | undefined): Promise<{ file: string; path: string; base?: string }[]> {
@@ -684,9 +680,9 @@ async function staff($: EngineInterface, front: string | undefined, flags: Recor
   if (project && spokes.length === 0) return `No project "${project}" on front "${front}": no spoke with a path found.`
   const repoDir = commonDir(spokes.map(x => x.path))
   const cwd = flags.cwd ?? (repoDir ? `${root}/${repoDir}` : root)
-  // A clone comes from an owner the front's own spokes name, all of them, and lands in the front's folder.
-  const cloneOwners = await ownersOf($, frontDir)
+  // A clone of any repository lands one level under the folder of any front the portfolio has now.
   const cloneHome = `${root}/fronts/${front}`
+  const cloneFronts = [...new Set([...(await frontsOf($, root)), front])].sort()
 
   const scope = project ? `${front}-${project}` : front
   const callSign = callSignOf(scope)
@@ -699,7 +695,7 @@ async function staff($: EngineInterface, front: string | undefined, flags: Recor
     if (holder) return list
     const reserved: Console = {
       callSign, front, ...(project ? { project } : {}), name, agentId: '', cwd, budget,
-      protectedBranches: [...new Set(spokes.flatMap(x => protectedFromSpoke(x.base)))], cloneOwners, cloneHome,
+      protectedBranches: [...new Set(spokes.flatMap(x => protectedFromSpoke(x.base)))], cloneHome, cloneFronts,
       model: flags.model ?? 'default', ...(flags.effort ? { tune: { effort: flags.effort } } : {}), staffedAt: new Date().toISOString(), status: 'staffing',
     }
     return [...list.filter(c => c.callSign !== callSign), reserved]
@@ -712,7 +708,7 @@ async function staff($: EngineInterface, front: string | undefined, flags: Recor
   let spawned: Awaited<ReturnType<EngineInterface['agent']['spawn']>>
   try {
     spawned = await $.agent.spawn({
-      prompt: staffingOrder({ front, ...(project ? { project } : {}), callSign, root, hub, spokes: spokes.map(x => x.file), cwd, budget, progress: `${frontDir}/progress.md` }),
+      prompt: staffingOrder({ front, ...(project ? { project } : {}), callSign, root, hub, spokes: spokes.map(x => x.file), cwd, budget, progress: `${frontDir}/progress.md`, clone: { home: cloneHome, fronts: cloneFronts } }),
       description: `${callSign} console`,
       subagentType: `mission-fleet:${CONTROLLER_TYPE}`,
       name,
