@@ -6,7 +6,24 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
-- 2026-10-15 (latest): the spend recorder (MC-069), a Claude Code mod at
+- 2026-10-17 (latest): the leak sweep's deny-list moves into the instance
+  (MC-137). `tools/leak-sweep.sh promote` reads
+  `_command/leak-sweep.private.txt`, or the file `LEAK_SWEEP_PRIVATE_LIST`
+  names, and exits 2 when there is none. It used to read
+  `tools/leak-sweep.private.txt`, pass without it and report clean with
+  `PrivateTerms=0`, so a sweep that never checked the operator's own names
+  read as a pass. Terms now match in any case, the clean line names the list
+  it read, and instance mode no longer reads the list, since an instance
+  names its own fronts. Cloners: move a list kept at
+  `tools/leak-sweep.private.txt` into `_command/`; a list left at the old
+  path is not read, and promote exits 2 until one exists in the instance.
+  `tools/leak-sweep.ps1` does the same and also takes `-PrivateList`; it
+  and its tests were changed on a machine without PowerShell and have not
+  been run, so a Windows cloner's first run is their first execution. The
+  examples in the standup, epic-flow, mission-flow and learn-from-session
+  skills and in `framework/task-board.md` now use an invented front, acme.
+
+- 2026-10-15: the spend recorder (MC-069), a Claude Code mod at
   `tools/mods/spend-recorder` that records the model, effort and token usage
   of every model call, per session and per agent, in the plugin's store (the
   last 30 sessions). `/spend-log` shows this session's table, and `/spend`
@@ -318,7 +335,7 @@ changes should never reach you silently.
   checks bounded (30-minute default, timeout reports); a red caused by the
   diff gets exactly one re-entry into the Phase 4-6 loop; infra/flake reds and
   second reds become founder-gated items. An integration branch once sat red
-  for five days unnoticed (AI-1814). (MC-022)
+  for five days unnoticed. (MC-022)
 
 - 2026-09-03: Phase 8 closes the loop it was already pointing at. The tracker
   ticket is transitioned to review (transitions discovered, not assumed); the
