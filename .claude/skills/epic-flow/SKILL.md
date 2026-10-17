@@ -217,13 +217,13 @@ record it in `00-face.md` as `shape: feature` or `shape: batch`:
 
 - **Feature** - the children compose one capability a user could name. The
   branch is named on it, `epic/<key>-<feature>` as in
-  `epic/ai-2114-mesh-identity`, and the PR title states the capability.
+  `epic/acme-120-saved-views`, and the PR title states the capability.
 - **Batch** - the children are scattered across the app and sum to no one
   area. Name the branch for what produced the set and the kind of change it
   makes, never for the areas it touches: `epic/<key>-<origin>-<kind>`, where
   the origin is the review, audit, incident, retro or promotion pass the
   tickets came from and the kind is what they do (`fixes`, `polish`,
-  `hardening`, `a11y`), as in `epic/js-151-ux-review-p1s`. With no shared
+  `hardening`, `a11y`), as in `epic/acme-130-ux-review-p1s`. With no shared
   origin, the kind and the date: `epic/<key>-hardening-2026-10-10`. A list of
   areas, `misc`, or a ticket count is never a name. The batch PR's commit
   index is grouped by app area, so a reviewer still reads it by surface.

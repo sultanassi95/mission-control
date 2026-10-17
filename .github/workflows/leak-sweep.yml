@@ -1,0 +1,51 @@
+# The leak sweep on every push and pull request, over every file that ships.
+#
+# The deny-list of the operator's private names lives in their instance and
+# never reaches this repository, so these runs load no private terms
+# (PrivateTerms=0 in the clean line) and check the generic rules: paths,
+# emails, keys and tokens, account ids, the legacy name and pinned model
+# names. The private names are checked by promote mode on the operator's
+# machine, with their list, before a push.
+name: leak-sweep
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  bash:
+    name: leak-sweep (bash)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Sweep every file that ships
+        run: LEAK_SWEEP_PRIVATE_LIST=/dev/null bash tools/leak-sweep.sh promote
+      - name: The sweep's own tests
+        run: bash tools/tests/leak-sweep.tests.sh
+
+  powershell:
+    name: leak-sweep (PowerShell twin)
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Sweep every file that ships
+        shell: powershell
+        run: |
+          $empty = Join-Path $env:RUNNER_TEMP "no-private-terms.txt"
+          New-Item -ItemType File -Force $empty | Out-Null
+          & powershell -NoProfile -ExecutionPolicy Bypass -File tools/leak-sweep.ps1 -Mode promote -PrivateList $empty
+          exit $LASTEXITCODE
+      - name: The twin's own tests
+        shell: powershell
+        run: |
+          & powershell -NoProfile -ExecutionPolicy Bypass -File tools/tests/leak-sweep.tests.ps1
+          exit $LASTEXITCODE

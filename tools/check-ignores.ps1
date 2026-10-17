@@ -34,6 +34,8 @@ $mustIgnore = @(
   "_command/portfolio/acme/api/tasks/T-001-a-ticket/scripts/repro.sh",
   "_command/portfolio/acme/api/tasks/T-001-a-ticket/samples/input.bin",
   "_command/portfolio/acme/api/scripts.md",
+  # the leak sweep's deny-list: the operator's private names, by design
+  "_command/leak-sweep.private.txt",
   # ticket payloads anywhere, including a name nobody thought to enumerate
   "framework/examples/fieldkit/tasks/T-001-offline-sync-conflict-merge/samples/input.bin",
   "framework/examples/fieldkit/tasks/T-001-offline-sync-conflict-merge/artifacts/dump.log",
@@ -42,7 +44,8 @@ $mustIgnore = @(
   "framework/examples/fieldkit/tasks/T-001-offline-sync-conflict-merge/logs/run.log",
   # retired payload location, kept ignored for instances whose spokes still name it
   ".tickets/T-001-a-ticket/samples/old.bin",
-  # operator-local and generated
+  # operator-local and generated; the deny-list's old home, kept ignored until
+  # a list left there is moved into the instance
   "tools/leak-sweep.private.txt",
   "node_modules/pkg/index.js",
   ".docs-viewer-cache/diagram.svg",
@@ -66,6 +69,8 @@ $mustTrack = @(
   "framework/examples/fieldkit/tasks/T-001-offline-sync-conflict-merge/ticket.md",
   "framework/examples/fieldkit/tasks/T-001-offline-sync-conflict-merge/scripts/repro-sync-conflict.sh",
   "tools/leak-sweep.ps1",
+  # the CI that runs the sweep on every push and pull request
+  ".github/workflows/leak-sweep.yml",
   "tools/check-ignores.ps1",
   "tools/check-ignores.sh",
   ".claude/skills/mission-flow/SKILL.md",

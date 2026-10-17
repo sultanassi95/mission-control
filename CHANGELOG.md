@@ -14,6 +14,49 @@ changes should never reach you silently.
   `LICENSE` text is what binds. Its `Required Notice:` line is unchanged and
   must still reach everyone who gets a copy.
 
+- 2026-10-17: the leak sweep reads every file that ships, and CI
+  runs it (MC-146). `promote` read a fixed list of folders
+  (`framework/`, `.claude/skills/` and four root files), so nothing under
+  `tools/` was checked, and private front names in the mod tests, the app
+  and a comment shipped. It now reads each file git tracks or would add
+  (outside a git work tree, every file under the root but `.git` and
+  `_command/`), skips binary, vendored and generated files and the planted
+  test fixtures, and counts each kind in the clean line. Those names are
+  now invented (acme, globex, initech), and the code lines the generic
+  rules flag on purpose carry the exempt marker. The shell twin matches
+  bytes (`LC_ALL=C`): under a UTF-8 locale macOS's grep matched nothing on
+  a line holding a byte that is not UTF-8, so a name there passed. A term
+  holding a letter outside ASCII is matched again in a UTF-8 locale, list
+  lines are trimmed (a Windows line ending never matched), the exempt
+  marker no longer hides a deny-list term, and a deny-list among the files
+  that ship fails the sweep instead of being skipped. The email rule stops
+  counting an SSH remote's `git` user and the domains reserved for
+  examples and tests. The standup skill no longer names one operator's
+  time zone.
+  `.github/workflows/leak-sweep.yml` runs promote and both test suites on
+  every push and pull request, on Linux and Windows; its Windows job is the
+  first run of the PowerShell twin and its tests, and both pass. CI has no
+  deny-list, so it checks the generic rules; the private names stay a
+  local check, promote with the operator's list, before a push. The app
+  now shows every profile name with a plain leading capital.
+
+- 2026-10-17: the leak sweep's deny-list moves into the instance
+  (MC-137). `tools/leak-sweep.sh promote` reads
+  `_command/leak-sweep.private.txt`, or the file `LEAK_SWEEP_PRIVATE_LIST`
+  names, and exits 2 when there is none. It used to read
+  `tools/leak-sweep.private.txt`, pass without it and report clean with
+  `PrivateTerms=0`, so a sweep that never checked the operator's own names
+  read as a pass. Terms now match in any case, the clean line names the list
+  it read, and instance mode no longer reads the list, since an instance
+  names its own fronts. Cloners: move a list kept at
+  `tools/leak-sweep.private.txt` into `_command/`; a list left at the old
+  path is not read, and promote exits 2 until one exists in the instance.
+  `tools/leak-sweep.ps1` does the same and also takes `-PrivateList`; it
+  and its tests were changed on a machine without PowerShell and have not
+  been run, so a Windows cloner's first run is their first execution. The
+  examples in the standup, epic-flow, mission-flow and learn-from-session
+  skills and in `framework/task-board.md` now use an invented front, acme.
+
 - 2026-10-15: the spend recorder (MC-069), a Claude Code mod at
   `tools/mods/spend-recorder` that records the model, effort and token usage
   of every model call, per session and per agent, in the plugin's store (the
@@ -326,7 +369,7 @@ changes should never reach you silently.
   checks bounded (30-minute default, timeout reports); a red caused by the
   diff gets exactly one re-entry into the Phase 4-6 loop; infra/flake reds and
   second reds become founder-gated items. An integration branch once sat red
-  for five days unnoticed (AI-1814). (MC-022)
+  for five days unnoticed. (MC-022)
 
 - 2026-09-03: Phase 8 closes the loop it was already pointing at. The tracker
   ticket is transitioned to review (transitions discovered, not assumed); the
