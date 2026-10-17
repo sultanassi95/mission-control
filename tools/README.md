@@ -43,11 +43,11 @@ Windows, and a tool listed with only one form has no twin yet.
 The personalization firewall. It scans text for anything that identifies the
 operator (names, emails, paths, secrets, old brand names) before it ships.
 
-The two scripts enforce the same rules, except where they read the deny-list
-(below). One platform note: on user-path rules the .ps1 uses a lookahead and
-the .sh an equivalent character class, so templated examples like
-`C:\Users\<NAME>` pass both; prefer `~/` style paths in shipped examples
-anyway.
+The two scripts enforce the same rules and read the deny-list from the same
+places; each opens with a note to keep them in step. One platform note: on
+user-path rules the .ps1 uses a lookahead and the .sh an equivalent character
+class, so templated examples like `C:\Users\<NAME>` pass both; prefer `~/`
+style paths in shipped examples anyway.
 
 Two run-sites, two rule sets:
 - **promote mode** - before anything is published: the generic identity
@@ -103,13 +103,10 @@ promote exits 2 when the list is missing: a sweep that never checked the
 operator's own names is not a pass. An empty list is a choice, so it runs,
 and the clean line names the list it read (`PrivateTerms=N from <path>`).
 The list used to live at `tools/leak-sweep.private.txt`; a list left there
-is not read, and the error says to move it. Tests:
-`tests/leak-sweep.tests.sh`, 8 cases, with the missing list as the
-negative control.
-
-The `.ps1` twin has not caught up: it still reads
-`tools/leak-sweep.private.txt` and runs without a list. On Windows, read
-the clean line's `PrivateTerms` count before trusting a promote run.
+is not read, and the error says to move it. The `.ps1` twin also takes
+`-PrivateList <file>`, which wins over the variable. Tests:
+`tests/leak-sweep.tests.sh`, 8 cases, and `tests/leak-sweep.tests.ps1`,
+each with the missing list as the negative control.
 
 ## check-refs
 

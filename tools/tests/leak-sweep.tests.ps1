@@ -6,10 +6,23 @@ $dirty     = Join-Path $fixtures "dirty"
 $clean     = Join-Path $fixtures "clean"
 $privList  = Join-Path $PSScriptRoot "test-private.txt"
 "Zoltan" | Set-Content $privList -Encoding utf8
+# A list named in the caller's environment would stand in for the ones these
+# cases name or leave missing; the case that needs the override sets it.
+Remove-Item Env:LEAK_SWEEP_PRIVATE_LIST -ErrorAction SilentlyContinue
 
 $failures = @()
 function Assert($name, $cond) {
   if ($cond) { Write-Output "PASS  $name" } else { Write-Output "FAIL  $name"; $script:failures += $name }
+}
+
+# Runs a copy of the sweep in a child process and returns its exit code and its
+# output, stderr included. Windows PowerShell 5.1 turns redirected native
+# stderr into error records, which "Stop" would make terminating, so the
+# preference is relaxed inside this function only.
+function Sweep([string]$script, [string[]]$sweepArgs) {
+  $ErrorActionPreference = "Continue"
+  $lines = @(& powershell -NoProfile -ExecutionPolicy Bypass -File $script @sweepArgs 2>&1 | ForEach-Object { "$_" })
+  return @{ Code = $LASTEXITCODE; Text = ($lines -join "`n") }
 }
 
 $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $sweep -Root $dirty -Path @(".") -Mode promote -PrivateList $privList
@@ -31,10 +44,47 @@ $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $sweep -Root $dirty
 Assert "instance flags placeholder"        (($out | Select-String '\[leftover-placeholder\]').Count -ge 3)
 Assert "instance skips identity rules"     (($out | Select-String '\[email\]|\[windows-user-path\]|\[unix-home-path\]|\[aws-account-id\]').Count -eq 0)
 Assert "instance still flags secrets"      (($out | Select-String '\[aws-access-key\]|\[github-token\]|\[generic-secret\]').Count -ge 3)
-Assert "instance still flags private term" (($out | Select-String '\[private-term\] Zoltan').Count -ge 1)
+Assert "instance does not read the deny-list" (($out | Select-String '\[private-term\]').Count -eq 0)
 
 $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $sweep -Root $clean -Path @(".") -Mode promote -PrivateList $privList
 Assert "clean promote exits 0"             ($LASTEXITCODE -eq 0)
+Assert "clean line names the list it read" (($out | Select-String -SimpleMatch "PrivateTerms=1 from $privList").Count -eq 1)
+
+# Where the deny-list is read from. Each case runs a copy of the sweep in its
+# own folder, so the instance beside that copy's tools/ folder and the old
+# tools/ path are the test's own, never the repo's.
+$sandbox = Join-Path ([System.IO.Path]::GetTempPath()) ("leak-sweep-tests-" + [guid]::NewGuid().ToString("N"))
+function Portfolio([string]$name) {
+  $p = Join-Path $sandbox $name
+  New-Item -ItemType Directory -Force (Join-Path $p "tools") | Out-Null
+  New-Item -ItemType Directory -Force (Join-Path $p "_command") | Out-Null
+  Copy-Item $sweep (Join-Path $p "tools\leak-sweep.ps1")
+  return $p
+}
+
+$p = Portfolio "missing"
+$r = Sweep (Join-Path $p "tools\leak-sweep.ps1") @("-Root", $clean, "-Path", ".", "-Mode", "promote")
+Assert "NEGATIVE CONTROL: no deny-list, so promote exits 2" ($r.Code -eq 2)
+Assert "no deny-list: the error names the path it looked at" ($r.Text.Contains("no private deny-list at '" + (Join-Path $p "_command/leak-sweep.private.txt") + "'"))
+
+$p = Portfolio "legacy"
+"Zoltan" | Set-Content (Join-Path $p "tools\leak-sweep.private.txt") -Encoding utf8
+$r = Sweep (Join-Path $p "tools\leak-sweep.ps1") @("-Root", $dirty, "-Path", ".", "-Mode", "promote")
+Assert "a list at the old tools/ path is not read: exit 2"  ($r.Code -eq 2)
+Assert "a list at the old tools/ path: the error says move it" ($r.Text.Contains("sits at the old path"))
+
+$p = Portfolio "instance"
+"Zoltan" | Set-Content (Join-Path $p "_command\leak-sweep.private.txt") -Encoding utf8
+$r = Sweep (Join-Path $p "tools\leak-sweep.ps1") @("-Root", $dirty, "-Path", ".", "-Mode", "promote")
+Assert "the list in the instance is read by default"  (($r.Code -eq 1) -and $r.Text.Contains("[private-term] Zoltan"))
+
+$p = Portfolio "override"
+$env:LEAK_SWEEP_PRIVATE_LIST = $privList
+$r = Sweep (Join-Path $p "tools\leak-sweep.ps1") @("-Root", $dirty, "-Path", ".", "-Mode", "promote")
+Remove-Item Env:LEAK_SWEEP_PRIVATE_LIST
+Assert "LEAK_SWEEP_PRIVATE_LIST names a list outside the instance" (($r.Code -eq 1) -and $r.Text.Contains("[private-term] Zoltan"))
+
+Remove-Item $sandbox -Recurse -Force
 
 $wb = Join-Path $fixtures "wb"; New-Item -ItemType Directory -Force $wb | Out-Null
 "We use NestJS for the API." | Set-Content (Join-Path $wb "wb.md") -Encoding utf8

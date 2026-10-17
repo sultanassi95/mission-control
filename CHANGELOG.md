@@ -17,9 +17,11 @@ changes should never reach you silently.
   names its own fronts. Cloners: move a list kept at
   `tools/leak-sweep.private.txt` into `_command/`; a list left at the old
   path is not read, and promote exits 2 until one exists in the instance.
-  The `.ps1` twin still reads the old path. The examples in the standup,
-  epic-flow, mission-flow and learn-from-session skills and in
-  `framework/task-board.md` now use an invented front, acme.
+  `tools/leak-sweep.ps1` does the same and also takes `-PrivateList`; it
+  and its tests were changed on a machine without PowerShell and have not
+  been run, so a Windows cloner's first run is their first execution. The
+  examples in the standup, epic-flow, mission-flow and learn-from-session
+  skills and in `framework/task-board.md` now use an invented front, acme.
 
 - 2026-10-15: the spend recorder (MC-069), a Claude Code mod at
   `tools/mods/spend-recorder` that records the model, effort and token usage

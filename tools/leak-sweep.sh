@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# leak-sweep.sh - bash twin of leak-sweep.ps1.
+# leak-sweep.sh - bash twin of leak-sweep.ps1. Keep the two in step: the
+# rules, the targets, where the deny-list is read from and the exit codes.
 # Usage: tools/leak-sweep.sh [promote|instance] [root]
 #
 # promote reads the operator's deny-list from the instance,

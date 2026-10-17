@@ -1,13 +1,31 @@
+# leak-sweep.ps1 - PowerShell twin of leak-sweep.sh. Keep the two in step:
+# the rules, the targets, where the deny-list is read from and the exit codes.
+# Only the shell twin runs on macOS and Linux, so a change here is checked by
+# reading it against leak-sweep.sh.
+#
+# promote reads the operator's deny-list from the instance,
+# _command/leak-sweep.private.txt beside this tools/ folder (gitignored with
+# the rest of _command/), or from -PrivateList, or from the file
+# LEAK_SWEEP_PRIVATE_LIST names, for a run from a clone or worktree with no
+# instance of its own. With no list it exits 2: a sweep that never checked the
+# operator's own names is not clean.
 param(
   # $Mode is FIRST so `leak-sweep.ps1 promote` selects a mode. With $Path first,
   # that bound "promote" to a path which does not exist: zero files, exit 0, and
   # `leak-sweep.ps1 instance` reported Mode=promote because $Mode never got it.
   [ValidateSet("promote", "instance")][string]$Mode = "promote",
   [string[]]$Path,
-  [string]$PrivateList = (Join-Path $PSScriptRoot "leak-sweep.private.txt"),
+  [string]$PrivateList,
   [string]$Root = (Split-Path $PSScriptRoot -Parent)
 )
 $ErrorActionPreference = "Stop"
+
+if (-not $PrivateList) {
+  $PrivateList = if ($env:LEAK_SWEEP_PRIVATE_LIST) { $env:LEAK_SWEEP_PRIVATE_LIST } else { Join-Path (Split-Path $PSScriptRoot -Parent) "_command/leak-sweep.private.txt" }
+}
+# Where the list used to live; read never, named in the error so a list left
+# there is moved rather than silently skipped.
+$legacyList = Join-Path $PSScriptRoot "leak-sweep.private.txt"
 
 # Generic rule families. Ship publicly; contain NO private terms.
 $rules = @(
@@ -25,10 +43,11 @@ $defaultPromoteTargets = @("framework", ".claude\skills", "README.md", "LIFTOFF.
 $defaultInstanceTargets = @("_command", "CLAUDE.md")
 
 if ($Mode -eq "instance") {
-  # Instance mode guards a PRIVATE instance: leftover template placeholders +
-  # the operator's deny-list (if present). The generic identity rules above
-  # guard the PUBLIC repo only - an instance legitimately contains its own
-  # founder's paths and email.
+  # Instance mode guards a PRIVATE instance: leftover template placeholders and
+  # live secrets. The generic identity rules above and the deny-list guard the
+  # PUBLIC repo only - an instance legitimately contains its own founder's
+  # paths and email, and names the fronts and the employer the deny-list keeps
+  # out of what ships.
   #
   # It reads a different tree for the same reason. Pointed at framework/ it
   # reported the kit templates' deliberate <PLACEHOLDER-...> blanks as leaks
@@ -50,8 +69,26 @@ if (-not $Path) {
 }
 
 $privateTerms = @()
-if (Test-Path $PrivateList) {
-  $privateTerms = Get-Content $PrivateList | Where-Object { $_ -and $_ -notmatch '^\s*#' } | ForEach-Object { $_.Trim() }
+if ($Mode -eq "promote") {
+  # A missing list used to pass with PrivateTerms=0, so the operator's own
+  # names went unchecked while the sweep reported clean. An empty list is a
+  # choice someone made; a missing one is not.
+  $listLines = $null
+  if (Test-Path -LiteralPath $PrivateList -PathType Leaf) {
+    try { $listLines = @(Get-Content -LiteralPath $PrivateList -ErrorAction Stop) } catch { $listLines = $null }
+  }
+  if ($null -eq $listLines) {
+    [Console]::Error.WriteLine("LEAK-SWEEP ERROR: no private deny-list at '$PrivateList', so the operator's own names cannot be checked.")
+    if (Test-Path -LiteralPath $legacyList -PathType Leaf) {
+      [Console]::Error.WriteLine("  A list sits at the old path '$legacyList': move it into the instance, to the path above.")
+    } else {
+      [Console]::Error.WriteLine("  Create it with one term per line ('#' starts a comment), or set LEAK_SWEEP_PRIVATE_LIST to a list elsewhere.")
+    }
+    exit 2
+  }
+  # Matched without regard to case, as -match always is: a name is the same
+  # name capitalised.
+  $privateTerms = @($listLines | Where-Object { $_ -and $_ -notmatch '^\s*#' } | ForEach-Object { $_.Trim() })
 }
 
 $exemptMarker = 'MC-LEAK-EXEMPT:'
@@ -115,5 +152,9 @@ if ($hits.Count -gt 0) {
   Write-Output ("LEAK-SWEEP FAILED: {0} hit(s). Mode={1}." -f $hits.Count, $Mode)
   exit 1
 }
-Write-Output ("LEAK-SWEEP CLEAN: 0 hits across {0} file(s). Mode={1}. PrivateTerms={2}." -f $targets.Count, $Mode, $privateTerms.Count)
+if ($Mode -eq "promote") {
+  Write-Output ("LEAK-SWEEP CLEAN: 0 hits across {0} file(s). Mode={1}. PrivateTerms={2} from {3}." -f $targets.Count, $Mode, $privateTerms.Count, $PrivateList)
+} else {
+  Write-Output ("LEAK-SWEEP CLEAN: 0 hits across {0} file(s). Mode={1}. The deny-list is for what ships, so this mode does not read it." -f $targets.Count, $Mode)
+}
 exit 0
