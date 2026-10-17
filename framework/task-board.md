@@ -89,7 +89,7 @@ Controller puts its worktrees inside the repo.
 
 A ticket is a **folder**, `tasks/<ID>-<slug>/`, whose name is its identity (ID
 zero-padded and sequenced per board for the native tracker, or the external key
-like `AI-1471`; slug in kebab-case). The folder moves as one unit when a
+like `ACME-101`; slug in kebab-case). The folder moves as one unit when a
 single-project front promotes to multi-project, so the id and its history
 survive the move. Inside it, from `kit/templates/_task.template.md`:
 
@@ -175,7 +175,7 @@ the external tracker, never mirrored here (the one-tracker rule). The folder
 still exists as the working-file home; `ticket.md` shrinks to a pointer plus the
 DoD checklist:
 
-    > Tracked in: JIRA AI-1471 - <url>
+    > Tracked in: JIRA ACME-101 - <url>
     (then the Definition of Done checklist)
 
 That is not a second copy of the ticket - it is the local artifact home and the

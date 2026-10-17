@@ -629,7 +629,7 @@ paths" below, which applies here too.
 _command/portfolio/<front>/[<project>/]tasks/<ID>-<slug>/ticket.md
 ```
 
-where `<ID>` is the tracker key (`AI-1639`, `#214`) or the native task id
+where `<ID>` is the tracker key (`ACME-113`, `#214`) or the native task id
 (`T-NNN`). See `framework/task-board.md` for the folder layout.
 
 With an external tracker, replace Context / Acceptance criteria /
@@ -1259,7 +1259,7 @@ Choose ONE destination per fact, by what the fact binds:
 changes when the PROJECT's shape changes, never when you merely do work -
 the reference-versus-state split in `framework/continuity-stack.md`. "The
 RDS is VPC-private, so a data change ships as a migration" is structural.
-"AI-1628 shipped on Tuesday" is state and belongs in `progress.md`. If a
+"ACME-113 shipped on Tuesday" is state and belongs in `progress.md`. If a
 future session would not act differently for knowing it, do not write it.
 
 Three tie-breakers for the cases the bar alone does not settle:
