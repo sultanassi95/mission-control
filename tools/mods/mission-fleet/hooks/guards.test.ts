@@ -377,3 +377,68 @@ test('a decision sent to Flight holds its gate for the code lifetime, then frees
   expect(awaitingFlight(undefined, at)).toBe(false)
   expect(awaitingFlight('not a date', at)).toBe(false)
 })
+
+// ---- redirects read as the shell reads them (MC-151) ----
+// The Bash tool runs zsh; an fd number, an input target or `&>` must not shift the git call the guard checks.
+
+test('an fd number, an input target and the and-redirect are redirects, never words that shift the command', () => {
+  const words = (cmd: string) => tokenize(cmd).commands[0]?.words.map(w => w.text)
+  const reds = (cmd: string) => tokenize(cmd).commands[0]?.redirects.map(w => w.text)
+  expect(words('git log 2>&1')).toEqual(['git', 'log'])
+  expect(words('git log 2>/dev/null')).toEqual(['git', 'log'])
+  // a space before the operator keeps the number a word
+  expect(words('echo 2 >f')).toEqual(['echo', '2'])
+  // input redirect targets are redirects, not words
+  expect(words('git log </dev/null')).toEqual(['git', 'log'])
+  expect(reds('git log </dev/null')).toContain('/dev/null')
+  expect(words('cat <&0')).toEqual(['cat'])
+  expect(words('cat <<<here')).toEqual(['cat'])
+  expect(reds('cat <<<here')).toContain('here')
+  // `&>` and `&>>` stay one command
+  expect(tokenize('git log &>/dev/null').commands).toHaveLength(1)
+  expect(words('git log &>/dev/null')).toEqual(['git', 'log'])
+  expect(tokenize('git log &>>/dev/null').commands).toHaveLength(1)
+})
+
+test('a quoted or escaped digit is a word, and a digit against &> is kept, so neither frees a push or stash', () => {
+  const S = '/w/fronts/acme/api'
+  const words = (cmd: string) => tokenize(cmd).commands[0]?.words.map(w => w.text)
+  // The shell makes an fd only from an UNQUOTED digit written against the operator; a quoted or escaped
+  // digit is an ordinary word (echo A '2'>&1 prints "A 2" in bash and zsh), so it must not be dropped.
+  for (const d of ["'2'", '"2"', '\\2', "2''"]) {
+    expect(words(`git --namespace ${d}>/dev/null stash`)).toContain('2')
+    expect(C(`git -C ${S} --namespace ${d}>/dev/null stash`)).toContain('stash')
+    expect(C(`git -C ${S} --namespace ${d}>/dev/null push --force`)).toContain('force')
+    expect(C(`git -C ${S} --namespace ${d}</dev/null push --force`)).toContain('force')
+  }
+  // an unquoted digit against the operator IS an fd and is dropped, so the real redirect case stays intact
+  expect(words('git --namespace 2>/dev/null log')).toEqual(['git', '--namespace', 'log'])
+  // bash and zsh disagree on a digit written against `&>`, so keep it a word and refuse (fail closed)
+  expect(words(`git -C ${S} --namespace 2&>/dev/null push --force`)).toContain('2')
+  expect(C(`git -C ${S} --namespace 2&>/dev/null push --force`)).toContain('force')
+  expect(C(`git -C ${S} --namespace 2&>>/dev/null stash`)).toContain('stash')
+})
+
+test('a phantom redirect word cannot hide the git subcommand the guard checks', () => {
+  const S = '/w/fronts/acme/api'
+  // --namespace consumes the fd or target on the old code, so the guard read `status` while git ran push.
+  for (const op of ['2>&1', '2>/dev/null', '</dev/null', '<<<x', '<>f']) {
+    expect(C(`git -C ${S} --namespace ${op} status push origin main`, ['main'])).toContain('main is a base or deploy branch')
+  }
+  // `&>` split the command on the old code, hiding the push behind a headless first command.
+  expect(C(`git -C ${S} &>/dev/null push origin main`, ['main'])).toContain('main is a base or deploy branch')
+  expect(C(`git -C ${S} &>>/dev/null push origin main`, ['main'])).toContain('main is a base or deploy branch')
+  expect(toolRefusal('controller', 'Bash', { command: `git -C ${S} --namespace 2>&1 status push origin main` }, ['main'], S)).toContain('main is a base or deploy branch')
+  // a back-room agent cannot hide a stash behind `&>>` either
+  expect(B('git -C /w/fronts/acme/api &>>/dev/null stash')).toContain('stash')
+})
+
+test('redirects do not change ordinary commands, and a Flight-only file is seen as an input target', () => {
+  expect(C('git -C /w/fronts/acme/api log > /tmp/out.txt')).toBeUndefined()
+  expect(C('git -C /w/fronts/acme/api log 2>&1 | grep fix')).toBeUndefined()
+  expect(C('echo hi > out 2> err')).toBeUndefined()
+  // an input redirect whose target is a Flight-only file is classified as a redirect and still caught
+  expect(tokenize('cat < _command/daily/today.md').commands[0]?.redirects.map(w => w.text)).toContain('_command/daily/today.md')
+  expect(C('cat < _command/daily/today.md')).toContain("Flight's to write")
+  expect(C('echo x > _command/trackers/fronts.md')).toContain("Flight's to write")
+})
