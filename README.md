@@ -12,7 +12,7 @@
   <img alt="Built for Claude Code" src="https://img.shields.io/badge/built%20for-Claude%20Code-0A6A70">
   <img alt="26 skills" src="https://img.shields.io/badge/skills-26-0A6A70">
   <img alt="Runs locally" src="https://img.shields.io/badge/runs-locally-0A6A70">
-  <img alt="License: PolyForm Noncommercial" src="https://img.shields.io/badge/license-PolyForm%20NC-44575C">
+  <img alt="License: PolyForm Shield" src="https://img.shields.io/badge/license-PolyForm%20Shield-44575C">
 </p>
 
 ---
@@ -201,7 +201,11 @@ Mission Control joins two lineages proven on a real multi-venture portfolio: a g
 `framework/learning-seed/` are that portfolio's real corpus, de-personalized, and the leak
 gates keep it that way on every publish.
 
-**License: PolyForm Noncommercial 1.0.0**, see [LICENSE](LICENSE). Free for personal and
-noncommercial use. Commercial use of the software itself (reselling it, hosting it as a
-service, or building commercial products on it) is not granted; a commercial offering is
-planned by the author. For commercial licensing, open an issue on this repository.
+**License: PolyForm Shield 1.0.0**, see [LICENSE](LICENSE). In plain words: you may use
+Mission Control for any purpose, at work too, change it and share it, as long as whoever
+gets a copy from you also gets the license, or its URL, and its `Required Notice:` line.
+The one purpose it excludes is providing a product that competes with Mission Control, or
+with any product its author provides using it. Selling or hosting it, or something built
+from it, as a substitute for it competes, and so does giving such a product away. That
+makes Mission Control source-available, not open source. Where these words and the
+license differ, the license governs. For other terms, open an issue on this repository.

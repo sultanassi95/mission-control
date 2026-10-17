@@ -6,7 +6,15 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
-- 2026-10-15 (latest): the spend recorder (MC-069), a Claude Code mod at
+- 2026-10-17 (latest): the license changes from PolyForm Noncommercial 1.0.0
+  to PolyForm Shield 1.0.0 (MC-145). Any purpose, use at work included, is
+  now permitted except one: providing a product that competes with Mission
+  Control, or with any product its author provides using it, whether sold or
+  given away. The README's license section says this in plain words; the
+  `LICENSE` text is what binds. Its `Required Notice:` line is unchanged and
+  must still reach everyone who gets a copy.
+
+- 2026-10-15: the spend recorder (MC-069), a Claude Code mod at
   `tools/mods/spend-recorder` that records the model, effort and token usage
   of every model call, per session and per agent, in the plugin's store (the
   last 30 sessions). `/spend-log` shows this session's table, and `/spend`
