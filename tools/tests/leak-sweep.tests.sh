@@ -5,6 +5,9 @@
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"; PASS=0; FAIL=0
 SWEEP="$HERE/../leak-sweep.sh"
+# A list named in the caller's environment would stand in for the ones these
+# cases name or leave missing; the two cases that need the override set it.
+unset LEAK_SWEEP_PRIVATE_LIST
 
 # t <name> <want exit> <text the output must hold> -- <command...>
 t() { local name="$1" want="$2" text="$3"; shift 4; local out got
