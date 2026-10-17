@@ -117,12 +117,12 @@ not. And when rule 2 produces an unusually long window - more than about a week
 - say that too, because it usually means a report failed, not that nothing
 happened.
 
-**Read every timestamp as an offset, never as a clock abbreviation.** The
-local zone here renders as `EEST` or `EDT` meaning UTC+3 (Egypt), NOT US
-Eastern. Read as a US zone, a three-letter label shifts the window by seven
-hours and silently drops or invents an evening of work. Compute the bounds
-with `date` and state them in the output, so a wrong window is visible
-instead of silent.
+**Read every timestamp as an offset, never as a clock abbreviation.** A
+three-letter label names more than one zone (`IST` is India, Israel or
+Ireland), and a European or Middle Eastern summer label read as US Eastern
+shifts the window by up to seven hours, silently dropping or inventing an
+evening of work. Compute the bounds with `date`, state them with their UTC
+offsets in the output, and a wrong window is visible instead of silent.
 
 ## Sourcing: read the records, not the conversation
 

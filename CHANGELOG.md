@@ -17,12 +17,20 @@ changes should never reach you silently.
   now invented (acme, globex, initech), and the code lines the generic
   rules flag on purpose carry the exempt marker. The shell twin matches
   bytes (`LC_ALL=C`): under a UTF-8 locale macOS's grep matched nothing on
-  a line holding a byte that is not UTF-8, so a name there passed.
+  a line holding a byte that is not UTF-8, so a name there passed. A term
+  holding a letter outside ASCII is matched again in a UTF-8 locale, list
+  lines are trimmed (a Windows line ending never matched), the exempt
+  marker no longer hides a deny-list term, and a deny-list among the files
+  that ship fails the sweep instead of being skipped. The email rule stops
+  counting an SSH remote's `git` user and the domains reserved for
+  examples and tests. The standup skill no longer names one operator's
+  time zone.
   `.github/workflows/leak-sweep.yml` runs promote and both test suites on
-  every push and pull request, on Linux and Windows. CI has no deny-list,
-  so it checks the generic rules; the private names stay a local check,
-  promote with the operator's list, before a push. The app now shows every
-  profile name with a plain leading capital.
+  every push and pull request, on Linux and Windows; its Windows job is the
+  first run of the PowerShell twin and its tests, and both pass. CI has no
+  deny-list, so it checks the generic rules; the private names stay a
+  local check, promote with the operator's list, before a push. The app
+  now shows every profile name with a plain leading capital.
 
 - 2026-10-17: the leak sweep's deny-list moves into the instance
   (MC-137). `tools/leak-sweep.sh promote` reads

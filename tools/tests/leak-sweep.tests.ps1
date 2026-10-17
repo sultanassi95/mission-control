@@ -113,6 +113,44 @@ New-Item -ItemType Directory -Force (Join-Path $p "tools\tests\fixtures\dirty") 
 "Planted: Zoltan." | Set-Content (Join-Path $p "tools\tests\fixtures\dirty\planted.md") -Encoding utf8
 $r = Sweep (Join-Path $p "tools\leak-sweep.ps1") @("-Mode", "promote")
 Assert "no -Path: the fixtures that plant a leak are skipped, and counted" (($r.Code -eq 0) -and $r.Text.Contains("0 binary or empty, 1 skipped by name"))
+
+# Each case below mirrors one in leak-sweep.tests.sh. A letter outside ASCII is
+# built from its code point so this file stays ASCII, and the asserts match on
+# file and line, which print the same in any console code page.
+$utf8 = New-Object System.Text.UTF8Encoding $false
+$p = Portfolio "wide"
+[System.IO.File]::WriteAllText((Join-Path $p "_command\leak-sweep.private.txt"), ("zo" + [char]0x00EB + "`n"), $utf8)
+[System.IO.File]::WriteAllText((Join-Path $p "tools\u.md"), ("# Tools`nBuilt at ZO" + [char]0x00CB + "`n"), $utf8)
+$r = Sweep (Join-Path $p "tools\leak-sweep.ps1") @("-Mode", "promote")
+Assert "no -Path: a term outside ASCII matches whatever its case" (($r.Code -eq 1) -and $r.Text.Contains("u.md:2: [private-term]"))
+
+$p = Portfolio "padded"
+[System.IO.File]::WriteAllText((Join-Path $p "_command\leak-sweep.private.txt"), "  Zoltan `r`n", $utf8)
+"The Zoltan report." | Set-Content (Join-Path $p "tools\c.md") -Encoding utf8
+$r = Sweep (Join-Path $p "tools\leak-sweep.ps1") @("-Mode", "promote")
+Assert "no -Path: a padded term in a list saved with Windows line endings still matches" (($r.Code -eq 1) -and $r.Text.Contains("c.md:1: [private-term] Zoltan"))
+
+$p = Portfolio "marker"
+"Zoltan" | Set-Content (Join-Path $p "_command\leak-sweep.private.txt") -Encoding utf8
+"seat: Zoltan  MC-LEAK-EXEMPT: test data" | Set-Content (Join-Path $p "tools\m.md") -Encoding utf8
+$r = Sweep (Join-Path $p "tools\leak-sweep.ps1") @("-Mode", "promote")
+Assert "no -Path: the exempt marker never hides a deny-list term" (($r.Code -eq 1) -and $r.Text.Contains("m.md:1: [private-term] Zoltan"))
+
+$p = Portfolio "shipped-list"
+"Zoltan" | Set-Content (Join-Path $p "_command\leak-sweep.private.txt") -Encoding utf8
+New-Item -ItemType Directory -Force (Join-Path $p "docs") | Out-Null
+"Zoltan" | Set-Content (Join-Path $p "docs\leak-sweep.private.txt") -Encoding utf8
+$r = Sweep (Join-Path $p "tools\leak-sweep.ps1") @("-Mode", "promote")
+Assert "no -Path: a deny-list among the files that ship fails the sweep" (($r.Code -eq 1) -and $r.Text.Contains("leak-sweep.private.txt: [private-list]"))
+
+$p = Portfolio "addresses"
+"Zoltan" | Set-Content (Join-Path $p "_command\leak-sweep.private.txt") -Encoding utf8
+@("git@github.com:acme/widgets.git", "ssh://deploy@git.example.org/acme.git", "ops@example.com, a@b.test") | Set-Content (Join-Path $p "tools\r.md") -Encoding utf8
+$r = Sweep (Join-Path $p "tools\leak-sweep.ps1") @("-Mode", "promote")
+Assert "no -Path: a git remote's user and the reserved example domains are not addresses" (($r.Code -eq 0) -and $r.Text.Contains("LEAK-SWEEP CLEAN"))
+"Write to ops@example-mail.com." | Set-Content (Join-Path $p "tools\s.md") -Encoding utf8 # MC-LEAK-EXEMPT: a planted address
+$r = Sweep (Join-Path $p "tools\leak-sweep.ps1") @("-Mode", "promote")
+Assert "no -Path: an address on a domain that only resembles a reserved one is flagged" (($r.Code -eq 1) -and $r.Text.Contains("s.md:1: [email] ops@example-mail.com")) # MC-LEAK-EXEMPT: a planted address
 Remove-Item Env:GIT_CEILING_DIRECTORIES
 
 Remove-Item $sandbox -Recurse -Force

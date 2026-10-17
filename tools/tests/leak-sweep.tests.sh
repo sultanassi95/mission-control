@@ -95,5 +95,37 @@ printf '%s\n' 'zebracorp' > "$W/l/_command/leak-sweep.private.txt"
 printf 'Plain text.\nIt\222s the zebracorp report.\n' > "$W/l/framework/cp1252.md"
 t "a term on a line that is not UTF-8 still fails the sweep" 1 "framework/cp1252.md:2: [private-term] zebracorp" -- env LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 bash "$W/l/tools/leak-sweep.sh" promote "$W/l"
 
+# The sweep reads bytes, where a letter outside ASCII is neither a word
+# character nor folded to its other case. Octal keeps this file ASCII.
+portfolio "$W/m"
+printf 'zo\303\253\n' > "$W/m/_command/leak-sweep.private.txt"
+printf '# Framework\nBuilt at ZO\303\213\n' > "$W/m/framework/a.md"
+t "a term outside ASCII matches whatever its case, at the end of a line" 1 "$(printf 'framework/a.md:2: [private-term] zo\303\253')" -- bash "$W/m/tools/leak-sweep.sh" promote "$W/m"
+
+portfolio "$W/n"
+printf '  zebracorp \r\n' > "$W/n/_command/leak-sweep.private.txt"
+printf '%s\n' '# Framework' 'The zebracorp report.' > "$W/n/framework/a.md"
+t "a padded term in a list saved with Windows line endings still matches" 1 "framework/a.md:2: [private-term] zebracorp" -- bash "$W/n/tools/leak-sweep.sh" promote "$W/n"
+
+portfolio "$W/o"
+printf '%s\n' 'zebracorp' > "$W/o/_command/leak-sweep.private.txt"
+printf '%s\n' '# Framework' 'seat: zebracorp  <!-- MC-LEAK-EXEMPT: test data -->' > "$W/o/framework/a.md"
+t "the exempt marker never hides a deny-list term" 1 "framework/a.md:2: [private-term] zebracorp" -- bash "$W/o/tools/leak-sweep.sh" promote "$W/o"
+
+portfolio "$W/p"
+printf '%s\n' 'zebracorp' > "$W/p/_command/leak-sweep.private.txt"
+printf '%s\n' 'zebracorp' > "$W/p/framework/leak-sweep.private.txt"
+t "a deny-list among the files that ship fails the sweep" 1 "framework/leak-sweep.private.txt: [private-list]" -- bash "$W/p/tools/leak-sweep.sh" promote "$W/p"
+
+portfolio "$W/q"
+printf '%s\n' 'zebracorp' > "$W/q/_command/leak-sweep.private.txt"
+printf '%s\n' '# Remotes' 'git@github.com:acme/widgets.git' 'ssh://deploy@git.example.org/acme.git' 'ops@example.com, a@b.test' > "$W/q/framework/a.md"
+t "a git remote's user and the domains reserved for examples are not addresses" 0 "LEAK-SWEEP CLEAN" -- bash "$W/q/tools/leak-sweep.sh" promote "$W/q"
+
+portfolio "$W/r"
+printf '%s\n' 'zebracorp' > "$W/r/_command/leak-sweep.private.txt"
+printf '%s\n' '# Contact' 'Write to ops@example-mail.com.' > "$W/r/framework/a.md" # MC-LEAK-EXEMPT: a planted address
+t "an address on a domain that only resembles a reserved one is flagged" 1 "framework/a.md:2: [email] ops@example-mail.com" -- bash "$W/r/tools/leak-sweep.sh" promote "$W/r" # MC-LEAK-EXEMPT: a planted address
+
 echo "---"; echo "leak-sweep tests: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

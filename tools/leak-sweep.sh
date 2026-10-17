@@ -8,7 +8,8 @@
 # tracks and each new one it would add (untracked and not ignored); outside
 # one, every file under the root but .git and the instance (_command/). It
 # skips binary files, vendored or generated ones, and the test fixtures that
-# plant a leak on purpose (skip_in_promote below).
+# plant a leak on purpose (skip_in_promote below). A deny-list among the files
+# that ship fails the sweep.
 #
 # promote reads the operator's deny-list from the instance,
 # _command/leak-sweep.private.txt beside this tools/ folder (gitignored with
@@ -45,12 +46,23 @@ skip_in_promote() {
   case "$1" in
     # vendored or generated
     node_modules/*|*/node_modules/*|vendor/*|*/vendor/*|.docs-viewer-cache/*|*/.docs-viewer-cache/*) return 0 ;;
-    */.claude-plugin/types/*|*.min.js|*.min.css) return 0 ;;
+    *.min.js|*.min.css) return 0 ;;
     package-lock.json|*/package-lock.json|pnpm-lock.yaml|*/pnpm-lock.yaml|yarn.lock|*/yarn.lock) return 0 ;;
     # the leaks the sweep's own tests plant, one per rule
     tools/tests/fixtures/dirty/*) return 0 ;;
-    # an operator's list, wherever it was left
-    leak-sweep.private.txt|*/leak-sweep.private.txt) return 0 ;;
+  esac
+  return 1
+}
+
+# An address no person reads: the user every SSH git remote logs in as, or a
+# domain reserved for examples and tests (RFC 2606, RFC 6761).
+placeholder_address() {
+  local domain
+  [ "${1%%@*}" = "git" ] && return 0
+  domain="$(printf '%s' "${1#*@}" | tr '[:upper:]' '[:lower:]')"
+  case "$domain" in
+    example.com|example.net|example.org|*.example.com|*.example.net|*.example.org) return 0 ;;
+    *.example|*.test|*.invalid|*.localhost) return 0 ;;
   esac
   return 1
 }
@@ -101,6 +113,11 @@ fi
 
 PRIVATE_TERMS=()
 PRIVATE_PATTERNS=()
+# 1 for a term holding a byte outside ASCII. The sweep reads bytes, and under C
+# such a letter is neither a word character nor folded to its other case, so
+# that term is matched a second time in a UTF-8 locale, where both work.
+PRIVATE_WIDE=()
+UTF8_LOCALE=""
 if [ "$MODE" = "promote" ]; then
   # A missing list used to pass with PrivateTerms=0, so the operator's own
   # names went unchecked while the sweep reported clean. An empty list is a
@@ -115,18 +132,57 @@ if [ "$MODE" = "promote" ]; then
     exit 2
   fi
   while IFS= read -r term || [ -n "$term" ]; do
+    # The space around a term is not part of it, and neither is the carriage
+    # return a list saved on Windows ends each line in ([:space:] holds it).
+    term="${term#"${term%%[![:space:]]*}"}"
+    term="${term%"${term##*[![:space:]]}"}"
     case "$term" in
       ''|'#'*) continue ;;
     esac
     PRIVATE_TERMS+=("$term")
-    # Escaped once here, not once per line of every file. Matched without
-    # regard to case: a name is the same name capitalised.
-    PRIVATE_PATTERNS+=("\<$(printf '%s' "$term" | sed -e 's/[][\.*^$()+?{}|]/\\&/g')\>")
+    # Escaped once here, not once per line of every file, and matched without
+    # regard to case: a name is the same name capitalised. Bounded by anything
+    # but a letter, digit or underscore; \< and \> need the term itself to
+    # start and end with one.
+    PRIVATE_PATTERNS+=("(^|[^[:alnum:]_])$(printf '%s' "$term" | sed -e 's/[][\.*^$()+?{}|]/\\&/g')([^[:alnum:]_]|\$)")
+    if printf '%s' "$term" | grep -q '[^ -~]'; then PRIVATE_WIDE+=(1); else PRIVATE_WIDE+=(0); fi
   done < "$PRIVATE_LIST"
+  case " ${PRIVATE_WIDE[*]-} " in
+    *" 1 "*)
+      # The locale must fold a letter outside ASCII (E with diaeresis, upper
+      # to lower) for the second pass to mean anything, so that is the test.
+      for loc in C.UTF-8 en_US.UTF-8; do
+        if printf '\303\213\n' | LC_ALL="$loc" grep -qi "$(printf '\303\253')" 2>/dev/null; then
+          UTF8_LOCALE="$loc"; break
+        fi
+      done
+      if [ -z "$UTF8_LOCALE" ]; then
+        echo "LEAK-SWEEP ERROR: the deny-list holds a term outside ASCII, and no UTF-8 locale here (C.UTF-8, en_US.UTF-8) can match it in every case." >&2
+        exit 2
+      fi
+      ;;
+  esac
 fi
+
+# term_in_file <index> <file>: grep's status for the term, 0 found, 1 not,
+# above 1 an error. term_in_line <index> <text>: true when the text holds it.
+term_in_file() {
+  local s=0
+  grep -Eqi -- "${PRIVATE_PATTERNS[$1]}" "$2" || s=$?
+  if [ "$s" -eq 1 ] && [ "${PRIVATE_WIDE[$1]}" = "1" ]; then
+    s=0
+    LC_ALL="$UTF8_LOCALE" grep -Eqi -- "${PRIVATE_PATTERNS[$1]}" "$2" || s=$?
+  fi
+  return "$s"
+}
+term_in_line() {
+  grep -Eqi -- "${PRIVATE_PATTERNS[$1]}" <<< "$2" && return 0
+  [ "${PRIVATE_WIDE[$1]}" = "1" ] && LC_ALL="$UTF8_LOCALE" grep -Eqi -- "${PRIVATE_PATTERNS[$1]}" <<< "$2"
+}
 
 FILES=()
 MISSING=()
+HITS=()
 LISTED=""
 # What promote listed but did not read, counted so the clean line says so.
 NOT_BY_NAME=0
@@ -134,6 +190,12 @@ NOT_BINARY=0
 NOT_DELETED=0
 if [ "$MODE" = "promote" ]; then
   add_promote() {
+    case "$1" in
+      leak-sweep.private.txt|*/leak-sweep.private.txt)
+        # A deny-list in what ships publishes every name it was kept to hide.
+        HITS+=("$1: [private-list] an operator's deny-list would ship")
+        return 0 ;;
+    esac
     if skip_in_promote "$1"; then NOT_BY_NAME=$((NOT_BY_NAME + 1)); return 0; fi
     # Tracked, but deleted in this work tree.
     if [ ! -e "$ROOT/$1" ]; then NOT_DELETED=$((NOT_DELETED + 1)); return 0; fi
@@ -196,7 +258,6 @@ if [ ${#FILES[@]} -eq 0 ]; then
   exit 2
 fi
 
-HITS=()
 for file in "${FILES[@]}"; do
   rel="${file#"$ROOT"/}"
 
@@ -237,7 +298,7 @@ for file in "${FILES[@]}"; do
   j=0
   while [ $j -lt ${#PRIVATE_TERMS[@]} ]; do
     status=0
-    grep -Eqi -- "${PRIVATE_PATTERNS[$j]}" "$file" || status=$?
+    term_in_file "$j" "$file" || status=$?
     if [ "$status" -eq 0 ]; then
       ACTIVE_TERMS+=("$j")
     elif [ "$status" -gt 1 ]; then
@@ -253,10 +314,13 @@ for file in "${FILES[@]}"; do
   lineno=0
   while IFS= read -r line || [ -n "$line" ]; do
     lineno=$((lineno + 1))
+    # The marker exempts a line from the generic rules only. A deny-list term
+    # is never legitimate in what ships, so no marker can hide one.
+    rules_here=${ACTIVE_RULES[@]+"${ACTIVE_RULES[@]}"}
     case "$line" in
-      *"$EXEMPT_MARKER"*) continue ;;
+      *"$EXEMPT_MARKER"*) rules_here="" ;;
     esac
-    for i in ${ACTIVE_RULES[@]+"${ACTIVE_RULES[@]}"}; do
+    for i in $rules_here; do
       rname="${RULE_NAMES[$i]}"
       pattern="${RULE_PATTERNS[$i]}"
       icase="${RULE_ICASE[$i]}"
@@ -267,12 +331,14 @@ for file in "${FILES[@]}"; do
       fi
       if [ -n "$matches" ]; then
         while IFS= read -r m; do
-          [ -n "$m" ] && HITS+=("$rel:$lineno: [$rname] $m")
+          [ -n "$m" ] || continue
+          if [ "$rname" = "email" ] && placeholder_address "$m"; then continue; fi
+          HITS+=("$rel:$lineno: [$rname] $m")
         done <<< "$matches"
       fi
     done
     for j in ${ACTIVE_TERMS[@]+"${ACTIVE_TERMS[@]}"}; do
-      if printf '%s' "$line" | grep -Eqi -- "${PRIVATE_PATTERNS[$j]}"; then
+      if term_in_line "$j" "$line"; then
         HITS+=("$rel:$lineno: [private-term] ${PRIVATE_TERMS[$j]}")
       fi
     done
