@@ -23,7 +23,7 @@
   Placeholders the skill fills:
     {{SCOPE}} {{SCOPE_ORIGIN}} {{WINDOW}} {{WINDOW_SHORT}} {{GENERATED}}
     {{WINDOW_ORIGIN}}  which rule set the window, e.g.
-                       "continuing the last smileshape report, 29 Sep 14:12"
+                       "continuing the last acme report, 29 Sep 14:12"
     {{TALK_TRACK}}  the two-minute spoken summary, grouped by kind of work
                     (SKILL.md, "The talk track"); markup sketch at the bottom
     {{COUNTS}}      one <span class="count"> per state
@@ -360,16 +360,16 @@
     <details class="day" open>
       <summary><h2>29 Sep 2026</h2></summary>
       <div class="group">
-        <h3>annotation-studio-3d</h3>
+        <h3>web</h3>
         <div class="item">
           <span class="time">18:21</span>
-          <span class="key">AI-2151</span>
+          <span class="key">ACME-105</span>
           <span class="chip done">Done</span>
           <span class="sub">merged</span>
-          <span class="what" data-summary="Ships honest counts on the project import
-            screen and a pool that only offers data not already held.">Duplicate-aware
-            import</span>
-          <span class="links"><a href="...">ticket</a><a href="...">PR #190</a></span>
+          <span class="what" data-summary="Adds a CSV download to the invoices table
+            that keeps the active filters and the column order.">Invoice CSV
+            export</span>
+          <span class="links"><a href="...">ticket</a><a href="...">PR #88</a></span>
         </div>
         NOTE: the visible text is the TICKET'S OWN title; the summary is the hover.
         Do not nest an HTML comment in here - comments cannot nest, the browser
@@ -383,20 +383,20 @@
       <div class="talk-head"><h2 id="talk-h">Talk track</h2><span class="est">about 2 minutes</span>
         <button data-copy="talk-text">copy</button></div>
       <p class="headline">15 tickets since yesterday. 14 shipped, 1 in review. Mostly security
-        and compliance, plus a Smart Data throughput fix.</p>
-      <h3>Security and compliance, 8 <span class="spread">across Smart Data, Monitor and UI Kit</span></h3>
+        and compliance, plus an api throughput fix.</p>
+      <h3>Security and compliance, 8 <span class="spread">across web, api and worker</span></h3>
       <ul>
-        <li>5 Vanta findings closed: three load balancer alarms ...
-          <span class="keys">WB-1003 to WB-1005</span></li>
+        <li>5 compliance findings closed: three load balancer alarms ...
+          <span class="keys">ACME-108 to ACME-112</span></li>
       </ul>
-      <p class="asks"><strong>Next</strong>: set the release secret on UI Kit ourselves.</p>
+      <p class="asks"><strong>Next</strong>: set the release secret on worker ourselves.</p>
       <pre id="talk-text">the same talk track as plain text, bold kept as **...**</pre>
     </section>
     The pre is hidden; it is what the copy button copies, so the clipboard gets
     clean text instead of the rendered list's bullets and spacing.
 
   {{EXCLUSIONS}}  (omit entirely when the scope was given)
-    <p class="exclusions">Scope inferred from this session: smileshape.
+    <p class="exclusions">Scope inferred from this session: acme.
       4 items on 2 other fronts fall in this window and are not shown -
       run <code>/standup --all</code>.</p>
 

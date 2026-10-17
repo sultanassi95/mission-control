@@ -19,7 +19,7 @@ test('nothing-values do not open a gate', () => {
 
 test('poll ids are short and stable, dependents come from other fronts\' maps', () => {
   expect(pollId('FIELDKIT-API', 3)).toBe('FI3')
-  expect(dependentsOf('api', [{ front: 'fieldkit', text: 'api --> web' }, { front: 'shelf', text: 'uses fieldkit api for media' }, { front: 'ytkit', text: 'nothing' }], 'fieldkit')).toEqual(['shelf'])
+  expect(dependentsOf('api', [{ front: 'fieldkit', text: 'api --> web' }, { front: 'shelf', text: 'uses fieldkit api for media' }, { front: 'initech', text: 'nothing' }], 'fieldkit')).toEqual(['shelf'])
 })
 
 test('PRs named in a report are found, and a PR signature changes when checks or comments do', () => {

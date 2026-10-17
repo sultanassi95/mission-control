@@ -7,12 +7,12 @@ const u = (i: number, o: number, r = 0, w = 0) => ({ input_tokens: i, output_tok
 const empty: Ledger = { sessions: [] }
 
 test('addStep: sums calls per agent within a session', () => {
-  let l = addStep(empty, 's1', '2026-10-15T10:00:00Z', { agent: MAIN, model: 'claude-opus-5-5', effort: 'high', usage: u(10, 5, 100, 20) })
-  l = addStep(l, 's1', '2026-10-15T10:01:00Z', { agent: MAIN, model: 'claude-opus-5-5', effort: 'high', usage: u(1, 2, 3, 4) })
-  l = addStep(l, 's1', '2026-10-15T10:02:00Z', { agent: 'a1', model: 'claude-haiku-5-5', effort: 'low', usage: u(7, 8) })
+  let l = addStep(empty, 's1', '2026-10-15T10:00:00Z', { agent: MAIN, model: 'claude-opus-5-5', effort: 'high', usage: u(10, 5, 100, 20) }) // MC-LEAK-EXEMPT: a real model id as test data
+  l = addStep(l, 's1', '2026-10-15T10:01:00Z', { agent: MAIN, model: 'claude-opus-5-5', effort: 'high', usage: u(1, 2, 3, 4) }) // MC-LEAK-EXEMPT: a real model id as test data
+  l = addStep(l, 's1', '2026-10-15T10:02:00Z', { agent: 'a1', model: 'claude-haiku-5-5', effort: 'low', usage: u(7, 8) }) // MC-LEAK-EXEMPT: a real model id as test data
   const s = l.sessions[0]!
   expect(s.lines[MAIN]).toMatchObject({ calls: 2, input: 11, output: 7, cacheRead: 103, cacheWrite: 24, label: 'Flight (main session)', type: 'main' })
-  expect(s.lines['a1']).toMatchObject({ calls: 1, input: 7, output: 8, model: 'claude-haiku-5-5', effort: 'low' })
+  expect(s.lines['a1']).toMatchObject({ calls: 1, input: 7, output: 8, model: 'claude-haiku-5-5', effort: 'low' }) // MC-LEAK-EXEMPT: a real model id as test data
   expect(s.updated).toBe('2026-10-15T10:02:00Z')
   expect(s.started).toBe('2026-10-15T10:00:00Z')
 })
