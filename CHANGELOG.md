@@ -6,6 +6,13 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
+- 2026-10-17: `/new-front` adds the new front's bullet to the `## The
+  fronts` list in `_command/CLAUDE.operating.md`, in the template's shape,
+  and `/retire-front` removes it, a registered-in-place note with it
+  (MC-132). Before, only liftoff wrote the list, so a front onboarded later
+  was missing from the map every session boots with, and a retired one
+  stayed on it. A front added since your liftoff may be missing from your
+  list: compare it with the board and add any missing bullet by hand.
 - 2026-10-17: a Controller may clone any repository into any front's folder
   (MC-135), which widens the 2026-10-16 rule (MC-126). The source is any
   repository URL git fetches over the network, from any owner or host:

@@ -3,9 +3,10 @@ name: new-front
 description: >-
   Onboard a new project (front) into an existing mission-control
   portfolio: a short detect-first interview, then the front hub, per-repo
-  spokes with git-memory, a board row, and a today entry. Use whenever the
-  founder says "add a front", "new project", "onboard <name> into the
-  portfolio", or points at a repo that is not yet on the board.
+  spokes with git-memory, a board row, a today entry, and its bullet in
+  the operating file's front list. Use whenever the founder says "add a
+  front", "new project", "onboard <name> into the portfolio", or points at
+  a repo that is not yet on the board.
 ---
 
 # New Front
@@ -62,8 +63,8 @@ instead of inside it. Offer, with the exact command shown:
   own folder name, so a front named after its only repo reads
   `fronts/<front>/<front>`.
 - **Register-in-place:** the spoke records the external absolute path,
-  and the operating file `_command/CLAUDE.operating.md` gains a note that
-  this front's directory must be added to sessions that work on it.
+  and the front's bullet in the operating file (written at Step 4) carries
+  a note that this directory must be added to sessions that work on it.
 - **Non-git fronts** (a design folder, a course, a consulting gig) are
   first-class: their folder is `fronts/<front>/`, made when there are
   files and holding them directly, with no repo inside; hub without
@@ -111,6 +112,17 @@ Using `framework/kit/templates/_front.template.md`,
   narrative goes in the hub's Status block, never the board).
 - Append the front's next action to `_command/daily/today.md` (one line).
 - Update the fronts branch of `_command/mental-model.md`.
+- Add the front's bullet to the `## The fronts` list in the operating file
+  `_command/CLAUDE.operating.md`, after the list's last bullet, in the
+  shape `framework/kit/templates/_portfolio-claude.template.md` gives it:
+  name, posture, one line, and its folder, as in
+  `` - **<front>** - <posture>. <one line>. `fronts/<front>/` ``. A repo
+  registered in place adds its external path and the note that sessions
+  working on it add that directory (`/add-dir <path>`). A project joining
+  an existing front adds no second bullet: when its repo is registered in
+  place, that repo's note joins the front's bullet; otherwise the bullet
+  stays as it is. Every session boots with this list, so a front missing
+  from it stays invisible until someone adds it by hand.
 - (The mirror skill is `/retire-front` - fronts leave the portfolio with
   the same rigor they join it.)
 - Multi-project front? Suggest the follow-up:
