@@ -910,3 +910,273 @@ test('the app is sent each call sign\'s colour with the fleet, as the store keep
     await clock.advance(10_000)
   }
 })
+
+// ---- Decisions asked in Flight's chat (MC-125) ----
+
+const ASKED_AT = '2026-10-18T09:12:00.000Z'
+const Q7: PollItem = {
+  id: 'MI7', at: ASKED_AT, from: 'MISSION-CONTROL', kind: 'question', title: 'Which branch should MC-136 build on?', detail: 'decisions:\n- Which branch should MC-136 build on? | ...', state: 'open', agentId: 'a1',
+  options: [{ label: 'The epic branch', does: 'lands with MC-124\'s PR' }, { label: 'Its own branch off main', does: 'a separate PR after MC-124' }],
+}
+const Q8: PollItem = { ...Q7, id: 'MI8', title: 'Keep the old Poll for a week?', options: [{ label: 'Keep it', does: 'both views for a week' }, { label: 'Drop it', does: 'read-only from today' }] }
+const TODO: PollItem = { ...Q7, id: 'MI9', kind: 'todo', title: 'Close PR #31 https://github.com/o/r/pull/31', options: undefined }
+const TWO_DECISIONS = [
+  'state: MC-136 planned',
+  'shipped: nothing',
+  'blocked on you: two decisions below',
+  'next: build once answered',
+  'decisions:',
+  '- Which branch should MC-136 build on? | 1) The epic branch: lands with MC-124\'s PR | 2) Its own branch off main: a separate PR after MC-124',
+  '- Keep the old Poll for a week? | 1) Keep it: both views for a week | 2) Drop it: read-only from today',
+  'notes: the sweep found 0 hits',
+  'for you to do:',
+  '- Close PR #31 https://github.com/o/r/pull/31',
+].join('\n')
+
+// The session beneath the plugins, answering a turn's end as core does: register once per test, before
+// the first reportEnds (the kit takes one handler per event).
+// deno-lint-ignore no-explicit-any
+const turnCore = (on: any) => on('turn.complete', (_$: Engine, e: { answer: string }) => ({ text: e.answer }))
+
+// A Controller's turn ending with this answer, as the session reports it, then the recording it starts.
+const reportEnds = async ($: Engine, clock: { settle: () => Promise<unknown> }, agentId: string, answer: string) => {
+  await $.turn.complete({ agentId, answer, durationMs: 1, isAborted: false, turnId: `t-${answer.length}`, reason: 'answer' } as Parameters<Engine['turn']['complete']>[0])
+  await clock.settle()
+}
+
+test('a report with two decisions, a note and a to-do opens two questions with their options and one to-do, and nothing for the note', async ($, on) => {
+  portfolio(on)
+  turnCore(on)
+  const clock = mock.clock(on, { now: Date.parse(ASKED_AT) })
+  const audit = auditLines(on)
+  const polls = pollWrites(on)
+  seed(on, { consoles: [MC] })
+  await reportEnds($, clock, 'a1', TWO_DECISIONS)
+  const items = polls.at(-1) ?? []
+  expect(items.map(p => `${p.kind}: ${p.title}`)).toEqual([
+    'question: Which branch should MC-136 build on?',
+    'question: Keep the old Poll for a week?',
+    'todo: Close PR #31 https://github.com/o/r/pull/31',
+  ])
+  expect(items[0]?.options).toEqual(Q7.options)
+  expect(items[1]?.options).toEqual(Q8.options)
+  expect(items.every(p => p.state === 'open' && p.agentId === 'a1' && p.from === 'MISSION-CONTROL')).toBe(true)
+  expect(new Set(items.map(p => p.id)).size).toBe(3)
+  const lines = audit.join('\n')
+  expect(lines.split('\n').filter(l => l.includes('\tasked\t')).length).toBe(2)
+  expect(lines).toContain('\ttodo\t')
+  const listed = (await person($, 'poll')).text ?? ''
+  expect(listed).toContain('question: Which branch should MC-136 build on?')
+  expect(listed).toContain('2) Its own branch off main - a separate PR after MC-124')
+  expect(listed).toContain('todo: Close PR #31')
+  expect(listed).not.toContain('sweep found')
+})
+
+test('notes, contract none, a contract no front depends on and a nothing-like blocked line open nothing', async ($, on) => {
+  portfolio(on)
+  turnCore(on)
+  const clock = mock.clock(on, { now: Date.parse(ASKED_AT) })
+  const polls = pollWrites(on)
+  seed(on, { consoles: [MC] })
+  await reportEnds($, clock, 'a1', 'state: ok\nshipped: nothing\nblocked on you: nothing yet\nnext: wait\nnotes: fyi only\ncontract: none')
+  await reportEnds($, clock, 'a1', 'state: ok\nblocked on you: none\nnext: wait\ncontract: the audit log gained a column')
+  expect((polls.at(-1) ?? []).filter(p => p.state === 'open')).toEqual([])
+  expect((await person($, 'poll')).text).toContain('Nothing is waiting on the founder')
+})
+
+test('a Controller staffed before questions still has its blocked line asked, as Go or No-go', async ($, on) => {
+  portfolio(on)
+  turnCore(on)
+  const clock = mock.clock(on, { now: Date.parse(ASKED_AT) })
+  const polls = pollWrites(on)
+  // Every hook beneath the plugins is registered before the first $ call.
+  const sent: string[] = []
+  on('session.send', (_$, e) => {
+    sent.push(e.text)
+    return { isDelivered: true }
+  })
+  seed(on, { consoles: [MC] })
+  await reportEnds($, clock, 'a1', 'state: built\nblocked on you: merge the fix\nnext: wait')
+  const gate = (polls.at(-1) ?? []).find(p => p.state === 'open')
+  expect(gate?.kind).toBe('gate')
+  expect(gate?.title).toBe('merge the fix')
+  expect((await person($, `decide ${gate?.id} 2`)).text).toContain(`${gate?.id}: NO-GO recorded, told MISSION-CONTROL.`)
+  expect(sent[0]).toContain(`NO-GO from the founder on ${gate?.id}.`)
+})
+
+test('answering one question delivers exactly that option to the Controller that asked it, and nothing else', async ($, on) => {
+  portfolio(on)
+  const audit = auditLines(on)
+  const polls = pollWrites(on)
+  seed(on, { poll: [Q7, Q8], consoles: [MC, { ...MC, callSign: 'ACME', front: 'acme', name: 'console-acme', agentId: 'k1' }] })
+  const sent: { to: string; text: string }[] = []
+  on('session.send', (_$, e) => {
+    sent.push({ to: JSON.stringify(e.to), text: e.text })
+    return { isDelivered: true }
+  })
+  const r = await person($, 'decide MI7 2 after the sweep')
+  expect(r.text).toBe('MI7: answered 2) Its own branch off main, told MISSION-CONTROL.')
+  expect(sent).toHaveLength(1)
+  expect(sent[0]?.to).toContain('a1')
+  expect(sent[0]?.text).toContain('The founder answered MI7: 2) Its own branch off main - a separate PR after MC-124.')
+  expect(sent[0]?.text).toContain('Note: after the sweep')
+  expect(sent[0]?.text).not.toContain('Keep the old Poll')
+  const after = polls.at(-1) ?? []
+  expect(after.find(p => p.id === 'MI7')).toMatchObject({ state: 'answered', choice: 2, note: 'after the sweep' })
+  expect(after.find(p => p.id === 'MI8')?.state).toBe('open')
+  expect(audit.join('\n')).toContain('\tanswered\tMI7\ttold MISSION-CONTROL')
+})
+
+test('an answer is the founder\'s: refused through Flight\'s tool without a code, from an unknown origin, and to a Controller', async ($, on) => {
+  portfolio(on)
+  seed(on, { poll: [Q7], consoles: [MC] })
+  let sends = 0
+  on('session.send', () => {
+    sends++
+    return { isDelivered: true }
+  })
+  const call = (args: string, agentId?: string) => $.tool.call({ tool: 'mcp__mission-fleet__console', args, ...(agentId ? { agentId } : {}) } as Parameters<Engine['tool']['call']>[0])
+  expect(JSON.stringify(await call('decide MI7 1'))).toContain('founder')
+  expect(JSON.stringify(await call(`decide MI7 1 --code ${'e'.repeat(32)}`))).toContain('unknown, used or expired')
+  expect(JSON.stringify(await call('decide MI7 1', 'a1'))).toContain('Only Flight runs the console tool')
+  expect((await run($, 'decide MI7 1')).text).toContain('founder')
+  expect((await run($, 'done MI7')).text).toContain('founder')
+  expect(sends).toBe(0)
+})
+
+test('a delivered answer cannot be sent twice, an option out of range is refused, and a question takes no GO', async ($, on) => {
+  portfolio(on)
+  seed(on, { poll: [Q7, Q8], consoles: [MC] })
+  let sends = 0
+  on('session.send', () => {
+    sends++
+    return { isDelivered: true }
+  })
+  expect((await person($, 'go MI8')).text).toContain('MI8 asks you to pick an option: /console decide MI8 <n>')
+  expect((await person($, 'decide MI8 3')).text).toContain('MI8 has options 1 to 2')
+  expect((await person($, 'decide MI8 two')).text).toContain('MI8 has options 1 to 2')
+  expect(sends).toBe(0)
+  expect((await person($, 'decide MI7 1')).text).toContain('MI7: answered 1) The epic branch')
+  expect((await person($, 'decide MI7 2')).text).toContain('MI7 was already decided: answered')
+  expect(sends).toBe(1)
+})
+
+test('a to-do is checked off with done and never answered; nothing is sent', async ($, on) => {
+  portfolio(on)
+  const polls = pollWrites(on)
+  seed(on, { poll: [Q7, TODO], consoles: [MC] })
+  let sends = 0
+  on('session.send', () => {
+    sends++
+    return { isDelivered: true }
+  })
+  expect((await person($, 'decide MI9 1')).text).toContain('MI9 is a to-do: /console done MI9 checks it off')
+  expect((await person($, 'done MI7')).text).toContain('MI7 is not a to-do')
+  expect((await person($, 'done MI9')).text).toBe('MI9 done. Nothing was sent to MISSION-CONTROL.')
+  expect(polls.at(-1)?.find(p => p.id === 'MI9')?.state).toBe('done')
+  expect((await person($, 'done MI9')).text).toContain('MI9 is already closed: done')
+  expect(sends).toBe(0)
+})
+
+test('a new report that lists one of two open questions again keeps it and replaces the other; a report with no decisions leaves both', async ($, on) => {
+  portfolio(on)
+  turnCore(on)
+  const clock = mock.clock(on, { now: Date.parse(ASKED_AT) })
+  const polls = pollWrites(on)
+  seed(on, { poll: [Q7, Q8], consoles: [MC] })
+  await reportEnds($, clock, 'a1', 'state: working\nblocked on you: nothing new\nnext: build')
+  expect(polls.at(-1)?.filter(p => p.state === 'open').map(p => p.id) ?? ['MI7', 'MI8']).toEqual(['MI7', 'MI8'])
+  await reportEnds($, clock, 'a1', 'state: still planned\ndecisions:\n- Which branch should MC-136 build on? | 1) The epic branch: lands with MC-124\'s PR | 2) Its own branch off main: a separate PR after MC-124\nnext: wait')
+  const after = polls.at(-1) ?? []
+  expect(after.filter(p => p.state === 'open').map(p => p.id)).toEqual(['MI7'])
+  expect(after.find(p => p.id === 'MI8')?.state).toBe('superseded')
+  expect(after).toHaveLength(2)
+})
+
+test('a report with only a to-do opens the to-do and leaves the open questions; its blocked line asks nothing', async ($, on) => {
+  portfolio(on)
+  turnCore(on)
+  const clock = mock.clock(on, { now: Date.parse(ASKED_AT) })
+  const audit = auditLines(on)
+  const polls = pollWrites(on)
+  seed(on, { poll: [Q7], consoles: [MC] })
+  await reportEnds($, clock, 'a1', 'state: built\nshipped: nothing\nblocked on you: the to-do below\nnext: wait\nfor you to do:\n- Close PR #31 https://github.com/o/r/pull/31')
+  const after = polls.at(-1) ?? []
+  expect(after.filter(p => p.state === 'open').map(p => `${p.id} ${p.kind}`)).toEqual(['MI7 question', `${after.at(-1)?.id} todo`])
+  expect(after.some(p => p.kind === 'gate')).toBe(false)
+  expect(audit.join('\n')).not.toContain('\tasked\t')
+})
+
+test('a question listed again in other words keeps its id and takes the new options; an answer on its way is never replaced', async ($, on) => {
+  portfolio(on)
+  turnCore(on)
+  const clock = mock.clock(on, { now: Date.parse(ASKED_AT) })
+  const polls = pollWrites(on)
+  seed(on, { poll: [Q7, { ...Q8, sentAt: ASKED_AT }], consoles: [MC] })
+  await reportEnds($, clock, 'a1', 'state: planned\ndecisions:\n-  which branch should   MC-136 build on? | 1) The epic branch: one review | 2) Main: a later PR\nnext: wait')
+  const after = polls.at(-1) ?? []
+  expect(after.map(p => `${p.id} ${p.state}`)).toEqual(['MI7 open', 'MI8 open'])
+  expect(after[0]?.options).toEqual([{ label: 'The epic branch', does: 'one review' }, { label: 'Main', does: 'a later PR' }])
+  await reportEnds($, clock, 'a1', 'state: planned\ndecisions: none\nnext: wait')
+  expect((polls.at(-1) ?? []).map(p => `${p.id} ${p.state}`)).toEqual(['MI7 superseded', 'MI8 open'])
+})
+
+test('a legacy blocked line replaces only an earlier one, never a question', async ($, on) => {
+  portfolio(on)
+  turnCore(on)
+  const clock = mock.clock(on, { now: Date.parse(ASKED_AT) })
+  const polls = pollWrites(on)
+  const GATE: PollItem = { ...Q7, id: 'MI5', kind: 'gate', title: 'merge the old fix', options: undefined }
+  seed(on, { poll: [GATE, Q7], consoles: [MC] })
+  await reportEnds($, clock, 'a1', 'state: built\nblocked on you: merge the new fix\nnext: wait')
+  const after = polls.at(-1) ?? []
+  expect(after.filter(p => p.id === 'MI5' || p.id === 'MI7').map(p => `${p.id} ${p.state}`)).toEqual(['MI5 superseded', 'MI7 open'])
+  expect(after.filter(p => p.state === 'open' && p.kind === 'gate').map(p => p.title)).toEqual(['merge the new fix'])
+})
+
+test('an answer changed in the app before Flight runs it replaces the first, whose code stops working', async ($, on) => {
+  portfolio(on)
+  const clock = mock.clock(on, { now: Date.parse(ASKED_AT) })
+  seed(on, { poll: [Q7], consoles: [MC] })
+  on('store.get', (_$, e) => ({ value: e.key === 'appAlways' ? false : undefined }))
+  on('store.set', () => ({ value: undefined }))
+  on('agent.list', () => ({ value: [] }))
+  on('process.run', () => ({ value: { exitCode: 0, stdout: '/p/tools/mods/mission-fleet\n', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+  let end: () => void = () => undefined
+  const ended = new Promise<void>(resolve => (end = resolve))
+  // The app server as the plugin starts it, sending two taps on MI7 before Flight runs either.
+  on('process.spawn', async function* () {
+    yield { stream: 'stdout' as const, text: '{"type":"ready","port":4999,"profile":"demo"}\n' }
+    yield { stream: 'stdout' as const, text: '{"type":"op","id":1,"op":"console","text":"decide MI7 1"}\n{"type":"op","id":2,"op":"console","text":"decide MI7 2"}\n' }
+    await ended
+    return { value: { code: 0, signal: null } }
+  })
+  on('http.fetch', () => ({ value: { status: 204, ok: true, headers: {}, text: '' } }))
+  const prompts: string[] = []
+  on('prompt.submit', (_$, e) => {
+    prompts.push(e.text)
+    return { text: e.text }
+  })
+  const sent: string[] = []
+  on('session.send', (_$, e) => {
+    sent.push(e.text)
+    return { isDelivered: true }
+  })
+  const codeIn = (t: string | undefined) => /--code ([0-9a-f]{32})/.exec(t ?? '')?.[1] ?? 'none'
+  try {
+    expect((await person($, 'app')).text).toContain('Mission Control App')
+    await clock.settle()
+    expect(prompts).toHaveLength(2)
+    expect(prompts[1]).toContain('replaces the earlier answer on MI7')
+    const first = await $.tool.call({ tool: 'mcp__mission-fleet__console', args: `decide MI7 1 --code ${codeIn(prompts[0])}` } as Parameters<Engine['tool']['call']>[0])
+    expect(JSON.stringify(first)).toContain('unknown, used or expired')
+    const second = await $.tool.call({ tool: 'mcp__mission-fleet__console', args: `decide MI7 2 --code ${codeIn(prompts[1])}` } as Parameters<Engine['tool']['call']>[0])
+    expect(JSON.stringify(second)).toContain('MI7: answered 2) Its own branch off main')
+    expect(sent).toHaveLength(1)
+    expect(sent[0]).toContain('2) Its own branch off main')
+  } finally {
+    end()
+    await person($, 'app stop')
+    await clock.advance(10_000)
+  }
+})

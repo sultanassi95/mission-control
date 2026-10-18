@@ -6,7 +6,28 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
-- 2026-10-17 (latest): an optional tool is a contract with a tested absent
+- 2026-10-18 (latest): a Controller asks each decision as its own question
+  with the options it wrote, and the Poll becomes a read-only view (MC-125).
+  A status check may add a `decisions:` block (`- <question> | 1) <option>:
+  <what it does> | 2) ...`), a `notes:` line and a `for you to do:` block.
+  Each decision opens a question; each to-do opens an item checked off with
+  `/console done <id>`; notes open nothing. A report that lists decisions, or
+  says `decisions: none`, is the console's whole list: a question listed
+  again keeps its id, one left out is replaced, and an answer already sent
+  from the app is never replaced. A report from a Controller staffed
+  earlier, with a blocked line and none of the new lines, is still asked, as
+  Go or No-go. The founder answers with `/console decide <id> <n>
+  [note]`, or from a card in the app's Flight tab; `go` and `nogo` remain
+  for Go/No-go and advisory items and are refused for a question with its
+  own options. An answer sent again from the app before Flight has run the
+  first replaces it, and the first one's code stops working. The Poll lists
+  the questions (each links to its card in Flight), the to-dos with Done,
+  undelivered and held answers, and history, with no GO or NO-GO buttons.
+  The alert reads "<SIGN> asks you a question: answer in the app's Flight
+  tab, or /console poll." Controllers staffed before this change keep their
+  old prompt until restaffed; their blocked lines are still asked.
+
+- 2026-10-17: an optional tool is a contract with a tested absent
   path (MC-052). `framework/engineering-standard.md` gains the Optional
   augmentation clause, pointed at from layer 5: the primary path completes
   without the tool, each optional tool is declared in one place, its absence

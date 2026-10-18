@@ -90,7 +90,7 @@ reality today, fix its rows in the same pass.
 
 List, in one short block, everything that now waits on the founder: a PR
 to review, a credential to rotate, a decision to make, a payment gate, and
-every open go/no-go in `/console poll` (with its call sign) when Controllers
+every open question and to-do in `/console poll` (with its call sign) when Controllers
 are staffed.
 These items go at the TOP of `today.md` under a "Founder-gated" heading,
 **each carrying its date**, so they cannot silently rot (`/retro` flags

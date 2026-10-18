@@ -36,14 +36,28 @@ export type Reservation = { controller: string; token: string; at: number }
 
 export type LoopEntry = { at: string; from: string; to: string; kind: 'status' | 'call' | 'decision' | 'advisory'; text: string }
 
+/** One answer a Controller offers the founder: its label, and what choosing it does. */
+export type DecisionOption = { label: string; does?: string }
+
 export type PollItem = {
   id: string
   at: string
   from: string
-  kind: 'gate' | 'advisory'
+  /**
+   * question: a decision the Controller asked, with its own options. gate: a report's blocked line
+   * with no decisions block (a Controller staffed before questions), asked as Go or No-go.
+   * advisory: a contract change naming dependent fronts, asked as Tell them or Don't tell.
+   * todo: an action only the founder can take; never asked, checked off with Done.
+   */
+  kind: 'gate' | 'advisory' | 'question' | 'todo'
   title: string
   detail: string
-  state: 'open' | 'go' | 'no-go' | 'superseded' | 'dismissed'
+  /** answered: a question's option was chosen (choice names it). done: a to-do was checked off. */
+  state: 'open' | 'go' | 'no-go' | 'answered' | 'done' | 'superseded' | 'dismissed'
+  /** A question's options as the Controller wrote them. */
+  options?: DecisionOption[]
+  /** The option the founder chose, counted from 1. */
+  choice?: number
   /** The agent that raised it: a decision goes to this agent only. */
   agentId: string
   /** Set when a decision could not be delivered. */
@@ -53,7 +67,7 @@ export type PollItem = {
    * held for the next Controller staffed under the same call sign. Cleared once that Controller has it.
    */
   held?: string
-  /** When the app sent a decision on it to Flight; the gate takes no other tap until Flight runs it or the code expires. */
+  /** When the app sent an answer on it to Flight; a later answer replaces it until Flight runs it or the code expires. */
   sentAt?: string
   decidedAt?: string
   note?: string

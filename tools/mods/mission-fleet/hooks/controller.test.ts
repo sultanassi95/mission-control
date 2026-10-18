@@ -11,6 +11,15 @@ test('the controller prompt carries the status format and the hard limits', () =
   expect(CONTROLLER_PROMPT).toContain('answer in one line')
 })
 
+test('the controller prompt asks each decision as its own question with options, and keeps notes and to-dos apart', () => {
+  for (const line of ['decisions:', 'notes:', 'for you to do:', 'contract:']) expect(CONTROLLER_PROMPT).toContain(line)
+  // The exact shape the parser reads (parseDecision in loops.ts).
+  expect(CONTROLLER_PROMPT).toContain('- <question> | 1) <option>: <what it does> | 2) <option>: <what it does>')
+  expect(CONTROLLER_PROMPT).toContain('one you leave out is withdrawn')
+  // The founder is reached only through these lines, still.
+  expect(CONTROLLER_PROMPT).toContain('You cannot ask the founder directly')
+})
+
 const ORDER = {
   front: 'fieldkit', project: 'api', callSign: 'FIELDKIT-API', root: '/p',
   hub: '/p/_command/portfolio/fieldkit/_front.md', spokes: ['/p/_command/portfolio/fieldkit/api/api.md'],

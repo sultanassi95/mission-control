@@ -61,21 +61,26 @@ session starts it and a supervisor restarts it when the server dies.
 - Shows the fleet, the Poll and the loops, and sends prompts and commands to
   Flight. A Flight reply that opens with call signs in bold shows each one as a
   chip in its Controller's colour.
-- **Decides from the phone.** Each of these reaches Flight as a prompt in the
-  founder's name with a one-time code (one try, those exact arguments, 10
-  minutes, lost on a plugin reload): a GO, NO-GO or Retry, a dismissal or
-  stand-down, and a `/console staff` or `/console call` typed in the app.
-  Flight runs it with the console tool once its current turn ends, and auto
-  mode allows it because the fleet approves its own staffing and messages.
-  Until then a GO, NO-GO or Retry card says it was sent to Flight and runs
-  once Flight is free, and takes no second tap. If Flight never runs it (a
-  plugin reload drops the code), the card opens again 10 minutes after the
-  tap; send it again then. Dismissing a gate, retuning and stopping the app
-  run at once.
-- **Undelivered and held decisions.** A decision that did not reach its
+- **Answers a Controller's questions from the phone.** Each decision a
+  Controller asks is a card in the Flight tab with the options it wrote; pick
+  one, add a note if you like, and send. The answer, a Retry, a dismissal or
+  stand-down, and a `/console staff` or `/console call` typed in the app each
+  reach Flight as a prompt in the founder's name with a one-time code (one
+  try, those exact arguments, 10 minutes, lost on a plugin reload). Flight
+  runs it with the console tool once its current turn ends, and auto mode
+  allows it because the fleet approves its own staffing and messages. Until
+  then the card says it was sent to Flight and runs once Flight is free; a
+  different option sent before then replaces the first, whose code stops
+  working. If Flight never runs it (a plugin reload drops the code), send it
+  again from the card. Checking off a to-do, dismissing a poll item, retuning
+  and stopping the app run at once.
+- **The Poll is a read-only view.** It lists the questions open in Flight
+  (each links to its card), the to-dos only the founder can do, with Done,
+  and the history; it asks nothing itself.
+- **Undelivered and held answers.** An answer that did not reach its
   Controller stays on the Poll with the reason in plain words (the engine's
   text under "Technical details"), with Retry while the Controller that raised
-  it is staffed, and Dismiss. A decision for a Controller that has stood down
+  it is staffed, and Dismiss. An answer for a Controller that has stood down
   is held for the next Controller staffed under that call sign; Dismiss clears
   it with nothing sent. The fleet skill (`.claude/skills/fleet/SKILL.md`)
   has the details.
@@ -116,17 +121,18 @@ power. A lid-closed Mac sleeps unless it is on power with an external display.
 
 ## Phone alerts
 
-When a Controller's report opens a gate, the mission-fleet mod sends one line
+When a Controller's report asks a new question or leaves a to-do, the
+mission-fleet mod sends one line
 through Claude Code's notification tool. It reaches the phone only while
 **Remote Control** is connected to this session; otherwise it is a desktop
 notification, and the tool skips it entirely while the founder is at the
 terminal. The audit log records which (`alert ... -> Mobile push not sent
-(Remote Control inactive)`). The app's Poll badge shows the same gate either way.
+(Remote Control inactive)`). The app's Poll badge counts the same items either way.
 
 ## Never
 
 - **Never `tailscale funnel`.** Funnel publishes to the public internet; this
-  app can start agents and answer go/no-go gates.
+  app can start agents and answer their questions.
 - **Never ngrok or any tunnel without its own login in front.**
 - **Never bind the server to 0.0.0.0** or a LAN address.
 

@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import type { PollItem } from '../types'
-import { awaitingFlight, fleetSelfApproval, isFlightOnly, isRelayedVerb, RELAY_TTL, relayHold, splitRelayCode, spendRelayCode, isShellLikeTool, pinnedDir, protectedFromSpoke, pushDestination, shellRefusal, tokenize, toolRefusal } from './guards'
+import { awaitingFlight, dropRelayCodes, fleetSelfApproval, isChoiceVerb, isFlightOnly, isRelayedVerb, RELAY_TTL, relayHold, splitRelayCode, spendRelayCode, isShellLikeTool, pinnedDir, protectedFromSpoke, pushDestination, shellRefusal, tokenize, toolRefusal } from './guards'
 import type { CloneScope, RelayCodes } from './guards'
 
 const C = (cmd: string, prot: string[] = []) => shellRefusal('controller', cmd, prot)
@@ -524,6 +524,41 @@ test('an app op holds only the item it decides while Flight runs it', () => {
   expect(relayHold('go MI1', items)).toBeUndefined()
   expect(relayHold('call MISSION-CONTROL go', items)).toBeUndefined()
   expect(relayHold('retry MI9', items)).toBeUndefined()
+})
+
+// ---- Answers to a Controller's question (MC-125) ----
+
+test('an answer to a question is relayed through Flight; checking off a to-do runs at once', () => {
+  expect(isRelayedVerb('decide MI7 2')).toBe(true)
+  expect(isRelayedVerb('decide MI7 2 after the sweep')).toBe(true)
+  expect(isRelayedVerb('done MI9')).toBe(false)
+  for (const a of ['decide MI7 2', 'go MI7', 'nogo MI7', 'no-go MI7']) expect(isChoiceVerb(a)).toBe(true)
+  for (const a of ['retry MI7', 'done MI7', 'call ACME decide', '']) expect(isChoiceVerb(a)).toBe(false)
+})
+
+test('an answer holds the open question it answers, never a to-do or a closed item', () => {
+  const base: PollItem = { id: 'MI7', at: '2026-10-18T09:12:00.000Z', from: 'MISSION-CONTROL', kind: 'question', title: 'Which branch?', detail: 'decisions: ...', state: 'open', agentId: 'a1', options: [{ label: 'Epic' }, { label: 'Own' }] }
+  const todo: PollItem = { ...base, id: 'MI9', kind: 'todo', title: 'Close PR #31' }
+  const answered: PollItem = { ...base, id: 'MI6', state: 'answered', choice: 1 }
+  const items = [base, todo, answered]
+  expect(relayHold('decide MI7 2', items)?.id).toBe('MI7')
+  expect(relayHold('decide mi7 1 note', items)?.id).toBe('MI7')
+  expect(relayHold('decide MI9 1', items)).toBeUndefined()
+  expect(relayHold('go MI9', items)).toBeUndefined()
+  expect(relayHold('decide MI6 2', items)).toBeUndefined()
+})
+
+test('a later answer drops the codes of earlier answers on the same item, and nothing else', () => {
+  const codes: RelayCodes = new Map([
+    ['c1', { args: 'decide MI7 1', at: 1000 }],
+    ['c2', { args: 'go mi7 note', at: 1000 }],
+    ['c3', { args: 'decide MI70 1', at: 1000 }],
+    ['c4', { args: 'retry MI7', at: 1000 }],
+    ['c5', { args: 'call MISSION-CONTROL decide MI7 1', at: 1000 }],
+  ])
+  expect(dropRelayCodes(codes, 'MI7')).toBe(2)
+  expect([...codes.keys()]).toEqual(['c3', 'c4', 'c5'])
+  expect(spendRelayCode(codes, 'c1', 'decide MI7 1', 2000)).toBe(false)
 })
 
 // ---- Clones (MC-126, MC-135) ----

@@ -26,7 +26,7 @@ argue its way around, and a control room you can run from your phone.
 <p align="center">
   <img src="docs/assets/app-phone-flight.png" alt="Flight: the morning summary across three fronts" width="240">
   &nbsp;
-  <img src="docs/assets/app-phone-poll.png" alt="The Poll: the decisions waiting on you, go or no-go" width="240">
+  <img src="docs/assets/app-phone-poll.png" alt="The Poll: the questions and to-dos waiting on you" width="240">
   &nbsp;
   <img src="docs/assets/app-phone-consoles.png" alt="Consoles: one Controller per front, with its state" width="240">
 </p>
@@ -44,9 +44,11 @@ PR watches wake a Controller when its checks or reviews change, so nobody polls 
 
 ### <img src="docs/assets/icon-poll.svg" width="28" align="top"> Every decision that needs you, in one place
 
-When a Controller is blocked on something only you can decide, it lands in the **Poll** as a
-go or no-go, with the report it came from. Answer with one tap and a note. Changes that ripple
-into other fronts are routed to the Controllers they affect. Nothing waits silently.
+When a Controller needs you to decide something, it asks in Flight as a question with its
+options spelled out, each with what it does, beside the report it came from. Pick one, add a
+note if you like. Things only you can do land on the **Poll** as to-dos with their links.
+Changes that ripple into other fronts are routed to the Controllers they affect. Nothing
+waits silently.
 
 ### <img src="docs/assets/icon-phone.svg" width="28" align="top"> Run it from your phone, from anywhere
 
@@ -97,11 +99,11 @@ of 23 lessons paid for on a real multi-venture portfolio.
 
 ```mermaid
 flowchart TB
-  YOU(["You<br/>terminal or phone"]) <-->|messages, go / no-go, photos| FLIGHT["Flight<br/>your main Claude Code session"]
+  YOU(["You<br/>terminal or phone"]) <-->|messages, answers, photos| FLIGHT["Flight<br/>your main Claude Code session"]
   FLIGHT -->|"/console staff"| C1["Controller<br/>storefront"]
   FLIGHT --> C2["Controller<br/>billing-api"]
   FLIGHT --> C3["Controller<br/>mobile-app"]
-  C1 & C2 & C3 -->|status, blocked on you| POLL[("The Poll")]
+  C1 & C2 & C3 -->|status, questions, to-dos| POLL[("The Poll")]
   POLL --> YOU
   C2 --> BR["back room<br/>helper agents within budget"]
   subgraph PORTFOLIO["Your portfolio, plain Markdown in git"]

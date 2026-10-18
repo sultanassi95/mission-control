@@ -93,7 +93,10 @@ button { cursor: pointer; }
 /* Poll */
 .gate { border: 1px solid var(--line); background: var(--raised); border-radius: var(--r-card); padding: var(--s4); display: grid; gap: var(--s2); }
 .gate .kind { font-size: var(--t-xs); line-height: var(--lh-xs); text-transform: uppercase; letter-spacing: var(--ls-3); color: var(--ink-faint); display: flex; gap: var(--s2); flex-wrap: wrap; }
-.gate h3 { margin: 0; font-size: var(--t-md); line-height: var(--lh-md); overflow-wrap: anywhere; }
+.gate h2 { margin: 0; font-size: var(--t-md); line-height: var(--lh-md); font-weight: 400; overflow-wrap: anywhere; }
+.gate h2 a { color: var(--accent); }
+.decision:focus { outline: none; }
+.decision:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .gate details { font-size: var(--t-sm); line-height: var(--lh-sm); color: var(--ink-soft); }
 .gate details pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--sans); margin: var(--s2) 0 0; max-height: 40vh; overflow-y: auto; }
 .gate .note { width: 100%; border: 1px solid var(--line); background: var(--surface); border-radius: var(--r-field); padding: var(--s2) var(--s3); min-height: var(--target); }

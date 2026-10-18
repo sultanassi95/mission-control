@@ -952,7 +952,7 @@ export function fleetSelfApproval(tool: string, input: unknown, seats: FleetSeat
 }
 
 /** Console verbs that message or start an agent. From the app they run through Flight, never from the app's own loop. */
-const RELAYED = new Set(['staff', 'call', 'go', 'nogo', 'no-go', 'retry', 'dismiss', 'stand-down'])
+const RELAYED = new Set(['staff', 'call', 'go', 'nogo', 'no-go', 'decide', 'retry', 'dismiss', 'stand-down'])
 export function isRelayedVerb(args: string): boolean {
   return RELAYED.has((args.trim().split(/\s+/)[0] ?? '').toLowerCase())
 }
@@ -984,15 +984,37 @@ export function awaitingFlight(sentAt: string | undefined, now: number): boolean
   return Number.isFinite(at) && now - at <= RELAY_TTL
 }
 
+/** Console verbs that answer an open poll item: decide <id> <n>, and go or no-go for a blocked line or an advisory. */
+const CHOICE = new Set(['decide', 'go', 'nogo', 'no-go'])
+export function isChoiceVerb(args: string): boolean {
+  return CHOICE.has((args.trim().split(/\s+/)[0] ?? '').toLowerCase())
+}
+
 /**
- * The poll item an app op holds while Flight runs it, so its card takes no second tap: an open gate
- * for go or no-go, an undelivered decision for retry. Undefined for any other op or item.
+ * The poll item an app op holds while Flight runs it: an open item that is asked (not a to-do) for an
+ * answer, an undelivered decision for retry. Undefined for any other op or item. A retry takes no
+ * second tap while held; a later answer replaces the earlier one (dropRelayCodes).
  */
 export function relayHold(args: string, items: readonly PollItem[]): PollItem | undefined {
   const [verb = '', id = ''] = args.trim().split(/\s+/)
   const item = items.filter(p => p.id.toLowerCase() === id.toLowerCase()).at(-1)
   if (!item) return undefined
-  const v = verb.toLowerCase()
-  if (v === 'retry') return isUndelivered(item) ? item : undefined
-  return (v === 'go' || v === 'nogo' || v === 'no-go') && item.state === 'open' ? item : undefined
+  if (verb.toLowerCase() === 'retry') return isUndelivered(item) ? item : undefined
+  return isChoiceVerb(verb) && item.state === 'open' && item.kind !== 'todo' ? item : undefined
+}
+
+/**
+ * Drops the codes minted for earlier answers on one poll item, so only the newest answer the app
+ * sent can run. Returns how many were dropped. Codes for any other item or verb are kept.
+ */
+export function dropRelayCodes(codes: RelayCodes, id: string): number {
+  let n = 0
+  for (const [code, minted] of codes) {
+    const [verb = '', target = ''] = minted.args.trim().split(/\s+/)
+    if (isChoiceVerb(verb) && target.toLowerCase() === id.toLowerCase()) {
+      codes.delete(code)
+      n++
+    }
+  }
+  return n
 }

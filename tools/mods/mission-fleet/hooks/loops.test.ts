@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import type { PollItem } from '../types'
-import { APP_HISTORY, appPoll, asSlots, cardFacts, dependentsOf, heldText, isHeld, isNothing, isUndelivered, liveSeat, parseStatus, placeSlots, plainReason, pollId, prSignature, prsIn, seatState, SLOT_COUNT } from './loops'
+import { answerWord, APP_HISTORY, appPoll, asSlots, cardFacts, decisionText, dependentsOf, GO_NOGO, heldText, isHeld, isNothing, isUndelivered, liveSeat, MAX_DECISIONS, MAX_TODOS, optionsOf, parseDecision, parseReport, parseStatus, placeSlots, plainReason, pollId, prSignature, prsIn, seatState, SLOT_COUNT } from './loops'
 
 // The refusal MI1's GO met on 2026-10-16, in part: written for the model, not for the founder.
 const AUTO_MODE = 'The server-side auto mode classifier gave no verdict for SendMessage: the request that produced this action did not ask for one. Issue the action again once, as-is; if it is denied again, continue with other tasks and tell the user.'
@@ -175,4 +175,127 @@ test('a ninth Controller staffed beside eight has no colour, so the app draws it
 test('a stored slot map keeps only whole slot numbers in range', () => {
   expect(asSlots({ FIELDKIT: 1, SHELF: SLOT_COUNT, A: -1, B: 1.5, C: '2', D: null })).toEqual({ FIELDKIT: 1 })
   for (const bad of [undefined, null, 'x', 3, [1, 2]]) expect(asSlots(bad)).toEqual({})
+})
+
+// ---- Decisions asked in Flight's chat (MC-125) ----
+
+const REPORT = [
+  'state: MC-136 planned',
+  'shipped: nothing',
+  'blocked on you: two decisions below',
+  'next: build once answered',
+  'decisions:',
+  '- Which branch should MC-136 build on? | 1) The epic branch: lands with MC-124\'s PR | 2) Its own branch off main: a separate PR after MC-124',
+  '- Keep the old Poll for a week? | 1) Keep it: both views for a week | 2) Drop it: read-only from today',
+  'notes: the sweep found 0 hits',
+  'for you to do:',
+  '- Close PR #31 https://github.com/o/r/pull/31',
+].join('\n')
+
+test('a report\'s decisions, notes and to-dos are read as blocks, each decision with its options and what each does', () => {
+  const r = parseReport(REPORT)
+  expect(r.state).toBe('MC-136 planned')
+  expect(r.blocked).toBe('two decisions below')
+  expect(r.next).toBe('build once answered')
+  expect(r.notes).toBe('the sweep found 0 hits')
+  expect(r.todos).toEqual(['Close PR #31 https://github.com/o/r/pull/31'])
+  expect(r.decisions).toEqual([
+    { question: 'Which branch should MC-136 build on?', options: [{ label: 'The epic branch', does: 'lands with MC-124\'s PR' }, { label: 'Its own branch off main', does: 'a separate PR after MC-124' }] },
+    { question: 'Keep the old Poll for a week?', options: [{ label: 'Keep it', does: 'both views for a week' }, { label: 'Drop it', does: 'read-only from today' }] },
+  ])
+  // The status check the console card reads is the same as before.
+  expect(parseStatus(REPORT)).toEqual({ state: 'MC-136 planned', shipped: 'nothing', blocked: 'two decisions below', next: 'build once answered' })
+})
+
+test('a decision with fewer than two options keeps none, and is asked as Go or No-go', () => {
+  expect(parseDecision('Merge PR #12 now?')).toEqual({ question: 'Merge PR #12 now?', options: [] })
+  expect(parseDecision('Merge PR #12 now? | 1) Yes: merge it')).toEqual({ question: 'Merge PR #12 now?', options: [] })
+  // An option with no "what it does" keeps its label alone; a label may hold a colon with no space after it.
+  expect(parseDecision('Port? | 1) 4777 | 2) 8080:alt')).toEqual({ question: 'Port?', options: [{ label: '4777' }, { label: '8080:alt' }] })
+  expect(optionsOf({ kind: 'question', options: [] })).toEqual(GO_NOGO)
+  expect(optionsOf({ kind: 'gate' })).toEqual(GO_NOGO)
+  expect(GO_NOGO.map(o => o.label)).toEqual(['Go', 'No-go'])
+  const tell = optionsOf({ kind: 'advisory', targets: ['shelf'] })
+  expect(tell.map(o => o.label)).toEqual(['Tell them', 'Don\'t tell'])
+  expect(tell[0]?.does).toContain('shelf')
+})
+
+test('nothing-like lines open nothing: an empty decisions block is an empty list, a missing one is no list', () => {
+  expect(parseReport('state: ok\nnotes: fyi only\ncontract: none').decisions).toBeUndefined()
+  expect(parseReport('state: ok\ndecisions: none').decisions).toEqual([])
+  expect(parseReport('decisions:\n- none\nnext: wait').decisions).toEqual([])
+  expect(parseReport('for you to do: nothing').todos).toEqual([])
+  expect(parseReport('state: ok').todos).toBeUndefined()
+  // The lines that opened empty gates on 2026-10-16 (SM31, TA26).
+  for (const v of ['none new.', 'nothing new', 'Nothing new from me', 'none open']) expect(isNothing(v)).toBe(true)
+  expect(isNothing('nothing new is safe to merge until you approve')).toBe(false)
+})
+
+test('a decisions block withdraws the open questions only when it is certain: items that parse, or a header that says none', () => {
+  // Said none, in more words than "none".
+  for (const v of ['none right now', 'none pending', 'nothing at the moment']) expect(parseReport(`decisions: ${v}`).decisions).toEqual([])
+  // Header text that is not a decision, and nothing beneath that parses: no list, so nothing is withdrawn.
+  expect(parseReport('decisions: see below\nWhich branch? A or B\nnext: wait').decisions).toBeUndefined()
+  expect(parseReport('decisions:\nWhich branch? A or B').decisions).toBeUndefined()
+  // Header text with options is a decision.
+  expect(parseReport('decisions: Ship it? | 1) Yes: ship | 2) No: wait').decisions?.map(d => d.question)).toEqual(['Ship it?'])
+  // Options on their own indented lines belong to the decision above them.
+  const folded = parseReport('decisions:\n- Which branch?\n  1) The epic: one review\n  2) Main: a later PR\n- Keep the old Poll? | 1) Yes: a week | 2) No: today').decisions
+  expect(folded?.map(d => `${d.question} ${d.options.map(o => o.label).join('/')}`)).toEqual(['Which branch? The epic/Main', 'Keep the old Poll? Yes/No'])
+  // CRLF reads as LF.
+  expect(parseReport('state: ok\r\ndecisions: none\r\nfor you to do:\r\n- Close PR #31\r\n').todos).toEqual(['Close PR #31'])
+  expect(parseReport('state: ok\r\ndecisions: none\r\n').decisions).toEqual([])
+})
+
+test('a status line ends a block, and a bulleted status line inside one is never a decision', () => {
+  const r = parseReport('decisions:\n- Ship it? | 1) Yes: ship | 2) No: wait\n- next: wait for the founder\n- state: planned')
+  expect(r.decisions?.map(d => d.question)).toEqual(['Ship it?'])
+  expect(r.next).toBe('wait for the founder')
+  expect(r.state).toBe('planned')
+  // A blank line ends a block too; the line after it is not an item.
+  expect(parseReport('for you to do:\n- close #3\n\n- an aside').todos).toEqual(['close #3'])
+  // The last decisions block is the one that counts, like the last status line.
+  expect(parseReport('decisions:\n- old? | 1) a: x | 2) b: y\nstate: s\ndecisions:\n- new? | 1) c: x | 2) d: y').decisions?.map(d => d.question)).toEqual(['new?'])
+})
+
+test('a report holds at most MAX_DECISIONS decisions and MAX_TODOS to-dos, and long text is cut', () => {
+  const many = ['decisions:', ...Array.from({ length: MAX_DECISIONS + 3 }, (_, k) => `- Q${k}? | 1) a: x | 2) b: y`), 'for you to do:', ...Array.from({ length: MAX_TODOS + 3 }, (_, k) => `- T${k}`)].join('\n')
+  const r = parseReport(many)
+  expect(r.decisions).toHaveLength(MAX_DECISIONS)
+  expect(r.todos).toHaveLength(MAX_TODOS)
+  expect(parseDecision(`${'q'.repeat(900)} | 1) a: x | 2) b: y`).question.length).toBeLessThanOrEqual(400)
+})
+
+const QUESTION = item({ id: 'MI7', kind: 'question', state: 'open', title: 'Which branch should MC-136 build on?', options: [{ label: 'The epic branch', does: 'lands with MC-124\'s PR' }, { label: 'Its own branch off main', does: 'a separate PR after MC-124' }] })
+
+test('an answered question is a decision like a go: it can be undelivered or held', () => {
+  const answered: PollItem = { ...QUESTION, state: 'answered', choice: 2 }
+  expect(isUndelivered({ ...answered, undelivered: 'x' })).toBe(true)
+  expect(isHeld({ ...answered, held: HELD_AT })).toBe(true)
+  expect(isUndelivered({ ...QUESTION, state: 'done', undelivered: 'x' })).toBe(false)
+  expect(answerWord({ ...QUESTION, state: 'answered', choice: 2 })).toBe('2) Its own branch off main')
+  expect(answerWord(item({ state: 'no-go' }))).toBe('NO-GO')
+})
+
+test('the Controller is told the option chosen and what it does, and only that question', () => {
+  const text = decisionText(QUESTION, 2, 'after the sweep')
+  expect(text).toContain('The founder answered MI7: 2) Its own branch off main - a separate PR after MC-124.')
+  expect(text).toContain('Note: after the sweep')
+  expect(text).toContain('Your question: Which branch should MC-136 build on?')
+  expect(text).not.toContain('The epic branch')
+  // A legacy gate keeps its GO or NO-GO and the report it answers.
+  const gate = decisionText(item({ state: 'open' }), 2, '')
+  expect(gate).toContain('NO-GO from the founder on MI1.')
+  expect(gate).toContain('blocked on you: approve the plan')
+  // A held answer reaches the next Controller in the same words.
+  expect(heldText('MISSION-CONTROL', [{ ...QUESTION, state: 'answered', choice: 1, held: HELD_AT }], [])).toContain('The founder answered MI7: 1) The epic branch')
+})
+
+test('the app is given each open question\'s options and each decision\'s answer, so the page decides neither', () => {
+  expect(cardFacts(QUESTION, SEATS).asks).toEqual(QUESTION.options)
+  expect(cardFacts(item({ state: 'open' }), SEATS).asks).toEqual(GO_NOGO)
+  expect(cardFacts({ ...QUESTION, kind: 'todo', options: undefined }, SEATS).asks).toBeUndefined()
+  expect(cardFacts({ ...QUESTION, state: 'answered', choice: 1 }, SEATS).answer).toBe('1) The epic branch')
+  expect(cardFacts({ ...QUESTION, state: 'answered', choice: 1 }, SEATS).asks).toBeUndefined()
+  expect(cardFacts(item({ state: 'no-go' }), SEATS).answer).toBe('NO-GO')
 })

@@ -294,7 +294,7 @@ tests already hold a value class keeps that idiom. Tests:
 The console fleet: a Claude Code mod, packaged as a plugin, that adds
 `/console` and a console tool for Flight (the orchestrator session). It staffs
 a kept-alive Controller per front or project, retunes and calls it, keeps the
-go/no-go poll and the loops, and guards what Controllers and their back rooms
+poll of the questions and to-dos it leaves the founder and the loops, and guards what Controllers and their back rooms
 may run. The verbs, the guard's limits and the founder-only commands are in
 `.claude/skills/fleet/SKILL.md`; the remote runbook is
 `framework/remote-access.md`.
