@@ -1,7 +1,8 @@
 import { expect, test } from 'claude-code/testing'
 
-import { awaitingFlight, fleetSelfApproval, isFlightOnly, isRelayedVerb, RELAY_TTL, splitRelayCode, spendRelayCode, isShellLikeTool, pinnedDir, protectedFromSpoke, pushDestination, shellRefusal, tokenize, toolRefusal } from './guards'
-import type { RelayCodes } from './guards'
+import type { PollItem } from '../types'
+import { awaitingFlight, dropRelayCodes, fleetSelfApproval, isChoiceVerb, isFlightOnly, isRelayedVerb, RELAY_TTL, relayHold, splitRelayCode, spendRelayCode, isShellLikeTool, pinnedDir, protectedFromSpoke, pushDestination, shellRefusal, tokenize, toolRefusal } from './guards'
+import type { CloneScope, RelayCodes } from './guards'
 
 const C = (cmd: string, prot: string[] = []) => shellRefusal('controller', cmd, prot)
 const B = (cmd: string) => shellRefusal('back room', cmd, [])
@@ -460,6 +461,15 @@ test('the fleet approves its own send only to an agent it has on record', () => 
   expect(fleetSelfApproval('SendMessage', { to: 'a1' }, [])).toBeUndefined()
 })
 
+test('the fleet never approves its own send to a console that is stood down', () => {
+  const seats = [
+    { callSign: 'MISSION-CONTROL', agentId: 'a1', name: 'console-mission-control', status: 'stood-down' },
+    { callSign: 'ACME', agentId: 'k1', name: 'console-acme', status: 'staffed' },
+  ]
+  expect(fleetSelfApproval('SendMessage', { to: 'a1', message: 'go' }, seats)).toBeUndefined()
+  expect(fleetSelfApproval('SendMessage', { to: 'k1', message: 'go' }, seats)).toBe('ACME')
+})
+
 test('the fleet approves its own spawn only of a Controller under a reserved console name', () => {
   const seats = [{ callSign: 'ACME', agentId: '', name: 'console-acme', status: 'staffing' }]
   expect(fleetSelfApproval('Agent', { subagent_type: 'mission-fleet:controller', name: 'console-acme' }, seats)).toBe('ACME')
@@ -470,7 +480,7 @@ test('the fleet approves its own spawn only of a Controller under a reserved con
 })
 
 test('app console ops that message or start an agent are relayed through Flight', () => {
-  for (const a of ['staff acme', 'call ACME hi', 'go MI8', 'nogo MI8 not now', 'no-go MI8', 'dismiss ACME', 'stand-down ACME']) expect(isRelayedVerb(a)).toBe(true)
+  for (const a of ['staff acme', 'call ACME hi', 'go MI8', 'nogo MI8 not now', 'no-go MI8', 'retry MI8', 'dismiss ACME', 'stand-down ACME']) expect(isRelayedVerb(a)).toBe(true)
   for (const a of ['list', 'poll', 'loops ACME', 'retune ACME haiku', 'dismiss-gate MI8', '']) expect(isRelayedVerb(a)).toBe(false)
 })
 
@@ -500,6 +510,431 @@ test('a decision sent to Flight holds its gate for the code lifetime, then frees
   expect(awaitingFlight('2026-10-16T01:57:00.000Z', at + RELAY_TTL + 1)).toBe(false)
   expect(awaitingFlight(undefined, at)).toBe(false)
   expect(awaitingFlight('not a date', at)).toBe(false)
+})
+
+test('an app op holds only the item it decides while Flight runs it', () => {
+  const base: PollItem = { id: 'MI1', at: '2026-10-16T00:30:12.000Z', from: 'MISSION-CONTROL', kind: 'gate', title: 'approve the plan', detail: 'blocked on you: approve the plan', state: 'go', agentId: 'a1' }
+  const open: PollItem = { ...base, id: 'MI2', state: 'open' }
+  const stuck: PollItem = { ...base, undelivered: 'Auto mode classifier gave no verdict' }
+  const items = [open, stuck]
+  expect(relayHold('go MI2', items)?.id).toBe('MI2')
+  expect(relayHold('nogo mi2 not now', items)?.id).toBe('MI2')
+  expect(relayHold('retry MI1', items)?.id).toBe('MI1')
+  expect(relayHold('retry MI2', items)).toBeUndefined()
+  expect(relayHold('go MI1', items)).toBeUndefined()
+  expect(relayHold('call MISSION-CONTROL go', items)).toBeUndefined()
+  expect(relayHold('retry MI9', items)).toBeUndefined()
+})
+
+// ---- Answers to a Controller's question (MC-125) ----
+
+test('an answer to a question is relayed through Flight; checking off a to-do runs at once', () => {
+  expect(isRelayedVerb('decide MI7 2')).toBe(true)
+  expect(isRelayedVerb('decide MI7 2 after the sweep')).toBe(true)
+  expect(isRelayedVerb('done MI9')).toBe(false)
+  for (const a of ['decide MI7 2', 'go MI7', 'nogo MI7', 'no-go MI7']) expect(isChoiceVerb(a)).toBe(true)
+  for (const a of ['retry MI7', 'done MI7', 'call ACME decide', '']) expect(isChoiceVerb(a)).toBe(false)
+})
+
+test('an answer holds the open question it answers, never a to-do or a closed item', () => {
+  const base: PollItem = { id: 'MI7', at: '2026-10-18T09:12:00.000Z', from: 'MISSION-CONTROL', kind: 'question', title: 'Which branch?', detail: 'decisions: ...', state: 'open', agentId: 'a1', options: [{ label: 'Epic' }, { label: 'Own' }] }
+  const todo: PollItem = { ...base, id: 'MI9', kind: 'todo', title: 'Close PR #31' }
+  const answered: PollItem = { ...base, id: 'MI6', state: 'answered', choice: 1 }
+  const items = [base, todo, answered]
+  expect(relayHold('decide MI7 2', items)?.id).toBe('MI7')
+  expect(relayHold('decide mi7 1 note', items)?.id).toBe('MI7')
+  expect(relayHold('decide MI9 1', items)).toBeUndefined()
+  expect(relayHold('go MI9', items)).toBeUndefined()
+  expect(relayHold('decide MI6 2', items)).toBeUndefined()
+})
+
+test('a later answer drops the codes of earlier answers on the same item, and nothing else', () => {
+  const codes: RelayCodes = new Map([
+    ['c1', { args: 'decide MI7 1', at: 1000 }],
+    ['c2', { args: 'go mi7 note', at: 1000 }],
+    ['c3', { args: 'decide MI70 1', at: 1000 }],
+    ['c4', { args: 'retry MI7', at: 1000 }],
+    ['c5', { args: 'call MISSION-CONTROL decide MI7 1', at: 1000 }],
+  ])
+  expect(dropRelayCodes(codes, 'MI7')).toBe(2)
+  expect([...codes.keys()]).toEqual(['c3', 'c4', 'c5'])
+  expect(spendRelayCode(codes, 'c1', 'decide MI7 1', 2000)).toBe(false)
+})
+
+// ---- Clones (MC-126, MC-135) ----
+
+// A Controller on the acme front: its own front's folder, and the fronts the portfolio named when it was staffed.
+const ACME: CloneScope = { home: '/w/fronts/acme', fronts: ['acme', 'kiln', 'shelf'] }
+const K = (cmd: string, scope = '/w/fronts/acme', clone: CloneScope | undefined = ACME) => shellRefusal('controller', cmd, [], scope, clone)
+const AT_HOME = 'cd /w/fronts/acme && '
+const WEB = 'git@github.com:acme-org/web.git'
+// What each refusal of a source says, by kind.
+const HELPER = 'names a remote helper (HELPER::), which runs a program rather than fetch a repository'
+const LOCAL = 'which reads this Mac\'s folders, other fronts\' repositories included'
+const DASH = 'a host or user starting with - would reach ssh as an option'
+const UNREAD = 'is not a repository URL this guard can read'
+const NO_FOLDER = 'leaves git no folder of its own: a path part is dots alone or .git'
+
+test('a Controller clones any repository URL into a front\'s folder, with the listed options', () => {
+  expect(K(`${AT_HOME}git clone ${WEB}`)).toBeUndefined()
+  expect(K(`${AT_HOME}git clone https://github.com/acme-org/web`)).toBeUndefined()
+  expect(K(`${AT_HOME}git clone https://github.com/acme-org/web.git web`)).toBeUndefined()
+  expect(K(`git -C /w/fronts/acme clone --depth 1 --single-branch --branch main --filter=blob:none --origin upstream -q --no-tags ${WEB}`)).toBeUndefined()
+  expect(K(`${AT_HOME}git clone -b feat/x --no-single-branch --quiet ${WEB} /w/fronts/acme/web`)).toBeUndefined()
+  // A project console, from its own repository, naming the folder beside it.
+  expect(K(`cd /w/fronts/acme/api && git clone ${WEB} ../web`, '/w/fronts/acme/api')).toBeUndefined()
+  // Any owner, any host and any transport git reads over the network, an ssh host alias included.
+  for (const src of [
+    'git@github.com:shelf-co/catalog.git', 'https://gitlab.com/group/sub/tool.git', 'https://gitlab.com/group/sub/tool/',
+    'http://git.example.org/team/tool', 'ssh://git@code.example.org:2222/team/tool.git', 'git+ssh://code.example.org/team/tool.git',
+    'ssh+git://code.example.org/team/tool.git', 'git://git.example.org/tool.git', 'git@personal-github:acme-org/tool.git',
+    'deploy_bot@git.example.org:/srv/git/tool.git', 'https://dev.example.com/org/proj/_git/tool', 'git@git.example.org:tool',
+  ]) expect(`${src} -> ${K(`${AT_HOME}git clone ${src}`) ?? 'allowed'}`).toBe(`${src} -> allowed`)
+  // A project console clones into its front's folder, beside its project.
+  expect(K(`${AT_HOME}git clone ${WEB}`, '/w/fronts/acme/api')).toBeUndefined()
+  expect(K(`git -C /w/fronts/acme/api clone ${WEB} /w/fronts/acme/web`, '/w/fronts/acme/api')).toBeUndefined()
+})
+
+test('a back-room agent still never clones', () => {
+  expect(B(`git clone ${WEB}`)).toContain('never runs git clone')
+  expect(shellRefusal('back room', `${AT_HOME}git clone ${WEB}`, [], '/w/fronts/acme', ACME)).toContain('never runs git clone')
+})
+
+test('every clone option off the list is refused by its own name, an abbreviation git would expand included', () => {
+  // The base command passes, so each refusal below is the option's.
+  expect(K(`${AT_HOME}git clone ${WEB}`)).toBeUndefined()
+  // Caught before the clone rule, as options that run a command (the git-wide list; --rec abbreviates --receive-pack there).
+  const RUNS = new Set(['--upload-pack', '--upload-pack=x', '--upl', '--rec'])
+  for (const opt of [
+    '-c core.sshCommand=x', '--config core.sshCommand=x', '--config=core.sshCommand=x', '--template /tmp/t', '--template=/tmp/t',
+    '-u x', '--upload-pack x', '--upload-pack=x', '--separate-git-dir /tmp/g', '--reference /tmp/r', '--reference-if-able /tmp/r',
+    '--recurse-submodules', '--recursive', '--recurse-submodules=lib', '--shallow-submodules', '--remote-submodules', '--also-filter-submodules',
+    '-j 4', '--jobs 4', '--temp /tmp/t', '--conf core.x=y', '--upl x', '--rec', '--dep 1', '--sing', '--quie', '-o upstream',
+    '--bare', '--mirror', '-l', '--local', '-s', '--shared', '--no-hardlinks', '--dissociate', '-n', '--no-checkout', '--sparse',
+    '--bundle-uri x', '--server-option x', '--ref-format files', '--revision x', '-bmain', '--depth=1', '--branch=main',
+    '--filter=tree:0', '--filter=blob:limit=1k', '-v', '--progress', '-4', '--ipv6', '-qb main',
+  ]) {
+    const word = opt.split(' ')[0] ?? ''
+    const why = K(`${AT_HOME}git clone ${opt} ${WEB}`) ?? 'allowed'
+    expect(`${opt} -> ${why}`).toContain(RUNS.has(word) ? `git clone ${word} can run a command` : `${word} is not an allowed clone option`)
+  }
+  expect(K(`${AT_HOME}git clone -- ${WEB}`)).toContain('`--` is not allowed in a clone')
+})
+
+test('a listed clone option takes a plain value as its next word', () => {
+  for (const [opt, value] of [['--depth', '0'], ['--depth', 'x'], ['--depth', '1000000'], ['--branch', '-x'], ['-b', '../x'], ['--origin', 'a/b'], ['--branch', "''"]]) {
+    expect(`${opt} ${value} -> ${K(`${AT_HOME}git clone ${opt} ${value} ${WEB}`) ?? 'allowed'}`).toContain(`${opt} takes a plain value as the next word`)
+  }
+  expect(K(`${AT_HOME}git clone ${WEB} --depth`)).toContain('--depth takes a plain value')
+})
+
+test('clone words must be literal: variables, globs and substitutions are refused', () => {
+  expect(K(`${AT_HOME}git clone $URL`)).toContain('clone arguments must be literal')
+  expect(K(`${AT_HOME}git clone --depth $N ${WEB}`)).toContain('clone arguments must be literal')
+  expect(K(`${AT_HOME}git clone "git@github.com:acme-org/$R.git"`)).toContain('clone arguments must be literal')
+  expect(K(`${AT_HOME}git clone ${WEB} ~/web`)).toContain('clone arguments must be literal')
+  expect(K(`${AT_HOME}git clone git@github.com:acme-org/w*.git`)).toContain('clone arguments must be literal')
+  expect(K(`${AT_HOME}git clone $(cat url.txt)`)).toContain('run plainly')
+})
+
+test('a clone source that runs a program or reads this Mac\'s folders is refused, naming why', () => {
+  const refusal = (src: string) => `${src} -> ${K(`${AT_HOME}git clone ${src}`) ?? 'allowed'}`
+  for (const src of ["'ext::sh -c x'", 'fd::3', "'transport::https://github.com/acme-org/web'", 'https::github.com/acme-org/web']) {
+    const text = tokenize(src).commands[0]?.words[0]?.text ?? src
+    expect(refusal(src)).toContain(`${text} ${HELPER}`)
+  }
+  for (const src of ['file:///w/fronts/shelf/shelf', 'FILE:///w/fronts/shelf/shelf', 'file://localhost/srv/web.git']) {
+    expect(refusal(src)).toContain(`${src} is a file:// source, ${LOCAL}`)
+  }
+  for (const src of ['/w/fronts/shelf/shelf', '../shelf/shelf', './web', 'web', 'shelf/web.git', 'a/b:c.git', '.git']) {
+    expect(refusal(src)).toContain(`${src} is a local path, ${LOCAL}`)
+  }
+  for (const src of ['ssh://-oProxyCommand=x/web.git', 'ssh://git@-oProxyCommand=x/web.git', 'git@-oProxyCommand=x:web.git', 'https://-x.example.org/web']) {
+    expect(refusal(src)).toContain(`${src}: ${DASH}`)
+  }
+})
+
+test('a source the guard cannot read, or one that leaves git no folder of its own, is refused', () => {
+  const refusal = (src: string) => `${src} -> ${K(`${AT_HOME}git clone ${src}`) ?? 'allowed'}`
+  for (const src of [
+    'HTTPS://github.com/acme-org/web', 'ftp://git.example.org/web.git', 'https://github.com:443', 'https://github.com/',
+    'https://git.example.org/a%20b/web.git', 'https://user:pw@git.example.org/web.git',
+    'github.com:acme-org/web.git', 'git@github.com:', 'file:web', 'ssh://git.example.org:22x/web.git',
+  ]) expect(refusal(src)).toContain(`${src} ${UNREAD}`)
+  for (const src of [
+    'git@github.com:acme-org/..git', 'https://github.com/acme-org/..', 'https://github.com/acme-org/.', 'https://github.com/acme-org/.git',
+    'git@github.com:acme-org/.GIT.git', 'git@github.com:acme-org/....git', 'git@github.com:acme-org/.git..git', 'https://github.com/acme-org/.git.',
+    'https://github.com/../web.git',
+  ]) expect(refusal(src)).toContain(`${src} ${NO_FOLDER}`)
+})
+
+test('a clone lands in any front the console was staffed with, and never in a folder that is not one', () => {
+  // Another front's folder, pinned there or named from the console's own.
+  expect(K(`cd /w/fronts/shelf && git clone ${WEB}`)).toBeUndefined()
+  expect(K(`git -C /w/fronts/shelf clone ${WEB}`)).toBeUndefined()
+  expect(K(`${AT_HOME}git clone ${WEB} /w/fronts/shelf/web`)).toBeUndefined()
+  expect(K(`${AT_HOME}git clone ${WEB} ../shelf/web`)).toBeUndefined()
+  // A folder no front on the record names: refused, naming the fronts it has.
+  expect(K(`${AT_HOME}git clone ${WEB} /w/fronts/ghost/web`)).toContain('ghost is not a front this console was staffed with (acme, kiln, shelf)')
+  expect(K(`cd /w/fronts/ghost && git clone ${WEB}`)).toContain('/w/fronts/ghost is outside your console\'s directory')
+  // A record that names its own front alone keeps every clone there.
+  const OWN: CloneScope = { home: '/w/fronts/acme', fronts: ['acme'] }
+  expect(K(`${AT_HOME}git clone ${WEB}`, '/w/fronts/acme', OWN)).toBeUndefined()
+  expect(K(`${AT_HOME}git clone ${WEB} /w/fronts/shelf/web`, '/w/fronts/acme', OWN)).toContain('shelf is not a front this console was staffed with (acme)')
+  expect(K(`cd /w/fronts/shelf && git clone ${WEB}`, '/w/fronts/acme', OWN)).toContain('/w/fronts/shelf is outside your console\'s directory')
+})
+
+test('a clone lands in the folder git names for the URL, the repository\'s own name', () => {
+  // The refusal for a landing outside fronts/ names where a clone goes instead: <front folder>/<git's folder>.
+  for (const [src, folder] of [
+    ['git@github.com:acme-org/web.git', 'web'], ['https://github.com/acme-org/web', 'web'], ['https://gitlab.com/group/sub/tool.git/', 'tool'],
+    ['ssh://git@code.example.org:2222/team/tool.git', 'tool'], ['git://git.example.org/tool', 'tool'], ['git@git.example.org:tool.git', 'tool'],
+    ['https://github.com/acme-org/web.git.git', 'web.git'], ['https://git.example.org/1234', '1234'], ['git@git.example.org:2222.git', '2222'],
+    ['git@git.example.org:1234', 'git.example.org'],
+  ]) expect(`${src} -> ${K(`${AT_HOME}git clone ${src} /tmp/x`) ?? 'allowed'}`).toContain(`here /w/fronts/acme/${folder}: \``)
+})
+
+test('a clone lands only one level under a front\'s folder, and a refusal names the command to use', () => {
+  const USE = 'a clone lands one level under a front\'s folder, here /w/fronts/acme/web: `cd /w/fronts/acme && git clone git@github.com:acme-org/web.git`'
+  expect(K(`${AT_HOME}git clone ${WEB} web2`)).toContain(`it would land in /w/fronts/acme/web2; ${USE}`)
+  // Never into a front's folder itself, which would make the folder a repository, nor into the fronts folder.
+  expect(K(`${AT_HOME}git clone ${WEB} .`)).toContain(`it would land in /w/fronts/acme; ${USE}`)
+  expect(K(`${AT_HOME}git clone ${WEB} ..`)).toContain(`it would land in /w/fronts; ${USE}`)
+  expect(K(`${AT_HOME}git clone ${WEB} /w/fronts/shelf`)).toContain('it would land in /w/fronts/shelf; a clone lands one level under a front\'s folder, here /w/fronts/shelf/web: `cd /w/fronts/shelf && git clone git@github.com:acme-org/web.git`')
+  expect(K(`${AT_HOME}git clone ${WEB} /tmp/web`)).toContain(`it would land in /tmp/web; ${USE}`)
+  // Two levels down, inside a repository, or beside the fronts.
+  expect(K(`${AT_HOME}git clone ${WEB} api/web`)).toContain('it would land in /w/fronts/acme/api/web; a clone lands one level under a front\'s folder, here /w/fronts/acme/web:')
+  expect(K(`cd /w/fronts/acme/api && git clone ${WEB}`, '/w/fronts/acme/api')).toContain('it would land in /w/fronts/acme/api/web;')
+  expect(K(`${AT_HOME}git clone ${WEB} ../web`)).toContain(`it would land in /w/fronts/web; ${USE}`)
+  expect(K(`${AT_HOME}git clone ${WEB} ../../../../tmp/web`)).toContain('it would land in /tmp/web;')
+  // Compared exactly: a path spelled in another case is refused, whatever the disk would do with it.
+  expect(K(`${AT_HOME}git clone ${WEB} /W/Fronts/Acme/web`)).toContain('it would land in /W/Fronts/Acme/web;')
+  expect(K(`${AT_HOME}git clone git@github.com:acme-org/Web.git web`)).toContain('it would land in /w/fronts/acme/web; a clone lands one level under a front\'s folder, here /w/fronts/acme/Web:')
+  expect(K(`${AT_HOME}git clone ${WEB} web extra`)).toContain('a clone takes the repository and at most one destination')
+  expect(K(`${AT_HOME}git clone`)).toContain('name the repository to clone')
+  expect(K(`${AT_HOME}git clone --depth 1`)).toContain('name the repository to clone')
+})
+
+test('a clone is pinned to the console\'s directory or a front\'s folder, and nothing else runs from a front\'s folder', () => {
+  expect(K(`git clone ${WEB}`)).toContain('Pin the repo')
+  expect(K(`cd /w/fronts && git clone ${WEB} acme/web`)).toContain('/w/fronts is outside your console\'s directory')
+  expect(K(`cd /tmp && git clone ${WEB} /w/fronts/acme/web`)).toContain('/tmp is outside your console\'s directory')
+  expect(K(`cd /w/fronts/shelf/shelf && git clone ${WEB} ../web`)).toContain('/w/fronts/shelf/shelf is outside your console\'s directory')
+  // A project console: its sibling's folder is not its own, and a front's folder takes only a clone.
+  expect(K(`cd /w/fronts/acme/web && git clone ${WEB} .`, '/w/fronts/acme/api')).toContain('/w/fronts/acme/web is outside your console\'s directory')
+  expect(K(`${AT_HOME}git status`, '/w/fronts/acme/api')).toContain('/w/fronts/acme is outside your console\'s directory')
+  expect(K(`${AT_HOME}git -c core.sshCommand=x clone ${WEB}`, '/w/fronts/acme/api')).toContain('outside your console\'s directory')
+  expect(K('cd /w/fronts/acme/web && git status', '/w/fronts/acme/api')).toContain('outside your console\'s directory')
+  expect(K('cd /w/fronts/shelf && git status')).toContain('/w/fronts/shelf is outside your console\'s directory')
+  expect(K('git -C /w/fronts/shelf fetch')).toContain('/w/fronts/shelf is outside your console\'s directory')
+  // A relative cd that CDPATH could send elsewhere does not pin a clone: the rule asks for the full path.
+  expect(K(`cd /w && cd fronts/shelf && git clone ${WEB}`)).toContain('pin it to a front\'s folder by its full path')
+  // With no directory to pin to, the clone rule asks for a front's folder itself.
+  expect(shellRefusal('controller', `git clone ${WEB}`, [], undefined, ACME)).toContain('pin it to a front\'s folder by its full path: `cd /w/fronts/acme && git clone git@github.com:acme-org/web.git`')
+})
+
+test('a front whose folder is itself a repository takes clones like any other front', () => {
+  // KILN keeps its repository in the front's folder, the layout check-fronts.sh reports; that blocks no clone.
+  const KILN: CloneScope = { home: '/w/fronts/kiln', fronts: ['acme', 'kiln', 'shelf'] }
+  const GLAZE = 'https://codeberg.org/kiln/glaze.git'
+  expect(K(`cd /w/fronts/kiln && git clone ${GLAZE}`, '/w/fronts/kiln', KILN)).toBeUndefined()
+  expect(K(`cd /w/fronts/kiln && git clone ${GLAZE} /w/fronts/acme/glaze`, '/w/fronts/kiln', KILN)).toBeUndefined()
+  expect(K(`cd /w/fronts/kiln && git clone ${GLAZE}`)).toBeUndefined()
+  // Its repository's own subfolders are still two levels down.
+  expect(K(`cd /w/fronts/kiln && git clone ${GLAZE} src/glaze`, '/w/fronts/kiln', KILN)).toContain('it would land in /w/fronts/kiln/src/glaze;')
+})
+
+test('a console with no clone folder on record is refused a clone until it is stood down and staffed again', () => {
+  expect(shellRefusal('controller', `${AT_HOME}git clone ${WEB}`, [], '/w/fronts/acme')).toContain('this console was staffed before clones were allowed: it can clone once it is stood down and staffed again')
+  expect(C(`git clone ${WEB}`)).toContain('stood down and staffed again')
+})
+
+test('the clone rule reaches toolRefusal with the console\'s folder and fronts', () => {
+  const bash = (command: string, clone?: CloneScope) => toolRefusal('controller', 'Bash', { command }, [], '/w/fronts/acme', clone)
+  expect(bash(`${AT_HOME}git clone --depth 1 ${WEB}`, ACME)).toBeUndefined()
+  expect(bash('cd /w/fronts/shelf && git clone https://gitlab.com/group/tool.git', ACME)).toBeUndefined()
+  expect(bash(`${AT_HOME}git clone -u x ${WEB}`, ACME)).toContain('A Controller clones only into a front\'s folder, one level down (fronts/<front>/<repo>): -u is not an allowed clone option')
+  expect(bash(`${AT_HOME}git clone file:///w/fronts/acme/web`, ACME)).toContain(`file:///w/fronts/acme/web is a file:// source, ${LOCAL}`)
+  expect(bash(`${AT_HOME}git clone ${WEB}`)).toContain('stood down and staffed again')
+})
+
+test('git takes no global option before a clone but -C', () => {
+  // --bare is off git's list of global options, so that list refuses it before the clone rule reads the call.
+  expect(K(`git --bare -C /w/fronts/acme clone ${WEB}`)).toContain('--bare is not an allowed git global option')
+  expect(K(`${AT_HOME}git --no-pager clone ${WEB}`)).toContain('git takes no option before clone but -C <dir> (here: --no-pager)')
+  expect(K(`${AT_HOME}git -p clone ${WEB}`)).toContain('git takes no option before clone')
+})
+
+test('a clone pinned by a relative cd is refused, since CDPATH could resolve that cd elsewhere', () => {
+  expect(K(`cd /w/fronts && cd acme && git clone ${WEB}`)).toContain('pin it to a front\'s folder by its full path: `cd /w/fronts/acme && git clone git@github.com:acme-org/web.git`')
+  expect(K(`export CDPATH=/tmp; cd /w/fronts && cd acme && git clone ${WEB}`)).toContain('nothing sets HOME, PATH, CDPATH')
+  // A cd led by . never consults CDPATH (one led by .. is refused for its .., below).
+  expect(K(`cd /w/fronts && cd ./acme && git clone ${WEB}`)).toBeUndefined()
+})
+
+// ---- Clones on a disk that follows links (MC-135 security review) ----
+// The guard reads paths as text and the disk follows links, and a cloned repository can hold a link:
+// so a clone never runs from inside a folder it may use, nor steps back out through one with `..`.
+
+test('a clone runs from exactly a front\'s folder or the console\'s own directory, never a folder inside one', () => {
+  const INSIDE = 'a folder inside one a clone may run from, where a link could carry it elsewhere; pin it to a front\'s folder by its full path: `cd /w/fronts/acme && git clone git@github.com:acme-org/web.git`'
+  expect(K(`cd /w/fronts/acme/api && git clone ${WEB} ../web`)).toContain(`it runs from /w/fronts/acme/api, ${INSIDE}`)
+  expect(K(`cd /w/fronts/acme/tool/link && git clone ${WEB} ../../web`)).toContain(`it runs from /w/fronts/acme/tool/link, ${INSIDE}`)
+  expect(K(`git -C /w/fronts/acme/api clone ${WEB} /w/fronts/acme/web`)).toContain(`it runs from /w/fronts/acme/api, ${INSIDE}`)
+  expect(K(`cd /w/fronts/acme/api/src && git clone ${WEB} ../../web`, '/w/fronts/acme/api')).toContain(`it runs from /w/fronts/acme/api/src, ${INSIDE}`)
+  // Exactly the console's directory, or exactly a front's folder, still runs one.
+  expect(K(`cd /w/fronts/acme/api && git clone ${WEB} ../web`, '/w/fronts/acme/api')).toBeUndefined()
+  expect(K(`cd /w/fronts/acme/api && git clone ${WEB} ../../shelf/web`, '/w/fronts/acme/api')).toBeUndefined()
+  expect(K(`git -C /w/fronts/shelf clone ${WEB}`, '/w/fronts/acme/api')).toBeUndefined()
+})
+
+test('a clone\'s cd or -C path holds no .., and its destination holds .. only before its first folder name', () => {
+  const DOTS = 'its cd or -C path holds .., which a link could carry elsewhere; pin it to a front\'s folder by its full path: `cd /w/fronts/acme && git clone git@github.com:acme-org/web.git`'
+  expect(K(`git -C /w/fronts/acme/tool/link/../.. clone ${WEB}`)).toContain(DOTS)
+  expect(K(`cd /w/fronts/acme/tool/link/../.. && git clone ${WEB}`)).toContain(DOTS)
+  expect(K(`cd /w/fronts/acme/api && cd .. && git clone ${WEB}`)).toContain(DOTS)
+  expect(K(`cd /w/fronts/acme && cd ./api && cd ../ && git clone ${WEB}`)).toContain(DOTS)
+  const AFTER = 'has .. after a folder name, which a link inside the tree could carry elsewhere; a clone lands one level under a front\'s folder, here /w/fronts/acme/web: `cd /w/fronts/acme && git clone git@github.com:acme-org/web.git`'
+  for (const dest of ['tool/link/../../web', 'tool/../web', './tool/../web', '/w/fronts/acme/tool/../web', '../acme/tool/../web']) {
+    expect(`${dest} -> ${K(`${AT_HOME}git clone ${WEB} ${dest}`) ?? 'allowed'}`).toContain(`${dest} ${AFTER}`)
+  }
+  // A leading .. steps out of the folder the clone runs from, one the console was staffed with.
+  expect(K(`${AT_HOME}git clone ${WEB} ../shelf/web`)).toBeUndefined()
+  expect(K(`${AT_HOME}git clone ${WEB} ./../acme/web`)).toBeUndefined()
+})
+
+test('a clone never makes a folder starting with ., one tools read as their settings', () => {
+  const refusal = (src: string) => `${src} -> ${K(`${AT_HOME}git clone ${src}`) ?? 'allowed'}`
+  for (const [src, folder] of [
+    ['https://github.com/acme-org/.claude', '.claude'], ['git@github.com:acme-org/.vscode.git', '.vscode'],
+    ['https://git.example.org/team/.envrc/', '.envrc'], ['ssh://git.example.org/team/.githooks.git', '.githooks'], ['git@git.example.org:.husky', '.husky'],
+  ] as const) expect(refusal(src)).toContain(`${src} would make the folder ${folder}, and a folder starting with . is one tools read as settings (a .claude folder's hooks run commands)`)
+  // A dot inside the name is the repository's own.
+  expect(K(`${AT_HOME}git clone https://github.com/acme-org/web.app.git`)).toBeUndefined()
+  expect(K(`${AT_HOME}git clone https://github.com/acme-org/web.app.git web.app`)).toBeUndefined()
+})
+
+test('a clone source on this Mac, by name or by any numeric spelling, is refused, and other hosts are not', () => {
+  const refusal = (src: string) => `${src} -> ${K(`${AT_HOME}git clone ${src}`) ?? 'allowed'}`
+  const MAC = 'names this Mac (localhost, 127.x.x.x or 0.x.x.x): a clone from it reads this Mac\'s own folders and services'
+  for (const src of [
+    'http://localhost:8080/acme-org/web.git', 'https://LOCALHOST/acme-org/web', 'ssh://git@app.localhost/acme-org/web.git', 'git@Localhost:acme-org/web.git',
+    'git@127.0.0.1:/srv/git/web.git', 'http://127.0.0.1:3000/acme-org/web', 'git://127.255.255.254/web.git', 'http://0.0.0.0/acme-org/web', 'https://0.1.2.3/acme-org/web',
+  ]) expect(refusal(src)).toContain(`${src} ${MAC}`)
+  const NUMBER = 'writes its host as a number other than a.b.c.d, a spelling that can name this Mac (127.1 is 127.0.0.1)'
+  for (const src of [
+    'http://127.1/acme-org/web', 'http://2130706433/acme-org/web', 'http://0x7f.0.0.1/acme-org/web', 'http://0x7F000001/acme-org/web',
+    'http://0177.0.0.1/acme-org/web', 'http://0/acme-org/web', 'https://10.0.0.010/acme-org/web', 'git@1.2.3:acme-org/web.git', 'git@1.2.3.4.5:acme-org/web.git',
+  ]) expect(refusal(src)).toContain(`${src} ${NUMBER}`)
+  // Hosts on the network pass: a number written plainly as a.b.c.d, or a name DNS resolves.
+  for (const src of [
+    'https://10.0.0.5/acme-org/web.git', 'https://192.168.1.20/acme-org/web', 'git@203.0.113.7:acme-org/web.git', 'https://127.example.org/acme-org/web',
+    'https://localhost.example.org/acme-org/web', 'https://mylocalhost/acme-org/web', 'git@git-127.example.org:acme-org/web.git',
+  ]) expect(refusal(src)).toBe(`${src} -> allowed`)
+})
+
+// ---- $(cat <<'EOF' ... EOF) values (MC-126 review) ----
+
+const sub = (body: string) => `$(cat <<'EOF'\n${body}\nEOF\n)`
+
+test('a $(cat <<EOF) value hides nothing from the push, command-name and gh rules', () => {
+  // Each was allowed when the tokenizer read the value as the word HEREDOC.
+  expect(C(`git push origin ${sub('main')}`)).toContain('stands only as a commit, tag, note or merge message')
+  expect(C(`git push -u origin "${sub('main')}"`)).toContain('stands only as a commit, tag, note or merge message')
+  expect(C(`git push origin ${sub('feat/x --force')}`)).toContain('stands only as a commit, tag, note or merge message')
+  expect(C(`${sub('git')} push origin main`)).toContain('never a command name built from a variable')
+  expect(C(`gh api ${sub('graphql -f query=x')}`)).toContain('stands only as a --title or --body')
+  expect(C(`gh pr create ${sub('--repo other/repo')}`)).toContain('stands only as a --title or --body')
+  expect(C(`git fetch ${sub('--upload-pack=x /tmp/r')}`)).toContain('stands only as a commit, tag, note or merge message')
+  expect(C(`git remote ${sub('set-url origin x')}`)).toContain('stands only as a commit, tag, note or merge message')
+  // A -C value is read with git's global options, which take only a literal value.
+  expect(C(`git -C ${sub('/tmp/r')} status`)).toContain('The value of git -C must be literal')
+  expect(K(`${AT_HOME}git clone -b ${sub('main --config=core.sshCommand=x --separate-git-dir=/tmp/g')} ${WEB}`)).toContain('stands only as a commit, tag, note or merge message')
+  // Off a message option it is refused too: -F names a file, --grep a pattern.
+  expect(C(`git commit -F "${sub('x')}"`)).toContain('stands only as a commit, tag, note or merge message')
+  expect(C(`git log --grep "${sub('x')}"`)).toContain('stands only as a commit, tag, note or merge message')
+})
+
+test('a $(cat <<EOF) value still passes as a message, in each spelling git and gh take', () => {
+  for (const cmd of [
+    `git commit -m "${sub('fix(x): tidy')}"`, `git commit -am "${sub('fix(x): tidy')}"`, `git commit --message "${sub('x')}"`,
+    `git commit --message="${sub('x')}"`, `git commit -m"${sub('x')}"`, `git commit -m "subject" -m "${sub('body')}"`,
+    `git tag -a v1 -m "${sub('release')}"`, `git merge --no-ff -m "${sub('merge x')}" feat/x`, `git notes add -m "${sub('n')}"`,
+    `gh pr create --title "t" --body "${sub('## Summary\n- push and stash notes')}"`, `gh pr comment 12 -b "${sub('looks good')}"`,
+    `gh issue create -t "${sub('t')}" -b "${sub('b')}"`, `echo "${sub('notes on git')}"`,
+  ]) expect(`${cmd} -> ${C(cmd) ?? 'allowed'}`).toBe(`${cmd} -> allowed`)
+  expect(B(`git commit -m "${sub('fix(x): tidy')}"`)).toBeUndefined()
+})
+
+test('an unquoted $(cat <<EOF) value word-splits, so a message option cannot carry it', () => {
+  // Unquoted, the body splits: -m takes its first word and the rest ride in as options. Each was
+  // allowed while the value was read as a message regardless of quoting.
+  expect(C(`git commit -m ${sub('fix -X foo')}`)).toContain('stands only as a commit, tag, note or merge message')
+  expect(C(`git commit -m${sub('fix -X foo')}`)).toContain('stands only as a commit, tag, note or merge message')
+  expect(C(`git tag -a v1 -m ${sub('rel --sign')} feat/x`)).toContain('stands only as a commit, tag, note or merge message')
+  expect(C(`gh api repos/o/r/pulls/1/merge -t ${sub('x -X PUT -f merge_method=squash')}`)).toContain('stands only as a --title or --body')
+  expect(C(`gh pr create --title t --body ${sub('b --repo other/repo')}`)).toContain('stands only as a --title or --body')
+  // Wholly inside double quotes it is one argument, so it still stands as the message.
+  expect(C(`git commit -m "${sub('fix -X foo')}"`)).toBeUndefined()
+  expect(C(`git commit -m"${sub('fix -X foo')}"`)).toBeUndefined()
+  expect(C(`gh pr create --title t --body "${sub('b --repo other/repo')}"`)).toBeUndefined()
+})
+
+test('a $(cat <<EOF) inside single quotes or a comment is text, so the lines it spans still run', () => {
+  // zsh and bash run the middle line of each; the old pre-pass swallowed it with the heredoc.
+  expect(C(`echo '$(cat <<'EOF'\n' && git push origin main && echo '\nEOF\n)'`)).toContain('base or deploy branch')
+  expect(C(`# $(cat <<'EOF'\ngit push origin main\n: <<'X'\nEOF\n)\nX`)).toContain('base or deploy branch')
+  // The body ends only at a line that is exactly the delimiter, as zsh and bash end it.
+  expect(C(`git commit -m "$(cat <<'EOF'\nmsg\n  EOF\n)"`)).toContain('run plainly')
+  expect(C(`git commit -m "$(cat <<'EOF'\nmsg\nEOF \n)"`)).toContain('run plainly')
+  expect(C(`git commit -m "$(cat <<-'EOF'\n\tmsg\n\tEOF\n)"`)).toBeUndefined()
+})
+
+test('a redirect heredoc ends where the shell ends it, and a delimiter it cannot read exactly makes the line unreadable', () => {
+  // zsh -c runs the push in each: the old reader ended the body at " A", or never saw a heredoc begin.
+  expect(C(`cat > /dev/null <<'A'\n A\necho '\nA\ngit push origin main\n' x'`)).toContain('base or deploy branch')
+  expect(C(`cat > /dev/null <<\\EOF\necho '\nEOF\ngit push origin main\n' x'`)).toContain('run plainly')
+  expect(C(`cat > /dev/null <<E"O"F\nE\necho '\nEOF\ngit push origin main\n' x'`)).toContain('run plainly')
+  // Still read: a plain heredoc, a <<- one with a tab-indented terminator, and a commit message on stdin.
+  expect(C("cat > /tmp/x <<'A'\nbody\nA\ngit push origin main")).toContain('base or deploy branch')
+  expect(C('cat > /tmp/x <<-A\n\tbody\n\tA\ngit status')).toBeUndefined()
+  expect(C("git commit -F - <<'EOF'\nfix(x): tidy\nEOF")).toBeUndefined()
+})
+
+test('on a line that names git, a $(cat <<EOF) value is no other command\'s argument, redirect or hidden path', () => {
+  expect(C(`eval "${sub('git push origin main')}"`)).toContain('never as an argument of eval')
+  expect(C(`find . -name x -exec ${sub('git')} push origin main ';'`)).toContain('never as an argument of find')
+  expect(C(`echo x | xargs ${sub('git')} push origin main`)).toContain('never as an argument of xargs')
+  expect(C(`echo x > "${sub('/tmp/out')}"`)).toContain('never names a redirect target')
+  // Its body is checked for Flight's files like any other word, except as a git or gh message.
+  const today = ['_command', 'daily', 'today.md'].join('/')
+  expect(C(`cp report.md "${sub(today)}"`)).toContain('Flight\'s to write')
+  expect(C(`cat "${sub(today)}"`)).toBeUndefined()
+  expect(C(`git commit -m "${sub(`docs: sync ${today}`)}"`)).toBeUndefined()
+  expect(C(`gh pr create --title t --body "${sub(`rewrites ${today}`)}"`)).toBeUndefined()
+})
+
+test('on a line that names git or gh, nothing sets a variable that moves what git reads or runs', () => {
+  const P = (cmd: string) => shellRefusal('controller', cmd, [], '/w/fronts/acme/web')
+  const AT = 'cd /w/fronts/acme/web && '
+  for (const cmd of [
+    `export HOME=/tmp/h; ${AT}git status`, `export XDG_CONFIG_HOME=/tmp/x && ${AT}git status`, `export PATH=/tmp/bin:/usr/bin; ${AT}git status`,
+    `export CDPATH=/tmp; ${AT}git status`, `export SSH_AUTH_SOCK=/tmp/s; ${AT}git status`, `declare -x HOME=/tmp/h; ${AT}git status`,
+    `readonly ZDOTDIR=/tmp/z; ${AT}git status`, `HOME=/tmp/h; ${AT}git status`, `PATH+=:/tmp/bin; ${AT}git status`,
+    `CDPATH=/tmp cd x && ${AT}git status`, `export HOME; ${AT}git status`, `export X="$Y"; ${AT}git status`, `GIT_DIR=/x; ${AT}git status`,
+    `BASH_ENV=/tmp/e; ${AT}gh pr list`,
+    // git runs EDITOR, VISUAL and PAGER as programs, and the loader honours DYLD_* and LD_*.
+    `export EDITOR=/tmp/e.sh; ${AT}git commit --allow-empty`, `export VISUAL=/tmp/v; ${AT}git commit --allow-empty`,
+    `export PAGER=/tmp/p; ${AT}git log`, `export DYLD_INSERT_LIBRARIES=/tmp/x.dylib; ${AT}git status`, `LD_PRELOAD=/tmp/x.so; ${AT}git status`,
+  ]) expect(`${cmd} -> ${P(cmd) ?? 'allowed'}`).toContain('nothing sets HOME, PATH, CDPATH')
+  // An append assignment is an assignment too: before git it is an environment prefix.
+  expect(C('FOO+=x git status')).toContain('environment prefix')
+  expect(P(`. ./env.sh && ${AT}git status`)).toContain('. does not run')
+  expect(P(`source ./env.sh && ${AT}git status`)).toContain('source does not run')
+  // A line without git or gh may set them, since nothing on it reads them; other variables pass beside git.
+  expect(P('export PATH=/opt/homebrew/bin:/usr/bin && node -v')).toBeUndefined()
+  expect(P('HOME=/tmp/h npm test')).toBeUndefined()
+  expect(P(`export NODE_ENV=test; ${AT}git status`)).toBeUndefined()
 })
 
 // ---- redirects read as the shell reads them (MC-151) ----

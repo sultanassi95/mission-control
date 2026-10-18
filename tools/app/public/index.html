@@ -27,11 +27,11 @@
   <main class="main" id="main" tabindex="-1"></main>
   <div class="composer" id="composer">
     <div class="quick" id="quick"></div>
-    <div class="preview" id="preview" hidden><img id="preview-img" alt="Photo to send"><button class="ghost" type="button" id="preview-remove">Remove photo</button></div>
+    <div class="tray" id="tray" hidden><ul class="att-row" id="tray-items" aria-label="Files to send"></ul><p class="hint" id="tray-hint" role="status"></p></div>
     <form class="row" id="send">
       <button class="slash" type="button" id="slash" aria-label="Commands">/</button>
-      <button class="slash attach" type="button" id="attach" aria-label="Attach a photo"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="12" cy="12" r="3.5"/><path d="M8 5l1.5-2h5L16 5"/></svg></button>
-      <input type="file" id="photo" accept="image/*" hidden>
+      <button class="slash attach" type="button" id="attach" aria-label="Attach photos or files"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.4 11.1l-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg></button>
+      <input type="file" id="files" accept="image/*,.pdf,.txt,.md,.csv,.json" multiple hidden>
       <label class="visually-hidden" for="draft">Message Flight</label>
       <textarea id="draft" rows="1" placeholder="Message Flight" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="sentences"></textarea>
       <button class="send" type="submit" aria-label="Send"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
@@ -42,6 +42,8 @@
 <div id="sheet-root"></div>
 <div id="toast" class="toast" role="status" hidden></div>
 <script src="md.js"></script>
+<script src="badge.js"></script>
+<script src="transcript.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

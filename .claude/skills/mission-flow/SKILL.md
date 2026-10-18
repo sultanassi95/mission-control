@@ -736,7 +736,14 @@ branch** off the ticket branch, whether one unit runs or several. Uniform on
 purpose: git refuses to check out one branch in two worktrees
 (`fatal: ... is already used by worktree at ...`), so per-unit branches are what
 makes more than one agent possible at all, and a single unit taking the same
-route means the common case is not the unprotected one.
+route means the common case is not the unprotected one. Each worktree stays
+inside the front's folder: inside the repo where the CLI's worktree tool puts
+it (`.claude/worktrees/`), or beside the repo as `fronts/<front>/<repo>-<slug>`,
+never at the top of `fronts/`, where `/preflight` reports it as a front of its
+own (`framework/task-board.md`, front placement). A Controller staffed by
+`/console` uses the first form: its git runs only inside its console's
+directory, and for a project's console, or a front's with one repo, that
+directory is the repo itself.
 
 The orchestrator merges each unit's branch back into the ticket branch as its
 record arrives - fast-forward when one unit ran - because Phase 5's diff and
@@ -1063,7 +1070,9 @@ includes the deploy path's own dry checks - the validate script, `cdk diff`
 or the stack's equivalent, a lint of the changed workflow - BEFORE the PR
 exists. Like telemetry reads, these may need cloud access - confirm it up
 front (an interactive login is the founder's to run); a check that cannot run
-is reported, never silently skipped. Two lived defects rode this gap: a
+is reported, never silently skipped (the shape of that report, and the tested
+absent path an optional tool owes: `framework/engineering-standard.md`,
+Optional augmentation). Two lived defects rode this gap: a
 secret-hydration script that exited silently on an empty variable, and an
 empty DB_HOST caught only by a hand-run validate before merge.
 

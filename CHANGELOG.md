@@ -6,7 +6,66 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
-- 2026-10-17 (latest): the license changes from PolyForm Noncommercial 1.0.0
+- 2026-10-18 (latest): a Controller asks each decision as its own question
+  with the options it wrote, and the Poll becomes a read-only view (MC-125).
+  A status check may add a `decisions:` block (`- <question> | 1) <option>:
+  <what it does> | 2) ...`), a `notes:` line and a `for you to do:` block.
+  Each decision opens a question; each to-do opens an item checked off with
+  `/console done <id>`; notes open nothing. A report that lists decisions, or
+  says `decisions: none`, is the console's whole list: a question listed
+  again keeps its id, one left out is replaced, and an answer already sent
+  from the app is never replaced. A report from a Controller staffed
+  earlier, with a blocked line and none of the new lines, is still asked, as
+  Go or No-go. The founder answers with `/console decide <id> <n>
+  [note]`, or from a card in the app's Flight tab; `go` and `nogo` remain
+  for Go/No-go and advisory items and are refused for a question with its
+  own options. An answer sent again from the app before Flight has run the
+  first replaces it, and the first one's code stops working. The Poll lists
+  the questions (each links to its card in Flight), the to-dos with Done,
+  undelivered and held answers, and history, with no GO or NO-GO buttons.
+  The alert reads "<SIGN> asks you a question: answer in the app's Flight
+  tab, or /console poll." Controllers staffed before this change keep their
+  old prompt until restaffed; their blocked lines are still asked.
+
+- 2026-10-17: an optional tool is a contract with a tested absent
+  path (MC-052). `framework/engineering-standard.md` gains the Optional
+  augmentation clause, pointed at from layer 5: the primary path completes
+  without the tool, each optional tool is declared in one place, its absence
+  prints one line in the shape `DEGRADED: <tool> unavailable - <what was
+  skipped>`, and a check runs the flow with the tool absent and present. An
+  untested absent path does not satisfy it, and a required tool such as
+  `gh` is never excused by it. mission-flow's Phase 6 sentence on checks
+  that cannot run points at the clause. The docs-viewer server now prints
+  `DEGRADED: mmdc unavailable - mermaid blocks served as source` when
+  `mmdc` is not in the project's `node_modules/.bin`, then the install hint;
+  `tools/tests/docs-viewer-degraded.tests.sh` runs the server the skill
+  ships both ways and prints CANNOT VERIFY, exit 2, when `MC_MMDC` does not
+  name an `mmdc` to run the present case with.
+
+- 2026-10-17: a message from the app carries several files, photos
+  and documents alike, and a slash command sent from it shows once, as typed
+  (MC-134). The attach button takes up to ten files per message, 8 MB each
+  and 32 MB in all: photos, scaled on the device to 1600 px JPEG, and PDF,
+  `.txt`, `.md`, `.csv` and `.json` documents. The server keeps each file by
+  its own bytes (a PDF picked as `notes.txt` is stored and sent as a PDF) and
+  refuses any other type by name; Office formats are refused for now. Flight
+  receives one `[Photo from the app: ...]` or `[Document from the app: ...]`
+  line per file, each a path it opens with Read. The conversation shows the
+  photos inline and each document as a chip that opens it in a new tab,
+  after a reload as well, and a file pruned from the Mac reads "no longer on
+  the Mac". The upload folder's retention cap covers documents too. A sent
+  `/epic-flow ...` used to show twice, the queued copy beside the engine's
+  raw `<command-message>` tags, then only the raw tags after a reload: the
+  transcript now reads those tags back as the command typed, and a queued
+  message leaves only when its own copy arrives, so an older identical
+  message never clears it. A message over 5800 characters, file lines
+  included, is refused in the page with its length, before any file goes
+  up when the typed text alone is too long; the server takes 8000, but the
+  transcript the app reads back keeps a message's first 6000 characters,
+  so a longer one came back cut, without its files. Files already stored
+  stay in the tray for a shorter retry.
+
+- 2026-10-17: the license changes from PolyForm Noncommercial 1.0.0
   to PolyForm Shield 1.0.0 (MC-145). Any purpose, use at work included, is
   now permitted except one: providing a product that competes with Mission
   Control, or with any product its author provides using it, whether sold or
@@ -57,7 +116,181 @@ changes should never reach you silently.
   examples in the standup, epic-flow, mission-flow and learn-from-session
   skills and in `framework/task-board.md` now use an invented front, acme.
 
-- 2026-10-15: the spend recorder (MC-069), a Claude Code mod at
+- 2026-10-17: `/new-front` adds the new front's bullet to the `## The
+  fronts` list in `_command/CLAUDE.operating.md`, in the template's shape,
+  and `/retire-front` removes it, a registered-in-place note with it
+  (MC-132). Before, only liftoff wrote the list, so a front onboarded later
+  was missing from the map every session boots with, and a retired one
+  stayed on it. A front added since your liftoff may be missing from your
+  list: compare it with the board and add any missing bullet by hand.
+- 2026-10-17: a Controller may clone any repository into any front's folder
+  (MC-135), which widens the 2026-10-16 rule (MC-126). The source is any
+  repository URL git fetches over the network, from any owner or host:
+  `https://`, `http://`, `ssh://`, `git+ssh://`, `ssh+git://`, `git://` or
+  `USER@HOST:PATH`. The clone lands one level under the folder of any front
+  with a hub under `_command/portfolio/`, as `fronts/<front>/<repo>`, where
+  `<repo>` is the folder git names for the URL; a front whose folder is
+  itself a repository takes clones too. A remote helper (`HELPER::`), a
+  `file://` or local-path source, a host or user starting with `-`, a
+  landing anywhere else and an option off the list stay refused. Also
+  refused, because the guard reads paths as text while the disk follows the
+  links a cloned repository may hold: a clone run from a folder inside a
+  front's folder rather than the folder itself, a `..` in its `cd` or `-C`
+  path or after a folder name in its destination, and a folder name
+  starting with `.` (a `.claude` folder's hooks run commands). This Mac as
+  the host is refused too: `localhost`, `*.localhost`, `127.x.x.x`,
+  `0.x.x.x`, or a host written as a number other than `a.b.c.d`. Staffing
+  records the portfolio's fronts beside the front's folder, and the
+  staffing order states the rule in one line, so a Controller no longer
+  learns it from a refusal. A console staffed under the earlier rule keeps
+  cloning into its own front only until it is staffed again.
+- 2026-10-17: the mission-fleet mod type-checks against the engine's current
+  plugin types, and `tools/check-mod-types.sh` runs that check where it can
+  fail (MC-128). An engine update rewrote the generated types: they no
+  longer declare the agent type's `autoCompactWindow` or the tool's
+  `isDeferred` as register options, and a register hook's answer now names
+  what it registered. `claude plugin test` does not type-check, so the four
+  errors passed every plugin test run.
+
+  The console tool's placement in Flight's prompt now comes from a
+  `tool.describe` hook, where the types put a tool's placement. The
+  Controller type sets no compaction window: the types declare none per
+  agent type, only per session (`CLAUDE_CODE_AUTO_COMPACT_WINDOW` or the
+  settings). A clone or worktree has no types folder of its own, so pass
+  `--types` with a loaded copy's, such as your workspace's. The spend
+  recorder mod still carries `isDeferred` and fails the same check.
+- 2026-10-17: the shipped `CLAUDE.md` is never edited in your clone (MC-104).
+  LIFTOFF Stage 4 used to rewrite it into your operating instructions, which
+  left a tracked file with a local edit: the first pull that updated it was
+  refused, and stashing the edit to get the pull through put every later
+  session back on the first-flight bootstrap without a word. Stage 4 now
+  writes the operating instructions to `_command/CLAUDE.operating.md`,
+  gitignored with the rest of `_command/`, and the shipped `CLAUDE.md`
+  imports it on its last line. Imports resolve from the folder of the file
+  that holds them, so the operating file's six imports read
+  `@../framework/...` for the doctrine and plain sibling paths for the
+  instance files. `/preflight` check 1 follows the chain and fails on a
+  local edit of `CLAUDE.md`. `.gitattributes` (`CLAUDE.md merge=ours`) is
+  gone: a merge driver acts only when both sides committed a change to the
+  file, so it never covered the uncommitted edit, and with nothing edited
+  locally it has nothing left to do. The fieldkit repro script sends its
+  JSON with a `Content-Type` header.
+
+  If you lifted off before this, move your operating text once, BEFORE you
+  pull this change (the pull is refused while `CLAUDE.md` carries your
+  edit). From the portfolio root:
+
+  ```bash
+  test -e _command/CLAUDE.operating.md || cp CLAUDE.md _command/CLAUDE.operating.md
+  sed -i.bak -e 's|^@framework/|@../framework/|' -e 's|^@_command/|@|' _command/CLAUDE.operating.md && rm _command/CLAUDE.operating.md.bak
+  grep -n '^@' _command/CLAUDE.operating.md   # every import must now resolve from _command/
+  git fetch upstream
+  git merge-base --is-ancestor HEAD upstream/main && git restore CLAUDE.md && git merge --ff-only upstream/main
+  ```
+
+  The first line never overwrites an operating file already in place, so
+  the block is safe to run again. The two rewrites cover the six imports
+  LIFTOFF wrote; an import you added yourself needs the same change by
+  hand: `../` in front of a path from the portfolio root, `_command/`
+  dropped from a path inside it. The last line puts the shipped
+  `CLAUDE.md` back only when your branch fast-forwards to `upstream/main`;
+  if it has commits of its own, the line stops before changing anything,
+  so merge those by hand and run it again. On Windows, run the block in
+  Git Bash, or make the copy and the import edits by hand.
+
+  If a pull already replaced your `CLAUDE.md` because you stashed your
+  edit to get it through, your text is in the stash. Find its entry with
+  `git stash list`, write it out with
+  `git show 'stash@{0}:CLAUDE.md' > _command/CLAUDE.operating.md` (your
+  entry's number in place of 0), run the `sed` and `grep` lines, and stop
+  there. If you committed your own `CLAUDE.md`, run the
+  first three lines, merge as usual, then take the shipped file back with
+  `git checkout upstream/main -- CLAUDE.md` and commit it.
+
+  Then open a fresh session at the portfolio root and ask which files its
+  instructions came from: the answer names `_command/CLAUDE.operating.md`
+  and its six imports. A session opened in a folder below the portfolio
+  root, such as a front's repo, loads them only once you approve imports
+  from outside its folder.
+
+- 2026-10-17: the fleet skill and `framework/remote-access.md` describe the
+  fleet as it now runs (MC-123). The fleet approves its own Controller
+  spawns and messages under auto mode and logs each approval, so Flight no
+  longer leaves auto mode to staff. A decision sent from the app reaches
+  Flight as a prompt with a one-time code to pass back; the skill says how
+  long a GO, NO-GO or Retry card stays held and how undelivered and held
+  decisions are retried or cleared. The commands table gains `retry`, and
+  the guard section lists the clone rules.
+
+- 2026-10-16: a message from Flight in the app names the Controllers it is
+  about (MC-129). When its first line is a marker, call signs in bold
+  joined by a middle dot, each call sign shows as a chip beside FLIGHT and
+  the marker leaves the text. Each live Controller holds one of eight
+  colours, kept per call sign across reloads and sessions, and every call
+  sign the app draws on Consoles, Poll and Loops is a chip in that colour.
+
+- 2026-10-16: every front is a folder holding its repos, `fronts/<front>/<repo>`,
+  even when it has only one (MC-130). `/new-front` and LIFTOFF used to move a
+  repo so that it became the front's folder (`mv <path> ./fronts/<front>`),
+  which left a second repo for that front nowhere to go; they now offer
+  `mkdir -p ./fronts/<front> && mv <path> ./fronts/<front>/<repo>`, and the
+  spoke's `path:` reads `fronts/<front>/<repo>`. A front with no repo is its
+  folder alone. Worktrees for front work stay inside the front's folder.
+  `/preflight` step 2 runs the new `tools/check-fronts.sh`, which reports a
+  front folder that is itself a repo and a worktree at the top of `fronts/`,
+  with the commands that fix each. If you onboarded fronts before this, run
+  `/preflight`: moving them is yours to do, and a moved repo's linked
+  worktrees need `git worktree repair`.
+
+- 2026-10-16: a Controller may clone its own front's repositories (MC-126).
+  The source is a literal github.com URL, HTTPS or SSH, whose owner a
+  spoke of that front names in its `remote:` line (the exact forms are in
+  the fleet skill), and the clone lands at `fronts/<front>/<REPO>`.
+  Options are taken by exact spelling from a short list; everything else,
+  `-c` and `--template` included, is refused. A console staffed before
+  this change has no owners recorded and clones nothing until it is
+  staffed again. `/console call`, `go` and `no-go` take the message or
+  note whole, so words that start with two dashes reach the Controller.
+  The guard reads a `$(cat <<'EOF' ... EOF)` substitution where the shell
+  reads it and allows one only as a double-quoted git commit, tag, notes
+  or merge message or a gh title or body. On a line that names git or gh
+  it refuses setting a variable that git reads for its config or runs as
+  a program, such as `HOME`, `PATH` or a `GIT_*` name.
+
+- 2026-10-16: the app opens on a profile that is running (MC-120). It used
+  to restore the last profile chosen on the device, even one whose session
+  had stopped. It now names and connects to none until the first listing,
+  then opens the remembered profile when it runs, else the profile whose
+  server holds the front door, else the first listed, and says so in one
+  line when the remembered one was not running. The profile switcher
+  shows only while two or more profiles run.
+
+- 2026-10-16: a GO or NO-GO for a Controller that was stood down or
+  dismissed is held instead of sent (MC-122); it used to resume the old
+  agent. The decision waits for the next Controller staffed under that
+  call sign, which receives it with the report it answers. `/console poll`
+  and the app show it as held, and `/console dismiss-gate` clears it.
+  Under auto mode the fleet approves its own messages only to a staffed
+  console.
+
+- 2026-10-16: the console skill is now `fleet` (`.claude/skills/fleet/SKILL.md`,
+  MC-121). The skill and the mission-fleet mod's `/console` command shared one
+  name, so the engine refused the mod's command at every session start, and a
+  typed `/console go <id>` could load the skill's text instead of running: the
+  decision never reached its Controller. `/console` now belongs to the mod
+  alone, and `/fleet` loads the guide. If you copied the skills into
+  `~/.claude/skills/`, delete the old `console` folder there, or the clash
+  stays.
+
+- 2026-10-16: a decision the Poll could not deliver can be retried or
+  dismissed (MC-119). Its card used to stay red for good, quoting the
+  engine's refusal. It now says why in one plain sentence, keeps the
+  engine's words behind Technical details, and offers Retry while the
+  Controller that raised it is staffed, and Dismiss. In a session,
+  `/console retry <id>` sends the decision again and
+  `/console dismiss-gate <id>` clears it.
+
+- 2026-10-15 (night): the spend recorder (MC-069), a Claude Code mod at
   `tools/mods/spend-recorder` that records the model, effort and token usage
   of every model call, per session and per agent, in the plugin's store (the
   last 30 sessions). `/spend-log` shows this session's table, and `/spend`
@@ -129,9 +362,10 @@ changes should never reach you silently.
   Controller names is watched every ten minutes, waking the Controller on a
   change in state, reviews, comments or checks. The mod ships 47 tests, run
   with `claude plugin test tools/mods/mission-fleet`. New: the console skill
-  (`.claude/skills/console/SKILL.md`), the Controller clause in the
-  constitution, and `framework/remote-access.md`, the runbook for reaching the
-  app from a phone through `tailscale serve` only, never a public tunnel.
+  (renamed `fleet` on 2026-10-16, now `.claude/skills/fleet/SKILL.md`), the
+  Controller clause in the constitution, and `framework/remote-access.md`, the
+  runbook for reaching the app from a phone through `tailscale serve` only,
+  never a public tunnel.
 
 - 2026-10-11 (later still): `/product-flow` after its first dry run (MC-091).
   A tabletop run of a sample idea through every instruction found eleven

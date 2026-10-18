@@ -32,7 +32,7 @@ flowchart TB
   S1["Stage 1 · Founder interview - the soul<br/>who you are · how you talk · north-star + stakes · standards · cadence<br/>writes founder-profile + north-star · STOP + early aha"]
   S2["Stage 2 · Fronts, detect-first - the portfolio<br/>per project: the path only, then scan · move-in-or-register gate ·<br/>trust/posture/stakes · writes board + hubs + spokes + today · STOP"]
   S3["Stage 3 · Routing + access - token economy<br/>models available · cost posture · writes routing ceilings"]
-  S4["Stage 4 · Instantiate<br/>REWRITE root CLAUDE.md (operating version) · CONSTITUTION.local ·<br/>instance leak-check · print the tree · liftoff report · STOP"]
+  S4["Stage 4 · Instantiate<br/>WRITE _command/CLAUDE.operating.md (root CLAUDE.md stays as shipped) · CONSTITUTION.local ·<br/>instance leak-check · print the tree · liftoff report · STOP"]
   S5["Stage 5 · PROVE IT - the wow is the gate<br/>a FRESH session reads the instance cold: board · next actions · rules ·<br/>REFUSES an unauthorized push"]
   S0 --> S1 --> S2 --> S3 --> S4 --> S5
   S5 -->|"passes -> liftoff DONE"| DONE([instance live])
@@ -130,16 +130,21 @@ fronts first; the rest can join later via `/new-front` - say so):
    pre-filled spoke draft: "here is what I found - correct anything."
    Confirming beats answering; only ask what a repo cannot tell you.
    **No repo yet / not a code project:** skip the scan and the
-   move-in-or-register gate entirely - the front's folder is created at
-   the portfolio root when it has files (or later, when it does), the
-   spoke's git-memory reads `N/A`, and the next action is asked, not
-   drafted from evidence.
-3. **The move-in-or-register gate:** offer the move into the portfolio
-   root with the exact `mv` command visible (the repo stays its own git,
+   move-in-or-register gate entirely - the front's folder,
+   `fronts/<front>/`, is created when it has files (or later, when it
+   does) and holds them directly, the spoke's git-memory reads `N/A`, and
+   the next action is asked, not drafted from evidence.
+3. **The move-in-or-register gate:** offer the move into the front's
+   folder with the exact command visible,
+   `mkdir -p ./fronts/<front> && mv <current-path> ./fronts/<front>/<repo>`
+   (every front is a folder holding its repos, even a single one, so a
+   second repo lands beside the first; the repo stays its own git,
    invisible to this repo's git via the allowlist .gitignore); move only
-   on an explicit yes. Register-in-place records the external path in the
-   spoke + a note in the operating CLAUDE.md. Non-git fronts are
-   first-class (git-memory `N/A`).
+   on an explicit yes, and the spoke's `path:` reads
+   `fronts/<front>/<repo>`. Register-in-place records the external path in
+   the spoke + a note in the operating file, `_command/CLAUDE.operating.md`
+   (written at Stage 4). Non-git fronts are first-class (git-memory
+   `N/A`).
 4. **The human questions:** trust (yours / partnered / employer + the IP
    boundary written into the hub; confidential fronts' spokes carry
    pointers and process, never payloads - no client or employer code,
@@ -200,16 +205,16 @@ Confirm in one line; no stop gate.
    edited), then carries: the founder's standard additions (Stage 1),
    the routing ceilings (Stage 3), and an empty "Promoted rules" section
    that `/promote-learnings` will grow.
-2. **REWRITE the root `CLAUDE.md`** - replace this bootstrap by filling
+2. **Write the operating file `_command/CLAUDE.operating.md`** by filling
    `framework/kit/templates/_portfolio-claude.template.md`: the founder's
    name, the front list (one line each, registered-in-place notes
    included), everything else verbatim from the template (it carries the
    orient order, the precedence pointer, the session-edge nudges, and
-   the six imports). Then tell the founder the one-time git setting
-   (theirs to run): `git config merge.ours.driver true` - with the
-   shipped `.gitattributes`, upstream pulls then always keep THEIR
-   CLAUDE.md over the bootstrap. The rule either way: on any CLAUDE.md
-   merge conflict, keep yours.
+   the six imports, written to resolve from `_command/`). Leave the root
+   `CLAUDE.md` exactly as shipped: its last line imports this file, so
+   your instructions load every session while the tracked file carries no
+   local edit, and every upstream pull applies cleanly. Confirm it:
+   `git status --porcelain CLAUDE.md` must print nothing.
 3. **Seed the learning log:** write `_command/learning/README.md` - two
    lines: your lessons accumulate here, per the schema in
    `framework/learning-seed/README.md`; `/learn-from-session` writes
@@ -223,8 +228,8 @@ Confirm in one line; no stop gate.
 5. **Run the instance leak-check** and paste its literal output:
    `tools/leak-sweep.sh instance` on macOS and Linux, or
    `powershell -Command ".\tools\leak-sweep.ps1 instance"` on Windows
-   (instance mode reads `_command/` and the operating `CLAUDE.md` in both,
-   so the two are equivalent here). Exit 0
+   (instance mode reads `_command/`, the operating file included, and the
+   root `CLAUDE.md` in both, so the two are equivalent here). Exit 0
    required - zero leftover
    placeholders. A non-zero exit means a template blank survived: fix the
    instance file, not the check.
@@ -288,7 +293,7 @@ is done only when the probe passes.**
   project never blindsides its dependents.
 - **Run several fronts at once:** `/console staff <front>` puts a kept-alive
   Controller on a front or project, and `/console list`, `call`, `retune`,
-  `poll` and `stand-down` run the fleet (`.claude/skills/console/SKILL.md`).
+  `poll` and `stand-down` run the fleet (`.claude/skills/fleet/SKILL.md`).
   It needs the mission-fleet mod, `tools/mods/mission-fleet`, loaded as a
   Claude Code plugin (`tools/README.md` says how).
 - **The Mission Control App:** `/console app` starts a local control surface

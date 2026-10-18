@@ -12,7 +12,6 @@
 # the README's banner, icons and app screenshots
 !/docs/
 !/.gitignore
-!/.gitattributes
 # CI: the leak sweep on every push and pull request
 !/.github/
 
@@ -33,9 +32,10 @@ tools/leak-sweep.private.txt
 # founder's internal project docs (allowlist already excludes; explicit for safety)
 .project/
 
-# optional fronts/ container: host your project repos here (moved or copied in),
-# each keeping its own git, invisible to this repo via the allowlist. Explicit
-# for clarity. See framework/task-board.md (front placement).
+# optional fronts/ container: one folder per front, its repos inside it
+# (fronts/<front>/<repo>, moved or copied in), each keeping its own git,
+# invisible to this repo via the allowlist. Explicit for clarity. See
+# framework/task-board.md (front placement).
 fronts/
 
 # ticket payloads, for a ticket folder in a TRACKED tree (never _command/, already

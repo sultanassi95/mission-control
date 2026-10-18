@@ -16,6 +16,9 @@
  * folder read later) is outside it; only an OS-level boundary closes that.
  */
 
+import type { PollItem } from '../types'
+import { isUndelivered } from './loops'
+
 /** Branches no Controller pushes to, whatever its spoke says. */
 export const ALWAYS_PROTECTED = ['main', 'master', 'dev', 'develop', 'test', 'staging', 'stage', 'production', 'prod', 'release']
 
@@ -35,8 +38,172 @@ export type Role = 'controller' | 'back room'
 const GIT_READS = ['status', 'log', 'diff', 'show', 'rev-parse', 'ls-files', 'ls-remote', 'blame', 'describe', 'shortlog', 'grep', 'cat-file', 'show-ref', 'for-each-ref', 'merge-base', 'rev-list', 'name-rev', 'reflog', 'help', 'version']
 const GIT_LOCAL_WRITES = ['add', 'commit', 'fetch', 'branch', 'tag', 'notes', 'mv', 'rm', 'apply', 'am', 'format-patch', 'worktree']
 const GIT_ALLOWED: Record<Role, Set<string>> = {
-  controller: new Set([...GIT_READS, ...GIT_LOCAL_WRITES, 'switch', 'checkout', 'restore', 'reset', 'merge', 'rebase', 'cherry-pick', 'revert', 'pull', 'remote', 'config', 'push']),
+  controller: new Set([...GIT_READS, ...GIT_LOCAL_WRITES, 'switch', 'checkout', 'restore', 'reset', 'merge', 'rebase', 'cherry-pick', 'revert', 'pull', 'remote', 'config', 'push', 'clone']),
   'back room': new Set([...GIT_READS, 'add', 'commit']),
+}
+
+/**
+ * Where a Controller may clone into: one level under the folder of any front it was staffed with,
+ * `<fronts folder>/<front>/<repo>`, where the fronts folder holds its own front's folder (`home`).
+ */
+export type CloneScope = { home: string; fronts: string[] }
+
+// Clone options by exact spelling. git also takes any unique prefix of a long option (--temp is
+// --template), so a spelling off this list is refused, whatever git would expand it to. A value is
+// the next word, checked by its pattern; no allowed spelling is a prefix of another clone option.
+const CLONE_FLAGS = new Set(['--single-branch', '--no-single-branch', '--filter=blob:none', '-q', '--quiet', '--no-tags'])
+const BRANCH_NAME = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$/
+const CLONE_VALUED: Record<string, RegExp> = {
+  '--depth': /^[1-9][0-9]{0,5}$/,
+  '--branch': BRANCH_NAME,
+  '-b': BRANCH_NAME,
+  '--origin': /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/,
+}
+const CLONE_OPTIONS = '--depth N, --branch NAME or -b NAME, --single-branch, --no-single-branch, --filter=blob:none, --origin NAME, -q or --quiet, --no-tags'
+// A source git reads over the network, in a form this guard reads whole: a URL with a scheme, a host
+// and a path, or USER@HOST:PATH. Host and user start with a letter or digit (ssh takes a leading dash
+// as an option), and every path part is plain, so the folder git names for it is plain too.
+const HOST = '[A-Za-z0-9](?:[A-Za-z0-9._-]{0,251}[A-Za-z0-9])?'
+const USER = '[A-Za-z0-9_][A-Za-z0-9._-]{0,63}'
+const PATH = '[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*'
+const SCHEME_URL = new RegExp(`^(?:https?|ssh|git\\+ssh|ssh\\+git|git)://(?:${USER}@)?(${HOST})(?::[0-9]{1,5})?/(${PATH})/?$`)
+const SCP_URL = new RegExp(`^${USER}@(${HOST}):/?(${PATH})/?$`)
+const SOURCE_FORMS = 'https://HOST/PATH, http://, ssh://[USER@]HOST[:PORT]/PATH, git+ssh://, git:// or USER@HOST:PATH'
+// A name of dots alone is no folder of its own (`.`, `..`), and `.git`, in any case and with or
+// without trailing dots (which some disks drop), would turn a front's folder into a repository.
+const NO_NAME = /^(\.+|\.git\.*)$/i
+// The resolver reads a host written as a number loosely (127.1, 2130706433, 0x7f.0.0.1 and 0177.0.0.1
+// are all 127.0.0.1), so a numeric host passes only spelled a.b.c.d, and never in 127/8 or 0/8.
+const OCTET = '(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])'
+const QUAD = new RegExp(`^${OCTET}(?:\\.${OCTET}){3}$`)
+
+/** The fronts folder: the parent of the console's own front folder. */
+function frontsFolder(clone: CloneScope): string {
+  return foldPath(`${clone.home}/..`)
+}
+
+/** True when dir is the folder of a front the clone scope names, exactly `<fronts folder>/<front>`. */
+function isFrontFolder(dir: string, clone: CloneScope | undefined): boolean {
+  if (!clone) return false
+  const root = frontsFolder(clone)
+  return dir.startsWith(`${root}/`) && clone.fronts.includes(dir.slice(root.length + 1))
+}
+
+/**
+ * The folder git names for a clone of `source` when no destination is given, as git's
+ * guess_dir_name (builtin/clone.c) derives it: skip the scheme and any user, strip trailing
+ * slashes and a `/.git`, strip a port when there is no path, take the last part after `/` or
+ * `:`, and strip one `.git`.
+ */
+function cloneFolder(source: string): string {
+  const scheme = source.indexOf('://')
+  let start = scheme < 0 ? 0 : scheme + 3
+  const slash = source.indexOf('/', start)
+  const at = source.lastIndexOf('@', slash < 0 ? source.length : slash)
+  if (at >= start) start = at + 1
+  let s = source.slice(start).replace(/\/+$/, '')
+  if (s.length > 5 && s.endsWith('/.git')) s = s.slice(0, -5).replace(/\/+$/, '')
+  if (!s.includes('/') && s.includes(':')) s = s.replace(/:[0-9]*$/, '')
+  const last = s.slice(Math.max(s.lastIndexOf('/'), s.lastIndexOf(':')) + 1)
+  return last.endsWith('.git') ? last.slice(0, -4) : last
+}
+
+/** Why git would not fetch `source` as a repository over the network, or undefined when it would. */
+function sourceRefusal(source: string): string | undefined {
+  if (/^[A-Za-z][A-Za-z0-9+.-]*::/.test(source)) return `${source} names a remote helper (HELPER::), which runs a program rather than fetch a repository`
+  if (/^file:\/\//i.test(source)) return `${source} is a file:// source, which reads this Mac's folders, other fronts' repositories included`
+  if (/(:\/\/|@)-/.test(source)) return `${source}: a host or user starting with - would reach ssh as an option`
+  // git reads a source with no `://` as a local path unless a `:` comes before any `/` (USER@HOST:PATH).
+  const colon = source.indexOf(':')
+  if (!source.includes('://') && (colon < 0 || source.slice(0, colon).includes('/'))) return `${source} is a local path, which reads this Mac's folders, other fronts' repositories included`
+  const [, host, path] = SCHEME_URL.exec(source) ?? SCP_URL.exec(source) ?? []
+  if (host === undefined || path === undefined) return `${source} is not a repository URL this guard can read: use ${SOURCE_FORMS}`
+  const onMac = hostRefusal(source, host)
+  if (onMac) return onMac
+  const folder = cloneFolder(source)
+  if (path.split('/').some(part => NO_NAME.test(part)) || !/^[A-Za-z0-9._-]+$/.test(folder) || NO_NAME.test(folder)) {
+    return `${source} leaves git no folder of its own: a path part is dots alone or .git`
+  }
+  if (folder.startsWith('.')) return `${source} would make the folder ${folder}, and a folder starting with . is one tools read as settings (a .claude folder's hooks run commands)`
+  return undefined
+}
+
+/** Why a clone source's host is this Mac, or may spell it, or undefined for a host on the network. */
+function hostRefusal(source: string, host: string): string | undefined {
+  const h = host.toLowerCase()
+  // As URL parsers read a host: when its last label is a number (decimal, or hex led by 0x), it is an address.
+  const numeric = /^(?:0x[0-9a-f]*|[0-9]+)$/.test(h.slice(h.lastIndexOf('.') + 1))
+  if (numeric && !QUAD.test(h)) return `${source} writes its host as a number other than a.b.c.d, a spelling that can name this Mac (127.1 is 127.0.0.1)`
+  if (h === 'localhost' || h.endsWith('.localhost') || (numeric && /^(?:127|0)\./.test(h))) {
+    return `${source} names this Mac (localhost, 127.x.x.x or 0.x.x.x): a clone from it reads this Mac's own folders and services`
+  }
+  return undefined
+}
+
+/** True when a path has a `..` after a folder name: the disk resolves that `..` from wherever a link there points. */
+function dotsAfterName(path: string): boolean {
+  let named = false
+  for (const part of path.split('/')) {
+    if (part === '..' && named) return true
+    if (part !== '' && part !== '.' && part !== '..') named = true
+  }
+  return false
+}
+
+/** The clone rule as a Controller's staffing order states it, in one line. */
+export function cloneRule(clone: CloneScope): string {
+  return `Clones: any repository URL (https://, http://, ssh://, git+ssh://, ssh+git://, git:// or USER@HOST:PATH) may land one level under a front's folder, ${frontsFolder(clone)}/<front>/<repo>, for ${clone.fronts.join(', ')};`
+    + ` run it from exactly a front's folder or your console's directory, named by its full path with no ..: \`cd ${foldPath(clone.home)} && git clone <url>\`.`
+    + ' Refused: a remote helper (HELPER::), a file:// or local-path source, this Mac as the host (localhost, 127.x.x.x, 0.x.x.x) or a host written as a number other than a.b.c.d,'
+    + ` a host or user starting with -, a folder starting with ., a .. after a folder name in the destination, a landing anywhere else, and any option but ${CLONE_OPTIONS}.`
+}
+
+/**
+ * Why a Controller may not run this clone, or undefined when it may: every option on the list, the
+ * source a repository URL git fetches over the network, and the destination (git's own folder name
+ * for the URL when none is given) exactly `<fronts folder>/<front>/<that name>` for a front the
+ * console was staffed with. With no pin, `unpinned` says why the folder it ran from does not pin it.
+ */
+export function cloneRefusal(args: Word[], pin: string | undefined, clone: CloneScope | undefined, unpinned = ''): string | undefined {
+  if (!clone) return 'this console was staffed before clones were allowed: it can clone once it is stood down and staffed again'
+  if (args.some(a => a.dynamic || a.glob)) return 'clone arguments must be literal (no variables, globs or substitutions)'
+  const positional: string[] = []
+  for (let i = 0; i < args.length; i++) {
+    const t = args[i]?.text ?? ''
+    if (t === '--') return '`--` is not allowed in a clone'
+    if (!t.startsWith('-')) {
+      positional.push(t)
+      continue
+    }
+    if (CLONE_FLAGS.has(t)) continue
+    const value = CLONE_VALUED[t]
+    if (!value) return `${t} is not an allowed clone option (allowed: ${CLONE_OPTIONS})`
+    if (!value.test(args[i + 1]?.text ?? '')) return `${t} takes a plain value as the next word (allowed: ${CLONE_OPTIONS})`
+    i++
+  }
+  const [source, dest, ...extra] = positional
+  if (source === undefined) return 'name the repository to clone'
+  if (extra.length) return 'a clone takes the repository and at most one destination'
+  const bad = sourceRefusal(source)
+  if (bad) return bad
+  const folder = cloneFolder(source)
+  const home = foldPath(clone.home)
+  // Unpinned, pinned by a relative cd that CDPATH can send elsewhere, or pinned where a link could lead out: it could land anywhere.
+  if (!pin) return `${unpinned}pin it to a front's folder by its full path: \`cd ${home} && git clone ${source}\``
+  // Compared exactly, case included: an allowlist that matched loosely would admit a path the disk keeps apart.
+  const target = foldPath(dest === undefined ? `${pin}/${folder}` : dest.startsWith('/') ? dest : `${pin}/${dest}`)
+  const root = frontsFolder(clone)
+  const parts = target.startsWith(`${root}/`) ? target.slice(root.length + 1).split('/') : []
+  const front = parts[0] ?? ''
+  // Point at the front the target names when it is one, else the console's own.
+  const to = clone.fronts.includes(front) ? `${root}/${front}` : home
+  const use = `a clone lands one level under a front's folder, here ${to}/${folder}: \`cd ${to} && git clone ${source}\``
+  // The target is folded as text; the disk would resolve this `..` from wherever a link before it points.
+  if (dest !== undefined && dotsAfterName(dest)) return `${dest} has .. after a folder name, which a link inside the tree could carry elsewhere; ${use}`
+  if (parts.length === 2 && parts[1] === folder) {
+    return clone.fronts.includes(front) ? undefined : `${front} is not a front this console was staffed with (${clone.fronts.join(', ')})`
+  }
+  return `it would land in ${target}; ${use}`
 }
 
 const GH_ALLOWED: Record<string, Set<string> | 'any'> = {
@@ -58,48 +225,61 @@ const TEXT_ONLY = new Set(['echo', 'printf', 'grep', 'rg', 'cat', 'head', 'tail'
 const READERS = new Set(['cat', 'grep', 'rg', 'head', 'tail', 'less', 'more', 'wc', 'ls', 'diff', 'stat', 'file', 'sed', 'awk', 'git', 'sort', 'uniq', 'cut', 'tr', 'nl', 'jq'])
 /** Shells and interpreters that read a program from stdin or a heredoc when given no script file. */
 const READS_STDIN = /^(sh|bash|zsh|dash|ksh|fish|csh|tcsh|python[0-9.]*|perl|ruby|node|deno|bun|php|lua|osascript)$/
+// Variables that move what git reads or runs: its config and ssh (HOME, XDG_CONFIG_HOME, GIT_*, SSH_*),
+// the programs it finds (PATH), the files a shell reads at start (ENV, BASH_ENV, ZDOTDIR) and where a
+// relative cd lands (CDPATH). Matched as an assignment (NAME=, NAME+=) or a bare name (export NAME).
+const GIT_LEVER = /^((GH|GIT|GITHUB|SSH|DYLD|LD)_[A-Za-z0-9_]*|HOME|PATH|CDPATH|XDG_CONFIG_HOME|ENV|BASH_ENV|ZDOTDIR|EDITOR|VISUAL|PAGER)(\+?=|$)/
+const SETTERS = new Set(['export', 'declare', 'typeset', 'readonly', 'local', 'set', 'setenv'])
+const LEVER_REFUSAL = 'On a line that names git or gh, nothing sets HOME, PATH, CDPATH, XDG_CONFIG_HOME, ENV, BASH_ENV, ZDOTDIR, EDITOR, VISUAL, PAGER or a GIT_*, GH_*, GITHUB_*, SSH_*, DYLD_* or LD_* variable, and nothing exports a value built from a variable: they can redirect git and gh or make it run a program. Run that as a separate command.'
 
-export type Word = { text: string; dynamic: boolean; glob: boolean; quoted?: boolean }
+/**
+ * A word as the shell will see it. `quoted` marks one with a quoted or escaped part, which is never
+ * an fd number. `heredoc` marks one that holds a `$(cat <<'EOF' ... EOF)`: its
+ * text shows `HEREDOC` there, `body` holds what the substitution prints, and the word is dynamic,
+ * because unquoted the shell splits that output into words of its own. `splits` marks a heredoc that
+ * was NOT inside double quotes, so at run time it word-splits into several arguments: it may not stand
+ * as a message, since a message option would take only its first word and the rest ride in as options.
+ */
+export type Word = { text: string; dynamic: boolean; glob: boolean; quoted?: boolean; heredoc?: true; body?: string; splits?: true }
 export type Simple = { words: Word[]; redirects: Word[]; sep: string }
 export type Parsed = { commands: Simple[]; opaque: boolean; bodies: string[]; unread: string[] }
 
 /**
- * Replaces each `$(cat <<'EOF' ... EOF)` (quoted delimiter only) with a literal
- * word, ending at the FIRST terminator line and only when `)` follows it.
+ * The `$(cat <<'EOF' ... EOF)` (quoted delimiter only) that starts at `at`: where it ends, just past
+ * its `)`, and its body. Undefined for any other `$(`. The body ends at the first line that is
+ * exactly the delimiter (after tabs, for `<<-`), where zsh and bash end it, and only `)` may follow.
  */
-function literalCommitHeredocs(input: string): string {
+function heredocSubstitution(text: string, at: number): { end: number; body: string } | undefined {
   // Nothing may follow the delimiter on its line: text there runs as a command (MC-116).
-  const open = /\$\(\s*cat\s+<<-?\s*(['"])(\w+)\1[ \t]*\n/g
-  let out = ''
-  let from = 0
-  for (let m = open.exec(input); m; m = open.exec(input)) {
-    const bodyStart = m.index + m[0].length
-    const term = new RegExp(`^[ \\t]*${m[2]}[ \\t]*$`, 'm').exec(input.slice(bodyStart))
-    if (!term) break
-    const after = bodyStart + term.index + term[0].length
-    const close = /^\s*\)/.exec(input.slice(after))
-    if (!close) continue
-    out += input.slice(from, m.index) + 'HEREDOC'
-    from = after + close[0].length
-    open.lastIndex = from
-  }
-  return out + input.slice(from)
+  const open = /\$\([ \t]*cat[ \t]+<<(-?)[ \t]*(['"])(\w+)\2[ \t]*\n/y
+  open.lastIndex = at
+  const m = open.exec(text)
+  if (!m) return undefined
+  const start = at + m[0].length
+  const term = new RegExp(`^${m[1] ? '\\t*' : ''}${m[3]}$`, 'gm')
+  term.lastIndex = start
+  const t = term.exec(text)
+  if (!t) return undefined
+  const close = /\s*\)/y
+  close.lastIndex = t.index + t[0].length
+  return close.exec(text) ? { end: close.lastIndex, body: text.slice(start, t.index) } : undefined
 }
 
 /**
  * A bash-subset tokenizer: quotes and escapes resolved, `$var`/`${}` and globs
  * marked, `$(...)`, backticks and process substitution marked opaque, heredoc
- * bodies skipped (a `$(cat <<'EOF' ... EOF)` commit message is literal text).
+ * bodies skipped. A `$(cat <<'EOF' ... EOF)` is read where it stands, so one
+ * inside single quotes or a comment is text, never a substitution; it becomes a
+ * dynamic `heredoc` word carrying its body (a commit message is the use).
  */
-export function tokenize(input: string): Parsed {
-  const text = literalCommitHeredocs(input)
+export function tokenize(text: string): Parsed {
   const commands: Simple[] = []
   let opaque = false
   let words: Word[] = []
   let redirects: Word[] = []
   let cur: Word | undefined
   let redirecting = false
-  const heredocs: { delim: string; quoted: boolean }[] = []
+  const heredocs: { delim: string; quoted: boolean; dash: boolean }[] = []
   const bodies: string[] = []
   const end = () => {
     if (cur) (redirecting ? redirects : words).push(cur)
@@ -124,15 +304,27 @@ export function tokenize(input: string): Parsed {
     redirecting = false
   }
   const ch = (i: number) => text[i] ?? ''
+  // Once the line is opaque it is refused whatever else it holds, so no later `$(` is searched for a heredoc.
+  const substitution = (at: number) => (opaque ? undefined : heredocSubstitution(text, at))
+  const holdHeredoc = (w: Word, body: string, splits: boolean) => {
+    w.text += 'HEREDOC'
+    w.dynamic = true
+    w.heredoc = true
+    w.body = (w.body ?? '') + body
+    // Unquoted, the substitution word-splits at run time; inside double quotes it stays one argument.
+    if (splits) w.splits = true
+  }
   for (let i = 0; i < text.length; i++) {
     const c = ch(i)
     if (c === '\n') {
       flush('\n')
       while (heredocs.length) {
-        const h = heredocs.shift() ?? { delim: '', quoted: true }
-        const rest = text.slice(i + 1)
-        const m = new RegExp(`^[ \\t]*${h.delim}[ \\t]*$`, 'm').exec(rest)
-        const body = m ? rest.slice(0, m.index) : rest
+        const h = heredocs.shift() ?? { delim: '', quoted: true, dash: false }
+        // The body ends at the first line that is exactly the delimiter (after tabs, for <<-), where zsh and bash end it.
+        const term = new RegExp(`^${h.dash ? '\\t*' : ''}${h.delim}$`, 'gm')
+        term.lastIndex = i + 1
+        const m = term.exec(text)
+        const body = text.slice(i + 1, m ? m.index : text.length)
         bodies.push(body)
         // An unquoted heredoc expands $(...), backticks and variables inside its body.
         if (!h.quoted && /\$|`/.test(body)) opaque = true
@@ -140,7 +332,7 @@ export function tokenize(input: string): Parsed {
           i = text.length
           break
         }
-        const lineEnd = text.indexOf('\n', i + 1 + m.index)
+        const lineEnd = text.indexOf('\n', m.index)
         i = lineEnd < 0 ? text.length : lineEnd
       }
       continue
@@ -185,13 +377,16 @@ export function tokenize(input: string): Parsed {
         redirecting = true
         continue
       }
-      if (ch(j) === '-') j++
-      while (ch(j) === ' ') j++
-      const m = /^(['"]?)(\w+)\1/.exec(text.slice(j))
-      if (m) {
-        heredocs.push({ delim: m[2] ?? '', quoted: (m[1] ?? '') !== '' })
-        i = j + m[0].length - 1
-      } else i = j - 1
+      const dash = ch(j) === '-'
+      if (dash) j++
+      while (ch(j) === ' ' || ch(j) === '\t') j++
+      const word = /(['"]?)(\w+)\1/y
+      word.lastIndex = j
+      const m = word.exec(text)
+      // Only a plain or wholly quoted delimiter is read: the shell ends <<\EOF and <<E"O"F at EOF, which this would not.
+      if (!m || /[\w'"\\$`]/.test(ch(j + m[0].length))) opaque = true
+      else heredocs.push({ delim: m[2] ?? '', quoted: (m[1] ?? '') !== '', dash })
+      i = m ? j + m[0].length - 1 : j - 1
       continue
     }
     if (c === '>' || c === '<') {
@@ -232,8 +427,14 @@ export function tokenize(input: string): Parsed {
         if (d === '\\' && ch(j + 1) === '\n') j++
         else if (d === '\\') cur.text += ch(++j)
         else if (d === '`' || (d === '$' && ch(j + 1) === '(')) {
-          opaque = true
-          cur.dynamic = true
+          const sub = d === '$' ? substitution(j) : undefined
+          if (sub) {
+            holdHeredoc(cur, sub.body, false)
+            j = sub.end - 1
+          } else {
+            opaque = true
+            cur.dynamic = true
+          }
         } else if (d === '$' && /[A-Za-z_{@*#?$!0-9]/.test(ch(j + 1))) {
           cur.dynamic = true
           cur.text += d
@@ -259,6 +460,12 @@ export function tokenize(input: string): Parsed {
         if (text.slice(i + 2, close < 0 ? text.length : close).includes('\\')) opaque = true
       }
       if (ch(i + 1) === '(') {
+        const sub = substitution(i)
+        if (sub) {
+          holdHeredoc(cur, sub.body, true)
+          i = sub.end - 1
+          continue
+        }
         opaque = true
         cur.dynamic = true
         i++
@@ -313,10 +520,10 @@ export function headOf(s: Simple): { head?: Word; rest: Word[] } {
   let i = 0
   while (i < w.length) {
     const t = w[i]?.text ?? ''
-    if (SHELL_KEYWORDS.has(t) || /^[A-Za-z_][A-Za-z0-9_]*=/.test(t)) i++
+    if (SHELL_KEYWORDS.has(t) || /^[A-Za-z_][A-Za-z0-9_]*\+?=/.test(t)) i++
     else if (WRAPPERS.has(t)) {
       i++
-      while (i < w.length && /^(-|[A-Za-z_][A-Za-z0-9_]*=|\d+[smhd]?$)/.test(w[i]?.text ?? '')) i++
+      while (i < w.length && /^(-|[A-Za-z_][A-Za-z0-9_]*\+?=|\d+[smhd]?$)/.test(w[i]?.text ?? '')) i++
     } else break
   }
   return { head: w[i], rest: w.slice(i + 1) }
@@ -371,6 +578,24 @@ export function pushRefusal(args: Word[], protectedBranches: string[]): string |
   return undefined
 }
 
+// A heredoc word hides from every rule what it expands to, so it stands only as a message: the value
+// of one of these options, as the next word or attached (-mHEREDOC, --message=HEREDOC), and only when
+// double-quoted. Unquoted it word-splits, and the option would take its first word while the rest ride
+// in as further options (`gh api ... -t $(cat <<EOF\nx -X PUT\nEOF)` would run -X PUT).
+type MessageOption = { next: RegExp; attached: RegExp }
+const GIT_MESSAGE: MessageOption = { next: /^(-[A-Za-z]*m|--message)$/, attached: /^(-[A-Za-z]*m|--message=)$/ }
+const GIT_MESSAGE_SUBS = new Set(['commit', 'tag', 'notes', 'merge'])
+const GH_MESSAGE: MessageOption = { next: /^(-[bt]|--body|--title)$/, attached: /^(-[bt]|--body=|--title=)$/ }
+
+/** True when words[k] is a heredoc word standing as the value of a message option. */
+function isMessage(words: Word[], k: number, option: MessageOption): boolean {
+  const w = words[k]
+  if (!w?.heredoc || w.splits) return false
+  if (w.text !== 'HEREDOC') return w.text.endsWith('HEREDOC') && option.attached.test(w.text.slice(0, -'HEREDOC'.length))
+  const prev = words[k - 1]
+  return prev !== undefined && !prev.dynamic && option.next.test(prev.text)
+}
+
 // git's global options by exact spelling, as git 2.55 reads them: flags, and options whose value is the
 // next word (or follows `=`, for the long ones). Any other word before the subcommand is refused, since
 // git may take the next word as its value and run another subcommand than the one read here
@@ -404,7 +629,7 @@ function gitGlobals(rest: Word[]): { at: number; refusal?: string } {
   return { at: i }
 }
 
-function gitRefusal(role: Role, rest: Word[], protectedBranches: string[]): string | undefined {
+function gitRefusal(role: Role, rest: Word[], protectedBranches: string[], pin?: string, clone?: CloneScope, unpinned?: string): string | undefined {
   const { at: i, refusal } = gitGlobals(rest)
   if (refusal) return refusal
   const sub = rest[i]
@@ -414,6 +639,9 @@ function gitRefusal(role: Role, rest: Word[], protectedBranches: string[]): stri
   if (!GIT_ALLOWED[role].has(name)) {
     if (name === 'stash') return role === 'controller' ? 'A Controller never stashes: the tree may hold someone else\'s work. Commit to your branch instead.' : 'A back-room agent never runs git stash; report to your Controller instead.'
     return role === 'controller' ? `git ${name} is not on a Controller's allowlist.` : `A back-room agent never runs git ${name}; report to your Controller instead.`
+  }
+  if (rest.some((w, k) => w.heredoc && !(k > i && GIT_MESSAGE_SUBS.has(name) && isMessage(rest, k, GIT_MESSAGE)))) {
+    return `In git, a $(cat <<'EOF' ... EOF) value stands only as a commit, tag, note or merge message (-m or --message); here it is part of git ${name}'s arguments.`
   }
   const args = rest.slice(i + 1)
   const RUNNERS = ['--exec', '--upload-pack', '--receive-pack', '--ext-diff', '--textconv', '--output', '--open-files-in-pager']
@@ -429,12 +657,20 @@ function gitRefusal(role: Role, rest: Word[], protectedBranches: string[]): stri
     const why = pushRefusal(args, protectedBranches)
     return why ? `A Controller may push only its own feature branch: ${why}.` : undefined
   }
+  if (name === 'clone') {
+    // Global options can move where a clone reads its config or writes (--bare, --git-dir): only -C pins it.
+    const lead = rest.slice(0, i)
+    const extra = clone && lead.length > 0 && !(lead.length === 2 && lead[0]?.text === '-C')
+    const why = extra ? `git takes no option before clone but -C <dir> (here: ${lead.map(w => w.text).join(' ')})` : cloneRefusal(args, pin, clone, unpinned)
+    return why ? `A Controller clones only into a front's folder, one level down (fronts/<front>/<repo>): ${why}.` : undefined
+  }
   if (name === 'config' && !args.some(a => ['--get', '--get-all', '--list', '-l', '--get-regexp'].includes(a.text))) return 'git config is read-only here (--get or --list).'
   if (name === 'remote' && args.some(a => ['add', 'set-url', 'rename', 'remove', 'rm', 'set-head', 'prune'].includes(a.text))) return 'git remote is read-only here.'
   return undefined
 }
 
 function ghRefusal(rest: Word[]): string | undefined {
+  if (rest.some((w, k) => w.heredoc && !isMessage(rest, k, GH_MESSAGE))) return 'In gh, a $(cat <<\'EOF\' ... EOF) value stands only as a --title or --body.'
   const pos: Word[] = []
   for (let i = 0; i < rest.length; i++) {
     const w = rest[i]
@@ -486,6 +722,25 @@ function foldPath(p: string): string {
   return `/${out.join('/')}`
 }
 
+/** The `cd <dir> &&` run directly before a command: only that pins it (anything else may not have run, or ran in a subshell). */
+function cdChain(commands: Simple[], index: number): Word[] {
+  const chain: Word[] = []
+  for (let k = index - 1; k >= 0; k--) {
+    const prev = commands[k] as Simple
+    const { head: h, rest: r } = headOf(prev)
+    if (prev.sep !== '&&' || !h || h.text !== 'cd' || r.length !== 1) break
+    chain.unshift(r[0] as Word)
+  }
+  return chain
+}
+
+/** True when a cd in a git call's pin chain names a relative path CDPATH can resolve elsewhere (one not led by `.` or `..`). */
+function pinFollowsCdpath(commands: Simple[], index: number): boolean {
+  const { rest } = headOf(commands[index] as Simple)
+  if (rest.some(w => w.text === '-C')) return false
+  return cdChain(commands, index).some(w => !w.text.startsWith('/') && !/^\.\.?(\/|$)/.test(w.text))
+}
+
 /**
  * The repo directory a git or gh call is pinned to: `git -C <dir>`, else the
  * last literal `cd` before it on the line; undefined when nothing pins it.
@@ -503,16 +758,8 @@ export function pinnedDir(commands: Simple[], index: number): string | undefined
     const dir = c >= 0 ? rest[c + 1] : undefined
     if (dir) return dir.dynamic || dir.glob || !dir.text.startsWith('/') ? undefined : foldPath(dir.text)
   }
-  // Only a run of `cd <dir> &&` directly before the call pins it: anything else may not have run, or ran in a subshell.
-  const chain: Word[] = []
-  for (let k = index - 1; k >= 0; k--) {
-    const prev = commands[k] as Simple
-    const { head: h, rest: r } = headOf(prev)
-    if (prev.sep !== '&&' || !h || h.text !== 'cd' || r.length !== 1) break
-    chain.unshift(r[0] as Word)
-  }
   let dir: string | undefined
-  for (const to of chain) {
+  for (const to of cdChain(commands, index)) {
     if (to.dynamic || to.glob || to.text.startsWith('-')) return undefined
     if (to.text.startsWith('/')) dir = foldPath(to.text)
     else if (dir) dir = foldPath(`${dir}/${to.text}`)
@@ -521,8 +768,22 @@ export function pinnedDir(commands: Simple[], index: number): string | undefined
   return dir
 }
 
+/** The words that pin a git call: its `-C` value, else the `cd` chain run directly before it. */
+function pinWords(commands: Simple[], index: number): Word[] {
+  const { rest } = headOf(commands[index] as Simple)
+  const c = rest.findIndex(w => w.text === '-C')
+  return c >= 0 ? rest.slice(c + 1, c + 2) : cdChain(commands, index)
+}
+
+/** True when a git call's subcommand, past its global options, is a literal `clone`. */
+function isClone(rest: Word[]): boolean {
+  const { at, refusal } = gitGlobals(rest)
+  const sub = rest[at]
+  return refusal === undefined && sub !== undefined && !sub.dynamic && !sub.glob && sub.text === 'clone'
+}
+
 /** The refusal for a shell command run by a fleet role, if any. */
-export function shellRefusal(role: Role, command: string, protectedBranches: string[], scopeDir?: string): string | undefined {
+export function shellRefusal(role: Role, command: string, protectedBranches: string[], scopeDir?: string, clone?: CloneScope): string | undefined {
   if (APP_HOME.test(command)) return APP_HOME_REFUSAL
   if (/_command\/fleet\b/.test(normalisePath(command)) || /\.claude[^/\s]*\/projects\b/.test(command)) return 'The fleet folder and Claude session transcripts are Flight\'s: fleet agents do not read them.'
   const parsed = tokenize(command)
@@ -540,14 +801,17 @@ export function shellRefusal(role: Role, command: string, protectedBranches: str
       if (APP_HOME.test(body) || tokenize(body).commands.some(s => [...s.words, ...s.redirects].some(w => APP_HOME.test(w.text)))) return APP_HOME_REFUSAL
     }
   }
-  if (parsed.opaque) return 'Commands run plainly here: no $(...), backticks, <(...) or unquoted heredocs that expand (a commit message may use $(cat <<\'EOF\' ... EOF)).'
+  if (parsed.opaque) return 'Commands run plainly here: no $(...), backticks, <(...), heredocs that expand, or a heredoc delimiter other than one plain word, bare or wholly quoted (a commit message may use $(cat <<\'EOF\' ... EOF)).'
   const rawMentionsGit = /\b(git|gh)\b/i.test(command)
   const scanned: string[] = []
   for (const s of parsed.commands) {
     const { head, rest } = headOf(s)
-    const isCommit = baseName(head?.text ?? '') === 'git' && rest.some(w => w.text === 'commit')
+    const name = baseName(head?.text ?? '')
+    const isCommit = name === 'git' && rest.some(w => w.text === 'commit')
     if (!isCommit) scanned.push(...s.words.map(w => w.text), ...s.redirects.map(w => w.text))
     else scanned.push(...s.redirects.map(w => w.text))
+    // A heredoc value is checked by what it holds, except in git and gh, where it stands only as a message.
+    if (name !== 'git' && name !== 'gh') scanned.push(...[...s.words, ...s.redirects].flatMap(w => w.body ?? []))
   }
   if (mentionsFlightFile(scanned.join(' '))) {
     const pureRead = parsed.commands.every(s => {
@@ -564,33 +828,58 @@ export function shellRefusal(role: Role, command: string, protectedBranches: str
   for (let k = 0; k < parsed.commands.length; k++) {
     const s = parsed.commands[k] as Simple
     const { head, rest } = headOf(s)
+    if (s.redirects.some(w => w.heredoc)) return 'A $(cat <<\'EOF\' ... EOF) value never names a redirect target here: write the path itself.'
+    // Assignments standing alone last for the rest of the line, and before a command they reach what it
+    // runs (CDPATH before cd). Before git or gh any prefix is refused below, with its own reason.
+    const prefixed = head !== undefined && ['git', 'gh'].includes(baseName(head.text))
+    if (rawMentionsGit && !prefixed && (head ? s.words.slice(0, s.words.indexOf(head)) : s.words).some(w => GIT_LEVER.test(w.text))) return LEVER_REFUSAL
     if (!head) continue
     if (head.dynamic || head.glob) return 'Commands run plainly here: never a command name built from a variable, glob or brace.'
     if (/\s/.test(head.text)) return 'A command name with spaces in it (env -S and the like) is not allowed here.'
     const name = baseName(head.text)
     const argsNameGit = rest.some(w => /\b(git|gh)\b/i.test(w.text))
     if (argsNameGit && !['git', 'gh'].includes(name) && !TEXT_ONLY.has(name)) return `git and gh run only at the head of a command, not through ${name}.`
-    if (rawMentionsGit && (name === 'xargs' || name === 'eval' || name === 'source' || name === '.' || name === 'exec') && rest.some(w => INTERPRETER.test(baseName(w.text)) || /\b(git|gh)\b/i.test(w.text))) {
+    // The same for a heredoc value, whose words the checks above cannot see (find -exec, xargs or eval of one).
+    if (rawMentionsGit && !['git', 'gh'].includes(name) && !TEXT_ONLY.has(name) && rest.some(w => w.heredoc)) {
+      return `On a line that names git or gh, a $(cat <<'EOF' ... EOF) value stands only as a git or gh message or as text to print, never as an argument of ${name}.`
+    }
+    if (rawMentionsGit && (name === 'source' || name === '.')) return `On a line that names git or gh, ${name} does not run: the file it reads can set variables that redirect git. Run it as a separate command.`
+    if (rawMentionsGit && (name === 'xargs' || name === 'eval' || name === 'exec') && rest.some(w => INTERPRETER.test(baseName(w.text)) || /\b(git|gh)\b/i.test(w.text))) {
       return `git and gh run only as plain commands, never through ${name}.`
     }
     // Fail closed: on a line that names git or gh, no interpreter runs at all (a pipe, heredoc, -c, /dev/stdin or option can feed it a program).
     if (['export', 'declare', 'typeset', 'set', 'setenv'].includes(name) && rest.some(w => /^(GH_|GIT_|GITHUB_)/.test(w.text))) return 'Setting GH_*, GIT_* or GITHUB_* variables is not allowed here: they can redirect git and gh in later commands.'
+    if (rawMentionsGit && SETTERS.has(name) && rest.some(w => GIT_LEVER.test(w.text) || w.dynamic)) return LEVER_REFUSAL
     if (/(127\.0\.0\.1|localhost|0\.0\.0\.0|\[::1\]):47(7[7-9]|8\d|9[0-7])\b/.test(command)) return 'The Mission Control App is the founder\'s: fleet agents never reach it.'
     if ((name === 'ps' && rest.some(w => /^[a-zA-Z]*e[a-zA-Z]*$/.test(w.text) || /^-[A-Za-z]*E/.test(w.text))) || /\/proc\/[^/\s]+\/environ/.test(command)) return 'Reading other processes\' environments is not allowed here.'
     if (name === 'claude') return 'A fleet agent never starts another Claude session: it would run without the fleet guards or budget. Use your back room (the Agent tool) instead.'
     if (rawMentionsGit && READS_STDIN.test(name)) return `git and gh run only as plain commands; ${name} on the same line is not allowed. Run it as a separate command.`
-    if ((name === 'git' || name === 'gh') && s.words.slice(0, s.words.indexOf(head)).some(w => /^[A-Za-z_][A-Za-z0-9_]*=/.test(w.text) || w.text === 'env')) {
+    if ((name === 'git' || name === 'gh') && s.words.slice(0, s.words.indexOf(head)).some(w => /^[A-Za-z_][A-Za-z0-9_]*\+?=/.test(w.text) || w.text === 'env')) {
       return `${name} runs here with no environment prefix (VAR=... or env): variables like GIT_SSH_COMMAND or GIT_CONFIG_PARAMETERS can redirect it.`
     }
+    let pin: string | undefined
+    let unpinned: string | undefined
     if (scopeDir && (name === 'git' || name === 'gh')) {
       if (name === 'gh' && rest.some(w => /^-R/.test(w.text) || /^--repo(=|$)/.test(w.text) || (/^-[A-Za-z]+$/.test(w.text) && w.text.includes('R')))) return 'gh -R/--repo is not allowed here: pin the repo with `cd <your repo> && gh ...`.'
       const dir = pinnedDir(parsed.commands, k)
       const scope = foldPath(scopeDir)
       if (!dir) return `Pin the repo on every ${name} call: \`cd ${scope} && ${name} ...\`${name === 'git' ? ` or \`git -C ${scope} ...\`` : ''}. Your shell may start in another repo.`
-      if (dir !== scope && !dir.startsWith(`${scope}/`)) return `${dir} is outside your console's directory (${scope}).`
+      // A Controller's clone may also run from a front's folder, where it lands one level down; nothing else runs there.
+      const cloning = role === 'controller' && clone !== undefined && name === 'git' && isClone(rest)
+      if (dir !== scope && !dir.startsWith(`${scope}/`) && !(cloning && isFrontFolder(dir, clone))) return `${dir} is outside your console's directory (${scope}).`
+      pin = dir
+      // A clone's pin decides where it writes, and the guard reads it as text while the disk follows links (a
+      // cloned repository can hold one). So it must not hang on a cd that CDPATH could resolve elsewhere, step
+      // back with `..`, or sit inside a folder a clone may run from rather than be that folder exactly.
+      if (cloning) {
+        if (pinFollowsCdpath(parsed.commands, k)) unpinned = ''
+        else if (pinWords(parsed.commands, k).some(w => w.text.split('/').includes('..'))) unpinned = 'its cd or -C path holds .., which a link could carry elsewhere; '
+        else if (dir !== scope && !isFrontFolder(dir, clone)) unpinned = `it runs from ${dir}, a folder inside one a clone may run from, where a link could carry it elsewhere; `
+        if (unpinned !== undefined) pin = undefined
+      }
     }
     if (name === 'git') {
-      const why = gitRefusal(role, rest, protectedBranches)
+      const why = gitRefusal(role, rest, protectedBranches, pin, clone, unpinned)
       if (why) return why
     } else if (name === 'gh') {
       const why = ghRefusal(rest)
@@ -606,12 +895,12 @@ export function isShellLikeTool(tool: string): boolean {
 }
 
 /** The refusal for any tool call by a fleet role, if any. */
-export function toolRefusal(role: Role, tool: string, input: unknown, protectedBranches: string[], scopeDir?: string): string | undefined {
+export function toolRefusal(role: Role, tool: string, input: unknown, protectedBranches: string[], scopeDir?: string, clone?: CloneScope): string | undefined {
   if (tool === 'Workflow') return 'Workflows are Flight\'s to run; a Controller dispatches its back room with the Agent tool.'
   if (isShellLikeTool(tool)) return `${tool} runs shell commands the fleet guard cannot read; use Bash.`
   const args = (input ?? {}) as Record<string, unknown>
   if (typeof args.command === 'string') {
-    const why = shellRefusal(role, args.command, protectedBranches, scopeDir)
+    const why = shellRefusal(role, args.command, protectedBranches, scopeDir, clone)
     if (why) return why
   }
   const flat = JSON.stringify(input ?? {})
@@ -645,14 +934,15 @@ export type FleetSeat = { callSign: string; agentId: string; name: string; statu
 /**
  * Whether one of the fleet's own sends or spawns may skip the mode's decider, and for which
  * console. Only the founder's console actions raise these, and the auto mode classifier
- * cannot judge a call a plugin raised. Anything else returns undefined and is decided as usual.
+ * cannot judge a call a plugin raised. A send qualifies only to a staffed console, so the fleet
+ * never wakes a Controller it stood down. Anything else returns undefined and is decided as usual.
  */
 export function fleetSelfApproval(tool: string, input: unknown, seats: FleetSeat[]): string | undefined {
   const i = (input ?? {}) as Record<string, unknown>
   if (tool === 'SendMessage') {
     const to = i.to
     if (typeof to !== 'string' || to === '') return undefined
-    return seats.find(s => s.agentId !== '' && s.agentId === to)?.callSign
+    return seats.find(s => s.agentId !== '' && s.agentId === to && s.status === 'staffed')?.callSign
   }
   if (tool === 'Agent') {
     if (i.subagent_type !== 'mission-fleet:controller' || typeof i.name !== 'string') return undefined
@@ -662,7 +952,7 @@ export function fleetSelfApproval(tool: string, input: unknown, seats: FleetSeat
 }
 
 /** Console verbs that message or start an agent. From the app they run through Flight, never from the app's own loop. */
-const RELAYED = new Set(['staff', 'call', 'go', 'nogo', 'no-go', 'dismiss', 'stand-down'])
+const RELAYED = new Set(['staff', 'call', 'go', 'nogo', 'no-go', 'decide', 'retry', 'dismiss', 'stand-down'])
 export function isRelayedVerb(args: string): boolean {
   return RELAYED.has((args.trim().split(/\s+/)[0] ?? '').toLowerCase())
 }
@@ -692,4 +982,39 @@ export function spendRelayCode(codes: RelayCodes, code: string | undefined, args
 export function awaitingFlight(sentAt: string | undefined, now: number): boolean {
   const at = sentAt ? Date.parse(sentAt) : NaN
   return Number.isFinite(at) && now - at <= RELAY_TTL
+}
+
+/** Console verbs that answer an open poll item: decide <id> <n>, and go or no-go for a blocked line or an advisory. */
+const CHOICE = new Set(['decide', 'go', 'nogo', 'no-go'])
+export function isChoiceVerb(args: string): boolean {
+  return CHOICE.has((args.trim().split(/\s+/)[0] ?? '').toLowerCase())
+}
+
+/**
+ * The poll item an app op holds while Flight runs it: an open item that is asked (not a to-do) for an
+ * answer, an undelivered decision for retry. Undefined for any other op or item. A retry takes no
+ * second tap while held; a later answer replaces the earlier one (dropRelayCodes).
+ */
+export function relayHold(args: string, items: readonly PollItem[]): PollItem | undefined {
+  const [verb = '', id = ''] = args.trim().split(/\s+/)
+  const item = items.filter(p => p.id.toLowerCase() === id.toLowerCase()).at(-1)
+  if (!item) return undefined
+  if (verb.toLowerCase() === 'retry') return isUndelivered(item) ? item : undefined
+  return isChoiceVerb(verb) && item.state === 'open' && item.kind !== 'todo' ? item : undefined
+}
+
+/**
+ * Drops the codes minted for earlier answers on one poll item, so only the newest answer the app
+ * sent can run. Returns how many were dropped. Codes for any other item or verb are kept.
+ */
+export function dropRelayCodes(codes: RelayCodes, id: string): number {
+  let n = 0
+  for (const [code, minted] of codes) {
+    const [verb = '', target = ''] = minted.args.trim().split(/\s+/)
+    if (isChoiceVerb(verb) && target.toLowerCase() === id.toLowerCase()) {
+      codes.delete(code)
+      n++
+    }
+  }
+  return n
 }

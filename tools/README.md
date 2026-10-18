@@ -14,8 +14,12 @@ flowchart LR
   subgraph PLAN[plan and design gates]
     EC[epic-coverage] --- TL[token-lint]
   end
+  subgraph INST[instance checks]
+    CF[check-fronts]
+  end
   subgraph FLEET[console fleet]
     MF[mods/mission-fleet] --> APP[app]
+    CMT[check-mod-types] -. type-checks .-> MF
   end
   subgraph METER[spend meter]
     SR[mods/spend-recorder] --> SPEND["/spend"]
@@ -28,10 +32,12 @@ flowchart LR
 | `leak-guard` | hook: blocks process vocabulary in commits, PRs and tracker writes | `.sh`, `.ps1` |
 | `check-refs` | every repo path and link a doc names must exist | `.sh` (with `.py`), `.ps1` |
 | `check-ignores` | the paths that must be gitignored are, and the ones that ship still can | `.sh` + `.py`, `.ps1` |
+| `check-fronts` | each front's folder holds its repos, and no worktree sits at the top of `fronts/` | `.sh` + `.py` |
 | `epic-coverage` | the E4 gate of epic-flow | `.sh`, `.py` |
 | `status-after-pipe-guard`, `front-context` | settings hooks | `.sh` |
 | `token-lint` | the design-token ratchet | `.sh`, `.py` |
 | `mods/mission-fleet` | the console fleet, a Claude Code plugin | TypeScript |
+| `check-mod-types` | type-checks a mod against the plugin types its engine wrote | `.sh` |
 | `mods/spend-recorder` | records the tokens every model call used, for `/spend` | TypeScript |
 | `app/` | the Mission Control App | Node |
 
@@ -67,9 +73,10 @@ Two run-sites, two rule sets:
   secret or token assigned in the clear). It does NOT run the identity
   rules or the deny-list - a private instance legitimately contains its
   own founder's paths and email, and names the fronts and the employer
-  the deny-list keeps out of what ships. It reads `_command/` and the
-  operating `CLAUDE.md`, not `framework/`, whose kit templates carry
-  placeholders on purpose. The brace token must be a bare identifier, so a Mermaid hexagon
+  the deny-list keeps out of what ships. It reads `_command/`, the
+  operating file `_command/CLAUDE.operating.md` included, and the root
+  `CLAUDE.md`, not `framework/`, whose kit templates carry placeholders on
+  purpose. The brace token must be a bare identifier, so a Mermaid hexagon
   node (`A{{"label"}}`) is not mistaken for an unfilled blank; an unquoted
   one (`A{{plain}}`) still needs the exempt marker.
 
@@ -166,6 +173,35 @@ gitignored are, and the paths that must ship still can be (exit 0 clean /
 reads the rules, because a doc claiming a path is ignored proves nothing
 about what git will do. `/preflight` step 6 runs it at every spend tier.
 
+## check-fronts
+
+An instance check, run by `/preflight` step 2. Every front is a folder under
+`fronts/` holding that front's repos, `fronts/<front>/<repo>`
+(`framework/task-board.md`, front placement). `bash tools/check-fronts.sh
+[root]` (with `check-fronts.py`, Python 3; the root defaults to the folder
+above `tools/`) reads the folders directly under `fronts/` and prints one line
+per problem, with the commands that fix it, run from the root (a path after
+`git -C <repo>` is relative to that repo, because git reads it from there):
+
+- a repo: a `.git` folder, a `.git` file naming a separate git directory, or a
+  bare repo (`HEAD`, `objects/` and `refs/` in the folder itself). The front's
+  folder is itself a repo, so a second repo for that front has nowhere to go.
+  The fix houses it at `fronts/<front>/<front>` (a bare `fronts/<name>.git` at
+  `fronts/<name>/<name>.git`) and names the `git worktree repair` its linked
+  worktrees need afterwards, with the new path of each one that moves with it.
+- a `.git` file naming a linked worktree: a worktree at the top of `fronts/`,
+  outside its front's folder. The fix is a `git worktree move` beside its repo,
+  after that repo's own fix when the repo is at the top of `fronts/` too.
+- a worktree whose repo has moved (its `.git` file names a git directory that
+  is gone, as after a repo's fix and before the repair): the fix is the
+  `git worktree repair` in the repo's new home, then the move.
+
+It reads only and moves nothing. Exit 0 is clean (also when there is no
+`fronts/`, as in this clone), 1 lists the problems, and 2 means it could not
+check: the root does not exist, `fronts/` is not a folder, or a folder cannot
+be read. Tests: `tests/check-fronts.tests.sh`. A `.ps1` twin is deferred
+until a Windows operator exists; there, run the `.py` with Python 3.
+
 ## epic-coverage (`epic-coverage.sh` / `epic-coverage.py`)
 
 The E4 gate of epic-flow: diffs fragment-owned outputs against the
@@ -258,9 +294,9 @@ tests already hold a value class keeps that idiom. Tests:
 The console fleet: a Claude Code mod, packaged as a plugin, that adds
 `/console` and a console tool for Flight (the orchestrator session). It staffs
 a kept-alive Controller per front or project, retunes and calls it, keeps the
-go/no-go poll and the loops, and guards what Controllers and their back rooms
+poll of the questions and to-dos it leaves the founder and the loops, and guards what Controllers and their back rooms
 may run. The verbs, the guard's limits and the founder-only commands are in
-`.claude/skills/console/SKILL.md`; the remote runbook is
+`.claude/skills/fleet/SKILL.md`; the remote runbook is
 `framework/remote-access.md`.
 
 Loading it. A mod is not on by default. Either set `CLAUDE_CODE_PLUGIN_DIRS`
@@ -269,9 +305,28 @@ in the `env` block of the profile's `settings.json` to the absolute path of
 `claude --plugin-dir tools/mods/mission-fleet`. It needs a Claude Code build
 that supports mods.
 
-Tests: `claude plugin test tools/mods/mission-fleet` (47 tests across
-`controller`, `guards`, `loops` and `register` at the time of writing; the run
-prints the count).
+Tests: `claude plugin test tools/mods/mission-fleet` (the tests in
+`controller`, `guards`, `loops` and `register`; the run prints the count).
+The test run does not type-check; `check-mod-types` does.
+
+## check-mod-types
+
+`bash tools/check-mod-types.sh [MOD] [--types DIR]` runs a pinned TypeScript
+(5.6.3, through `npx`, so the first run fetches it and needs the network
+once) over a mod's `hooks`, `types` and `tests` with the compiler options of
+the plugin types the engine writes into `MOD/.claude-plugin/types` where it
+loads the mod. That folder is gitignored and the engine rewrites it on
+update, so a type error can arrive with an engine update and no commit.
+`MOD` defaults to `tools/mods/mission-fleet`. A clone or worktree the engine
+has not loaded has no types folder: pass `--types` with a loaded copy's,
+such as the operating workspace's
+`tools/mods/mission-fleet/.claude-plugin/types`. Exit 0 clean; 1 on type
+errors in the mod's own files (tsc's lines, then a count); 2 when it cannot
+run (no mod, no types, `--types` with no folder, TypeScript did not start,
+or tsc stopped on its configuration or found no files), never a pass. The
+clean and failed lines name the engine version the types came from. Tests:
+`tests/check-mod-types.tests.sh` (fake engine types, a planted error, each
+cannot-run case, a folder name with a space and a quote).
 
 ## mods/spend-recorder
 
@@ -308,3 +363,7 @@ step. You do not run it by hand: `/console app` starts it from the mod, and
   `tailscale serve`, never a public tunnel: `framework/remote-access.md`.
 - The design, tokens and states: `app/DESIGN.md`. The token ratchet is held at
   zero: `tools/token-lint.sh tools/app`.
+
+Tests: `node --test tools/tests/app-badge.tests.mjs` (the call-sign marker that
+badges a Flight message and the call-sign chip, `app/public/badge.js`; 22
+tests at the time of writing).

@@ -1,7 +1,7 @@
 ---
 repo: <project-name>
 front: <front>
-path: <path from the portfolio root, or the external registered path>
+path: <fronts/FRONT/REPO when moved in, or the external registered path>
 remote: <git remote url, or N/A>
 trust: yours | partnered | employer | stakeholder
 tracker: tasks | jira | github

@@ -36,8 +36,9 @@ flowchart LR
 
 **Scope guard.** `--front` is required, and the skill reads and writes only
 that front's repo, in a worktree off its recorded base branch when another
-checkout is in use. When a delivery flow calls it, it inherits that flow's
-front and never widens it.
+checkout is in use (inside the front's folder, never at the top of `fronts/`:
+`framework/task-board.md`, front placement). When a delivery flow calls it, it
+inherits that flow's front and never widens it.
 
 ## Adopt mode
 

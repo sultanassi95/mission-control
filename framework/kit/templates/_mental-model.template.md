@@ -21,6 +21,7 @@ mindmap
       <portfolio root>/ = the one root
       _command/ = mission control · boot here
       framework/ = upstream doctrine · pulled, never edited
+      fronts/ = one folder per front · its repos inside
       each project owns its own git
       docs lead with diagrams · Mermaid viewer
     Fronts

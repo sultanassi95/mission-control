@@ -11,8 +11,8 @@
 
   const $ = id => document.getElementById(id)
   const str = v => (v === undefined || v === null ? '' : String(v))
-  // Claude Code records a prompt the app submits between a plugin preamble and a trailing note; the founder typed only what follows it.
-  const typed = v => stripReminders(v).replace(/^The [\w-]+ plugin sent a message:\n/, '').replace(/\n+This is how Claude Code surfaces a prompt a plugin submits[\s\S]*$/, '').trim()
+  // The founder's own words read back from Flight's transcript, and the files a message carried (transcript.js).
+  const { typed, waiting, attachments, line, stripReminders, PHOTO_EXTS, DOC_EXTS } = window.mcTranscript
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
   const ICONS = {
     flight: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg>',
@@ -26,17 +26,20 @@
   const models = () => fleet().models ?? ['haiku', 'sonnet', 'opus', 'fable']
   const efforts = () => fleet().efforts ?? ['low', 'medium', 'high', 'xhigh', 'max']
   let seenOp = 0
-  const TABS = [['flight', 'Flight'], ['consoles', 'Consoles'], ['poll', 'Poll'], ['loops', 'Loops']]
+  // Op ids a toast already summed up; the fleet's echo of each (lastOp, same id) is not toasted over it.
+  const summed = new Set()
+  const TABS =[['flight', 'Flight'], ['consoles', 'Consoles'], ['poll', 'Poll'], ['loops', 'Loops']]
 
-  const S = { tab: 'flight', state: null, live: false, sheet: null, sel: null, filter: 'ALL', query: '', open: new Set(), queued: [], tune: null, notes: {}, details: new Set(), sending: false, opener: null, flights: [], profile: '' }
-  try { S.profile = localStorage.getItem('mcapp-profile') ?? '' } catch {}
+  // The remembered profile (localStorage mcapp-profile) is a wish, not the state: nothing is named or
+  // connected until the first listing of live profiles decides which one opens (loadFlights).
+  // files: the attachment tray, in the order picked; upload: which of them is going up while a message sends.
+  const S = { tab: 'flight', state: null, live: false, sheet: null, sel: null, filter: 'ALL', query: '', open: new Set(), queued: [], files: [], upload: null, tune: null, notes: {}, picks: {}, sentPick: {}, details: new Set(), sending: false, opener: null, flights: [], profile: '', resolved: false, listFailed: false, streamFailed: false }
   // Every request goes to the chosen profile's Flight through the front door.
   const base = () => (S.profile ? `/p/${encodeURIComponent(S.profile)}` : '')
   const authHeaders = () => (token ? { 'x-mcapp-token': token } : {})
   const label = p => str(p).charAt(0).toUpperCase() + str(p).slice(1)
   // Claude Code records its own notices (a background task finishing, a system reminder) as user
   // messages; they show as a quiet line, never as the founder's words. null: not a notice.
-  const stripReminders = t => str(t).replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, '').trim()
   const harnessNotice = text => {
     const t = str(text).trim()
     if (/^<task-notification>/.test(t) || /^\[SYSTEM NOTIFICATION/.test(t)) {
@@ -46,47 +49,97 @@
     if (/^<system-reminder>/.test(t) && !stripReminders(t)) return ''
     return null
   }
-  // A photo travels as a line naming its stored path; Flight opens the path with Read.
-  const PHOTO_LINE = /\n*\[Photo from the app: (.+?\/uploads\/([a-f0-9]{24}\.(?:jpg|png|webp))) - open it with Read\]\s*$/
-  // Photos are fetched with the token in a header and shown from a blob: URL, so the token never sits in the page.
-  const photos = new Map()
-  const photoSrc = id => {
+  // Each file a message carried travels as a line naming its stored path, which Flight opens with Read. The
+  // page fetches it once with the token in a header and shows it from a blob: URL, so the token never sits
+  // in the page. A document's blob takes a fixed type whatever the server answered: a PDF opens as a PDF,
+  // every text file as plain text, never as a page.
+  const OPENS_AS = { pdf: 'application/pdf', txt: 'text/plain;charset=utf-8', md: 'text/plain;charset=utf-8', csv: 'text/plain;charset=utf-8', json: 'text/plain;charset=utf-8' }
+  const TYPE_OF = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp', ...OPENS_AS }
+  const kept = new Map()
+  const keptFile = (id, ext) => {
     const key = `${S.profile}/${id}`
-    if (!photos.has(key)) {
-      photos.set(key, '')
+    if (!kept.has(key)) {
+      kept.set(key, { state: 'loading', url: '' })
       fetch(`${base()}/upload/${id}`, { headers: authHeaders() })
-        .then(r => (r.ok ? r.blob() : null))
-        .then(b => {
-          if (b) {
-            photos.set(key, URL.createObjectURL(b))
-            render()
+        .then(async r => {
+          // Only the server's own answer for a pruned file means gone; a 404 from the front door (a profile
+          // restarting, so not listed for a moment) is asked again like any other failure.
+          if (r.status === 404 && (await r.text().catch(() => '')) === 'that file is gone') kept.set(key, { state: 'gone', url: '' })
+          else if (!r.ok) throw new Error(`upload ${r.status}`)
+          else {
+            const b = await r.blob()
+            kept.set(key, { state: 'ready', url: URL.createObjectURL(OPENS_AS[ext] ? new Blob([b], { type: OPENS_AS[ext] }) : b) })
           }
+          render()
         })
-        .catch(() => undefined)
+        // Not fetched this time (the link down, the Mac asleep): a later repaint asks again.
+        .catch(() => setTimeout(() => kept.delete(key), 10_000))
     }
-    return photos.get(key)
+    return kept.get(key)
   }
-  const userBubble = (text, img, who = 'You') => {
-    const m = PHOTO_LINE.exec(text)
-    const body = m ? text.slice(0, m.index) : text
-    const src = img ?? (m ? photoSrc(m[2]) : '')
-    const pic = src ? `<img class="photo" src="${esc(src)}" alt="Photo you sent">` : m ? '<p class="hint">Photo loading…</p>' : ''
-    return `<div class="msg user"><div class="who">${esc(who)}</div>${pic}${body ? esc(body) : ''}</div>`
+  const photoView = (f, i, n) => {
+    const got = keptFile(f.id, f.ext)
+    if (got.state === 'ready') return `<img${n > 1 ? '' : ' class="photo"'} src="${esc(got.url)}" alt="${n > 1 ? `Photo ${i + 1} of ${n} you sent` : 'Photo you sent'}">`
+    return `<span class="ph">${got.state === 'gone' ? 'Photo no longer on the Mac' : 'Photo loading…'}</span>`
+  }
+  const docView = f => {
+    const got = keptFile(f.id, f.ext)
+    const name = esc(f.name || f.id)
+    const type = `<span class="ftype" aria-hidden="true">${esc(f.ext)}</span>`
+    if (got.state === 'ready') return `<a class="doc" href="${esc(got.url)}" target="_blank" rel="noopener" data-a="doc" data-v="${esc(f.id)}">${type}<span class="doc-name">${name}<span class="visually-hidden">, opens in a new tab</span></span></a>`
+    return `<span class="doc${got.state === 'gone' ? ' gone' : ''}">${type}<span class="doc-name">${name}</span><span class="doc-state">· ${got.state === 'gone' ? 'no longer on the Mac' : 'loading'}</span></span>`
+  }
+  // The founder's message: its photos (a grid when several), its documents as chips, then its words.
+  const userBubble = (text, who = 'You') => {
+    const { body, files } = attachments(text)
+    const photos = files.filter(f => f.kind === 'photo')
+    const docs = files.filter(f => f.kind === 'document')
+    const pics = photos.length > 1 ? `<div class="photos">${photos.map((f, i) => photoView(f, i, photos.length)).join('')}</div>` : photos.map(f => photoView(f, 0, 1)).join('')
+    const chips = docs.length ? `<div class="docs">${docs.map(docView).join('')}</div>` : ''
+    return `<div class="msg user"><div class="who">${esc(who)}</div>${pics}${chips}${body ? esc(body) : ''}</div>`
   }
   let queueSeq = 0
+  // The founder's messages in Flight's transcript, as he typed them.
+  const said = () => (fleet().flight?.messages ?? []).filter(x => x.role === 'user').map(x => typed(x.text))
   try { S.tab = sessionStorage.getItem('mcapp-tab') || 'flight' } catch {}
 
   const fleet = () => S.state?.fleet ?? {}
   const consoles = () => fleet().consoles ?? []
   const pollItems = () => fleet().poll ?? []
+  // Each call sign's colour slot, 0 to 7, as the fleet keeps it (placeSlots in the mod's hooks/loops.ts).
+  const slots = () => fleet().slots ?? {}
+  // A call sign as the app draws it everywhere: a chip in its Controller's colour, the idle fill when it
+  // has none (badge.js, which also gives the colour's class).
+  const slotClass = sign => (window.mcBadge ? window.mcBadge.slotClass(slots(), sign) : '')
+  const call = sign => (window.mcBadge ? window.mcBadge.chip(sign, slots()) : `<span class="call">${esc(sign)}</span>`)
+  // The call signs a Flight message's marker may name: every console's, and every one with a kept colour.
+  const knownSigns = () => new Set([...consoles().map(c => c.callSign), ...Object.keys(slots())])
   // A decision the app sent to Flight holds its gate for the relay code's lifetime (RELAY_TTL in guards.ts).
   const SENT_HOLD = 10 * 60_000
   const sentToFlight = p => Boolean(p.sentAt) && Date.now() - Date.parse(p.sentAt) <= SENT_HOLD
-  const openGates = () => pollItems().filter(p => p.state === 'open' && !sentToFlight(p))
+  // An open item a Controller asks the founder (a question, a blocked line, a contract change); a to-do is never asked.
+  const asked = p => p.state === 'open' && p.kind !== 'todo'
+  const todo = p => p.state === 'open' && p.kind === 'todo'
+  // What waits on the founder: a question not yet sent to Flight, and an open to-do.
+  const waitingOn = () => pollItems().filter(p => (asked(p) && !sentToFlight(p)) || todo(p))
+  // A decision sent to a Controller: a go, a no-go or an answered question (isDecided in the mod's hooks/loops.ts).
+  const decided = p => p.state === 'go' || p.state === 'no-go' || p.state === 'answered'
+  // A decision that never reached its Controller (isUndelivered in the mod's hooks/loops.ts).
+  const undelivered = p => Boolean(p.undelivered) && decided(p)
+  // A decision kept for the next Controller under its call sign (isHeld in the mod's hooks/loops.ts).
+  const held = p => Boolean(p.held) && decided(p) && !undelivered(p)
+  // The answer in a word or two, as the fleet words it (answerWord in hooks/loops.ts).
+  const answerOf = p => str(p.answer) || (p.state === 'no-go' ? 'NO-GO' : 'GO')
+  const stoodDown = sign => consoles().some(c => c.callSign === sign && c.status === 'stood-down')
+  // A to-do's text with its links live; escaped first, so only an http(s) link becomes markup.
+  const linked = t => esc(t).replace(/https?:\/\/[^\s<]+/g, u => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`)
+  // A Poll card's meta line, the same on every card: the call sign, then id and time.
+  const meta = (p, at) => `<div class="kind">${call(p.from)}<span>· ${esc(p.id)}${at ? ` · ${esc(time(at))}` : ''}</span></div>`
+  const report = (p, key = p.id) => (p.detail ? `<details data-id="${esc(key)}"${S.details.has(key) ? ' open' : ''}><summary>The report it came from</summary><pre>${esc(p.detail)}</pre></details>` : '')
 
   function statusOf(c) {
     if (c.status === 'stood-down') return ['idle', 'Stood down']
-    if (openGates().some(p => p.from === c.callSign)) return ['waiting', 'Waiting on you']
+    if (waitingOn().some(p => p.from === c.callSign)) return ['waiting', 'Waiting on you']
     if (c.status === 'staffing') return ['running', 'Starting']
     if (c.live === 'failed' || c.live === 'killed') return ['failed', 'Stopped']
     if (c.live === 'running' || c.live === 'pending' || c.live === 'waiting') return ['running', 'Running']
@@ -105,17 +158,26 @@
     if (!S.state) parts.push('<p class="sys">Waiting for the first state from Flight…</p>')
     else if (!f.messages?.length) parts.push('<p class="empty">No messages yet. Ask Flight anything, or tap / for a command.</p>')
     // Flight's replies are markdown, rendered by md.js (which escapes first); the founder's own messages stay plain text.
+    // A reply whose first line is the call-sign marker (badge.js) is badged with those Controllers, and the marker leaves the text.
+    const known = knownSigns()
     for (const m of f.messages ?? []) {
       const notice = m.role === 'user' ? harnessNotice(m.text) : null
       if (notice !== null) {
         if (notice) parts.push(`<p class="sys">${esc(notice)}</p>`)
         continue
       }
-      parts.push(m.role === 'user'
-        ? userBubble(typed(m.text))
-        : `<div class="msg assistant md"><div class="who">FLIGHT</div>${window.mcMarkdown ? window.mcMarkdown(str(m.text)) : esc(str(m.text))}</div>`)
+      if (m.role === 'user') {
+        parts.push(userBubble(typed(m.text)))
+        continue
+      }
+      const { signs, text } = window.mcBadge ? window.mcBadge.parse(str(m.text), known) : { signs: [], text: str(m.text) }
+      // A screen reader hears "FLIGHT, about MISSION-CONTROL, FIELDKIT"; on screen the chips stand alone.
+      const who = window.mcBadge ? window.mcBadge.label(signs, slots()) : 'FLIGHT'
+      parts.push(`<div class="msg assistant md"><div class="who">${who}</div>${window.mcMarkdown ? window.mcMarkdown(text) : esc(text)}</div>`)
     }
-    for (const q of S.queued) parts.push(userBubble(q.text, q.preview, `You · ${q.sent ? 'waiting for Flight' : 'sending'}`))
+    for (const q of S.queued) parts.push(userBubble(q.text, `You · ${q.sent ? 'waiting for Flight' : 'sending'}`))
+    // Each Controller's open question, oldest first, answered here (the Poll only lists them).
+    for (const p of pollItems().filter(asked)) parts.push(decisionCard(p))
     if (f.ask) parts.push(askCard(f.ask))
     else if (f.asking) parts.push(`<div class="notice" role="status">Flight is waiting for your answer on the Mac: ${esc(f.asking)}</div>`)
     // What Flight is doing right now, so a long turn never looks like nothing is happening.
@@ -136,7 +198,7 @@
       const st = statusOf(c)
       const r = reportOf(c.callSign)
       h += `<button class="card stripe-${st[0]}" type="button" data-a="open" data-v="${esc(c.callSign)}">
-        <span class="head"><span class="call">${esc(c.callSign)}</span>${pill(st)}</span>
+        <span class="head">${call(c.callSign)}${pill(st)}</span>
         <span class="task">${esc(r.state ?? 'No status check yet.')}</span>
         <span class="meta"><span class="tag">${esc(c.applied ?? c.model)}</span><span>${esc(c.project ? `${c.front}/${c.project}` : c.front)}</span><span>budget ${esc(c.budget ?? '-')}</span></span>
       </button>`
@@ -144,51 +206,113 @@
     return h
   }
 
+  // The Poll lists and answers nothing itself: a question is answered in Flight, a to-do is checked
+  // off, an undelivered or held decision is retried or dismissed. No GO or NO-GO here.
   function viewPoll() {
     if (!S.state) return '<p class="sys">Checking what is waiting on you…</p>'
     const items = pollItems()
-    const open = items.filter(p => p.state === 'open' && !sentToFlight(p))
-    let h = ''
-    for (const p of items.filter(x => x.state === 'open' && sentToFlight(x))) {
-      h += `<article class="gate"><div class="kind"><span class="call">${esc(p.from)}</span><span>· ${esc(p.id)}</span></div><h3>${esc(p.title)}</h3><p class="hint" role="status">Sent to Flight. It runs once Flight is free.</p></article>`
-    }
-    for (const p of items.filter(x => x.undelivered).slice(-3).reverse()) {
-      h += `<article class="gate undelivered"><div class="kind"><span class="call">${esc(p.from)}</span><span>· ${esc(p.id)}</span></div><h3>Your ${p.state === 'go' ? 'GO' : 'NO-GO'} did not reach ${esc(p.from)}</h3><p class="hint">${esc(p.undelivered)}. Staff the console again from Flight, then call it with the decision.</p></article>`
-    }
-    if (!open.length && !items.some(x => x.state === 'open' && sentToFlight(x))) h += '<p class="empty">Nothing is waiting on you. New go/no-go calls appear here.</p>'
-    const down = new Set(consoles().filter(c => c.status === 'stood-down').map(c => c.callSign))
-    open.forEach((p, i) => {
-      const orphan = down.has(p.from)
-      h += `<article class="gate">
-        <div class="kind"><span class="call">${esc(p.from)}</span><span>· ${esc(p.kind)} · ${esc(p.id)} · ${esc(time(p.at))}</span></div>
-        <h3>${esc(p.title)}</h3>
-        ${orphan ? `<p class="hint">${esc(p.from)} is stood down: your answer is kept for the next Controller on this front.</p>` : ''}
-        ${p.targets?.length ? `<p class="hint">Tells: ${esc(p.targets.join(', '))}</p>` : ''}
-        <details data-id="${esc(p.id)}"${S.details.has(p.id) ? ' open' : ''}><summary>The report it came from</summary><pre>${esc(p.detail)}</pre></details>
-        <label class="visually-hidden" for="note-${esc(p.id)}">Note for ${esc(p.id)}</label>
-        <input class="note" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="sentences" id="note-${esc(p.id)}" data-id="${esc(p.id)}" placeholder="Note (optional), e.g. which option" value="${esc(S.notes[p.id] ?? '')}">
-        <div class="gobar"><button class="go${i ? ' secondary' : ''}" type="button" data-a="go" data-v="${esc(p.id)}">GO</button><button class="nogo" type="button" data-a="nogo" data-v="${esc(p.id)}">NO-GO</button></div>
-        <div class="btnrow ${orphan ? 'two' : 'one'}"><button class="ghost" type="button" data-a="ask" data-v="${esc(p.id)}">Ask Flight first</button>${orphan ? `<button class="warn" type="button" data-a="gatedismiss" data-v="${esc(p.id)}">Dismiss</button>` : ''}</div>
-      </article>`
-    })
-    const decided = items.filter(p => (p.state === 'go' || p.state === 'no-go' || p.state === 'dismissed') && !p.undelivered).slice(-6).reverse()
+    const open = items.filter(asked)
+    const todos = items.filter(todo)
+    const stuck = items.filter(undelivered).reverse()
+    let h = stuck.map(undeliveredCard).join('')
+    if (!open.length && !todos.length && !stuck.length) h += '<p class="empty">Nothing is waiting on you. A Controller\'s questions are asked in Flight.</p>'
+    if (open.length) h += '<p class="section-label">Questions in Flight</p>' + open.map(questionCard).join('')
+    if (todos.length) h += '<p class="section-label">For you to do</p>' + todos.map(todoCard).join('')
+    // Held decisions wait on a staffing, not on the founder, so they sit below what does.
+    const kept = items.filter(held).reverse()
+    if (kept.length) h += '<p class="section-label">Held for the next Controller</p>' + kept.map(heldCard).join('')
+    const past = items.filter(p => (decided(p) || p.state === 'done' || p.state === 'dismissed') && !undelivered(p) && !held(p)).slice(-6).reverse()
     const replaced = items.filter(p => p.state === 'superseded').slice(-3).reverse()
-    if (decided.length) h += '<p class="section-label">Decided</p>' + decided.map(p => `<p class="resolved">${pill(p.state === 'go' ? ['done', 'Go'] : p.state === 'dismissed' ? ['idle', 'Dismissed'] : ['failed', 'No-go'])}<span>${esc(p.id)} · ${esc(p.from)}</span></p>`).join('')
+    const chip = p => (p.state === 'dismissed' ? ['idle', 'Dismissed'] : p.state === 'done' ? ['done', 'Done'] : p.state === 'no-go' ? ['failed', 'No-go'] : ['done', p.state === 'go' ? 'Go' : answerOf(p)])
+    if (past.length) h += '<p class="section-label">Decided</p>' + past.map(p => `<p class="resolved">${pill(chip(p))}<span>${esc(p.id)} · ${call(p.from)} · ${esc(str(p.title).slice(0, 90))}</span></p>`).join('')
     if (replaced.length) h += '<p class="section-label">Replaced by a newer report</p>' + replaced.map(p => `<p class="resolved">${pill(['idle', 'Replaced'])}<span>${esc(p.id)} · ${esc(str(p.title).slice(0, 90))}</span></p>`).join('')
     return h
   }
 
+  // An open question as the Poll lists it: where it stands, and the way to the card that answers it.
+  function questionCard(p) {
+    const down = stoodDown(p.from)
+    const sent = sentToFlight(p)
+    const state = sent ? `Sent to Flight${S.sentPick[p.id] !== undefined ? `: ${esc(`${S.sentPick[p.id] + 1}) ${p.asks?.[S.sentPick[p.id]]?.label ?? ''}`)}` : ''}. It runs once Flight is free.` : 'Waiting for your answer.'
+    const stood = down ? ` ${esc(p.from)} is stood down: your answer is held for the next ${esc(p.from)} Controller.` : ''
+    const go = `<button class="ghost" type="button" data-a="toask" data-v="${esc(p.id)}">Answer in Flight<span class="visually-hidden"> (${esc(p.id)})</span></button>`
+    const dismiss = down ? `<button class="warn" type="button" data-a="gatedismiss" data-v="${esc(p.id)}">Dismiss<span class="visually-hidden"> ${esc(p.id)}</span></button>` : ''
+    return `<article class="gate">${meta(p, p.at)}<h2>${esc(p.title)}</h2><p class="hint"${sent ? ' role="status"' : ''}>${state}${stood}</p>${p.targets?.length ? `<p class="hint">Tells: ${esc(p.targets.join(', '))}</p>` : ''}<div class="btnrow ${down ? 'two' : 'one'}">${go}${dismiss}</div>${report(p)}</article>`
+  }
+
+  // An action only the founder can take, with its link; Done checks it off and sends nothing.
+  function todoCard(p) {
+    return `<article class="gate todo">${meta(p, p.at)}<h2>${linked(p.title)}</h2><div class="btnrow one"><button class="go secondary" type="button" data-a="tododone" data-v="${esc(p.id)}">Done<span class="visually-hidden"> (${esc(p.id)})</span></button></div>${report(p)}</article>`
+  }
+
+  // A Controller's question in Flight's chat: its options as the Controller wrote them, picked one at a
+  // time, then sent. A sent answer can be changed until Flight has delivered it.
+  function decisionCard(p) {
+    const opts = p.asks ?? []
+    const pick = S.picks[p.id]
+    const sent = sentToFlight(p)
+    const sentPick = S.sentPick[p.id]
+    const down = stoodDown(p.from)
+    const options = opts.map((o, i) => `<button type="button" class="ask-opt" data-a="decpick" data-v="${esc(p.id)}:${i}" aria-pressed="${pick === i}"><b>${i + 1}) ${esc(o.label)}</b>${o.does ? `<span>${esc(o.does)}</span>` : ''}</button>`).join('')
+    const status = sent ? `<p class="hint" role="status">Sent to Flight${sentPick !== undefined ? `: ${esc(`${sentPick + 1}) ${opts[sentPick]?.label ?? ''}`)}` : ''}. It runs once Flight is free. Pick another option to change it.</p>` : ''
+    // The same option can be sent again: a plugin reload drops the first one's code, and a repeat only replaces it.
+    const ready = pick !== undefined
+    return `<section class="gate ask decision" id="ask-${esc(p.id)}" tabindex="-1" aria-label="${esc(p.from)} asks, ${esc(p.id)}">
+      ${meta(p, p.at)}
+      <h2>${esc(p.title)}</h2>
+      ${down ? `<p class="hint">${esc(p.from)} is stood down: your answer is held for the next ${esc(p.from)} Controller.</p>` : ''}
+      ${p.targets?.length ? `<p class="hint">Tells: ${esc(p.targets.join(', '))}</p>` : ''}
+      <div class="ask-options" role="group" aria-label="Options for ${esc(p.id)}">${options}</div>
+      <label class="visually-hidden" for="note-${esc(p.id)}">Note for ${esc(p.id)}</label>
+      <input class="note" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="sentences" id="note-${esc(p.id)}" data-id="${esc(p.id)}" placeholder="Note (optional)" value="${esc(S.notes[p.id] ?? '')}">
+      ${status}
+      <button class="go" type="button" data-a="decsend" data-v="${esc(p.id)}" ${ready ? '' : 'disabled'}>${!sent ? 'Send answer' : sentPick === pick ? 'Send again' : 'Change answer'}</button>
+      ${report(p)}
+    </section>`
+  }
+
+  // A decision that did not reach its Controller: why, in one plain sentence (the engine's own words
+  // behind Technical details), then Retry while the Controller that raised it is staffed, and Dismiss.
+  // The mod's snapshot says why (p.why) and where that Controller stands (p.seat: live, replaced, gone).
+  function undeliveredCard(p) {
+    const verdict = answerOf(p)
+    const what = p.state === 'answered' ? `answer ${verdict}` : verdict
+    const why = esc(p.why || 'The message could not be delivered.')
+    const key = `${p.id}:why`
+    const raw = `<details data-id="${esc(key)}"${S.details.has(key) ? ' open' : ''}><summary>Technical details</summary><pre>${esc(p.undelivered)}</pre></details>`
+    // Beside Retry, Dismiss is neutral so Retry stays the card's one primary action; alone, it is .warn.
+    const dismiss = cls => `<button class="${cls}" type="button" data-a="gatedismiss" data-v="${esc(p.id)}">Dismiss<span class="visually-hidden"> ${esc(p.id)}</span></button>`
+    let body
+    if (sentToFlight(p)) body = '<p class="hint" role="status">Retry sent to Flight. It runs once Flight is free.</p>'
+    else if (p.seat === 'live') body = `<p class="hint">${why} Retry sends the same ${esc(what)} to ${esc(p.from)}.</p>${raw}<div class="btnrow two"><button class="${p.state === 'no-go' ? 'nogo' : 'go secondary'}" type="button" data-a="gateretry" data-v="${esc(p.id)}">Retry${p.state === 'answered' ? '' : ` ${esc(verdict)}`}</button>${dismiss('ghost')}</div>`
+    else if (p.seat === 'replaced') body = `<p class="hint">${why} The ${esc(p.from)} Controller that raised it has been replaced. Tell the new one from Flight, or dismiss this.</p>${raw}<div class="btnrow one">${dismiss('warn')}</div>`
+    else body = `<p class="hint">${why} ${esc(p.from)} is no longer staffed. Staff the console again from Flight, then tell it the decision, or dismiss this.</p>${raw}<div class="btnrow one">${dismiss('warn')}</div>`
+    return `<article class="gate undelivered">${meta(p, p.decidedAt)}<h2>Your ${esc(what)} did not reach ${esc(p.from)}</h2>${body}${report(p, `${p.id}:report`)}</article>`
+  }
+
+  // A decision made after the Controller that raised it stood down: kept until the next Controller
+  // staffed under that call sign gets it with its staffing, or until it is dismissed.
+  function heldCard(p) {
+    const verdict = answerOf(p)
+    const what = p.state === 'answered' ? `answer ${verdict}` : verdict
+    return `<article class="gate held">${meta(p, p.held)}<h2>Your ${esc(what)} is held for the next ${esc(p.from)} Controller</h2><p class="hint">The ${esc(p.from)} Controller that raised it had stood down when you decided. The next Controller staffed under ${esc(p.from)} gets it with its staffing. Dismiss clears it and nothing is sent.</p>${report(p, `${p.id}:held`)}<div class="btnrow one"><button class="warn" type="button" data-a="gatedismiss" data-v="${esc(p.id)}">Dismiss<span class="visually-hidden"> ${esc(p.id)}</span></button></div></article>`
+  }
+
   function viewLoops() {
     const rows = fleet().loops ?? []
-    const signs = ['ALL', 'FLIGHT', 'FOUNDER', ...new Set(consoles().map(c => c.callSign))]
+    const named = [...new Set(consoles().map(c => c.callSign))]
+    const signs = ['ALL', 'FLIGHT', 'FOUNDER', ...named]
+    // A Controller wears its colour here too: its filter outlined, filled while pressed. FLIGHT and FOUNDER stay neutral.
+    const known = knownSigns()
+    const who = s => (known.has(s) ? call(s) : esc(s))
     const list = rows.filter(l => S.filter === 'ALL' || l.from === S.filter || l.to === S.filter).slice().reverse()
-    let h = `<div class="filters" role="group" aria-label="Filter by call sign">${signs.map(s => `<button type="button" data-a="filter" data-v="${esc(s)}" aria-pressed="${S.filter === s}">${esc(s)}</button>`).join('')}</div>`
+    let h = `<div class="filters" role="group" aria-label="Filter by call sign">${signs.map(s => `<button type="button"${known.has(s) ? ` class="signed${slotClass(s)}"` : ''} data-a="filter" data-v="${esc(s)}" aria-pressed="${S.filter === s}">${esc(s)}</button>`).join('')}</div>`
     if (!list.length) h += '<p class="empty">No loop traffic yet.</p>'
     list.forEach(l => {
       const key = `${l.at}|${l.from}|${l.to}|${l.kind}`
       const full = S.open.has(key)
       const text = full ? str(l.text) : str(l.text).split('\n')[0]
-      h += `<button type="button" class="loop ${l.kind === 'advisory' ? 'adv' : ''}" data-a="expand" data-v="${esc(key)}" aria-expanded="${full}"><span class="route">${esc(l.from)} → ${esc(l.to)}<span class="kindtag">${esc(l.kind)}</span></span><time>${esc(time(l.at))}</time><span class="body">${esc(text)}</span></button>`
+      h += `<button type="button" class="loop ${l.kind === 'advisory' ? 'adv' : ''}" data-a="expand" data-v="${esc(key)}" aria-expanded="${full}"><span class="route">${who(l.from)} → ${who(l.to)}<span class="kindtag">${esc(l.kind)}</span></span><time>${esc(time(l.at))}</time><span class="body">${esc(text)}</span></button>`
     })
     return h
   }
@@ -214,7 +338,7 @@
       const c = consoles().find(x => x.callSign === S.sel)
       if (!c) return ''
       const r = reportOf(c.callSign)
-      head = `<span class="call">${esc(c.callSign)}</span> ${pill(statusOf(c))}`
+      head = `${call(c.callSign)} ${pill(statusOf(c))}`
       body = `<dl class="report"><dt>State</dt><dd>${esc(r.state ?? '—')}</dd><dt>Shipped</dt><dd>${esc(r.shipped ?? '—')}</dd><dt>Blocked</dt><dd>${esc(r.blocked ?? '—')}</dd><dt>Next</dt><dd>${esc(r.next ?? '—')}</dd></dl>
         <p class="hint">${esc(c.front)}${c.project ? `/${esc(c.project)}` : ''} · ${esc(c.applied ?? c.model)} · budget ${esc(c.budget)} · ${esc(c.cwd)}</p>
         ${c.status === 'stood-down' ? '<p class="hint">This console is stood down. Staff it again from Flight.</p>' : `<div class="btnrow"><button class="ghost" type="button" data-a="callc">Call</button><button class="ghost" type="button" data-a="retune">Retune</button><button class="danger" type="button" data-a="standdown">Stand down</button></div>`}`
@@ -222,18 +346,20 @@
       const c = consoles().find(x => x.callSign === S.sel)
       if (!c) return ''
       const t = (S.tune ??= { model: 'sonnet', effort: 'medium' })
-      head = `Retune <span class="call">${esc(c.callSign)}</span>`
+      head = `Retune ${call(c.callSign)}`
       body = `<p class="section-label">Model</p><div class="seg" role="group" aria-label="Model">${models().map(m => `<button type="button" data-a="tm" data-v="${m}" aria-pressed="${t.model === m}">${m}</button>`).join('')}</div>
         <p class="section-label">Effort</p><div class="seg" role="group" aria-label="Effort">${efforts().map(e => `<button type="button" data-a="te" data-v="${e}" aria-pressed="${t.effort === e}">${e}</button>`).join('')}</div>
         <p class="hint">Applies from the console's next model request. Its work keeps its context.</p>
         <button class="primary" type="button" data-a="applytune">Retune to ${esc(t.model)} · ${esc(t.effort)}</button>`
     } else if (S.sheet === 'standdown') {
-      head = `Stand down <span class="call">${esc(S.sel)}</span>?`
+      head = `Stand down ${call(S.sel)}?`
       body = `<p>The console writes a dated handoff to its front's progress.md, then ends. <b>Dismiss</b> ends it with nothing written.</p>
         <div class="btnrow"><button class="ghost" type="button" data-a="back">Keep</button><button class="ghost" type="button" data-a="dismiss">Dismiss</button><button class="danger" type="button" data-a="sdyes">Stand down</button></div>`
     } else if (S.sheet === 'profiles') {
       head = 'Profiles'
-      body = S.flights.length
+      body = S.listFailed
+        ? `<p class="sys">Can't reach the Mac to list profiles; trying again.</p>`
+        : S.flights.length
         ? `<div class="profiles">${S.flights.map(f => `<button class="prof" type="button" data-a="profile" data-v="${esc(f.profile)}" aria-pressed="${f.profile === S.profile}"><span class="prof-name">${esc(label(f.profile))}</span>${f.unreachable ? pill(['failed', 'Not answering']) : f.gates ? pill(['waiting', `${f.gates} waiting`]) : f.busy ? pill(['running', 'Working']) : pill(['idle', 'Idle'])}</button>`).join('')}</div>
           <p class="hint">A profile appears here while its session runs /console app.</p>`
         : '<p class="empty">No Flight is running. Type /console app in a Claude session.</p>'
@@ -247,7 +373,7 @@
         <p class="hint">Flight keeps running in the terminal either way.</p>`
     } else if (S.sheet === 'stop') {
       head = 'Dismiss every console?'
-      body = `<p>Every staffed console ends now, with nothing written. Uncommitted work stays in each repo.</p><div class="btnrow two"><button class="ghost" type="button" data-a="close">Keep them</button><button class="danger" type="button" data-a="stopyes">Dismiss all</button></div>`
+      body = `<p>A dismissal for each staffed console goes to Flight and runs once Flight is free, ending the console with nothing written. Uncommitted work stays in each repo.</p><div class="btnrow two"><button class="ghost" type="button" data-a="close">Keep them</button><button class="danger" type="button" data-a="stopyes">Dismiss all</button></div>`
     } else if (S.sheet === 'appstop') {
       head = 'Stop the app server?'
       body = `<p>This page stops working until <code>/console app</code> runs again at the terminal, with a new link.</p><div class="btnrow two"><button class="ghost" type="button" data-a="close">Keep it</button><button class="danger" type="button" data-a="appstopyes">Stop it</button></div>`
@@ -258,7 +384,7 @@
   // ---------- render ----------
   // Each region is replaced only when its HTML changed, so a state push every two seconds
   // does not steal focus, collapse a report, wipe a note or replay a sheet's animation.
-  const last = { main: '', tabs: '', sheet: '', quick: '' }
+  const last = { main: '', tabs: '', sheet: '', quick: '', tray: '' }
   // A field being typed in is never rebuilt under the cursor: replacing it closes the phone keyboard
   // and breaks the word it is composing. The region repaints once the field loses focus.
   const typingIn = el => {
@@ -304,7 +430,7 @@
       else if (q.type === 'number') input = `<input class="note ask-in" type="number" autocomplete="off" inputmode="decimal" data-q="${qi}" min="${esc(q.min ?? '')}" max="${esc(q.max ?? '')}" step="${esc(q.step ?? 'any')}" value="${esc(d.value ?? '')}" placeholder="${esc(q.min ?? '')}–${esc(q.max ?? '')}${q.unit ? ` ${esc(q.unit)}` : ''}">`
       else input = `<div class="ask-options" role="group" aria-label="${esc(q.question)}">${(q.options ?? []).map((o, oi) => `<button type="button" class="ask-opt" data-a="askpick" data-v="${qi}:${oi}" aria-pressed="${Boolean(d.picks?.has(oi))}"><b>${esc(o.label)}</b>${o.description ? `<span>${esc(o.description)}</span>` : ''}</button>`).join('')}</div>
         <input class="note ask-other" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="sentences" data-q="${qi}" placeholder="Or type your own answer" value="${esc(d.other ?? '')}">`
-      return `<div class="ask-q">${q.header ? `<p class="kind">${esc(q.header)}${q.multiSelect ? ' · pick any' : ''}</p>` : ''}<h3>${esc(q.question)}</h3>${input}</div>`
+      return `<div class="ask-q">${q.header ? `<p class="kind">${esc(q.header)}${q.multiSelect ? ' · pick any' : ''}</p>` : ''}<h2>${esc(q.question)}</h2>${input}</div>`
     }).join('')
     // A question may be left unanswered; one answer is enough to send.
     const ready = qs.some((q, qi) => askAnswer(q, draft.q[qi]))
@@ -314,6 +440,8 @@
   // Flight stays pinned to the newest message unless the founder scrolled up to read; opening the
   // app, returning to it, coming back to the Flight tab or switching profile pins it again.
   let stick = true
+  // Set by "Answer in Flight": the scroll its jump causes must not pin the chat back to the bottom.
+  let unstickUntil = 0
   const tabScroll = {}
   let restoreScroll = true
   function render() {
@@ -324,17 +452,28 @@
       main.className = `main view-${S.tab}`
       paint(main, 'main', views[S.tab]())
       const busy = fleet().flight?.busy
-      $('link-text').textContent = S.live ? (busy ? `Live · ${fleet().flight?.activity || 'Flight is working'}` : 'Live · connected to Flight') : S.state ? 'Reconnecting…' : 'Not connected: sign in to Tailscale, or open the link /console app printed'
+      // No listing means the Mac is out of reach; a listing with no stream means only this profile's Flight is not answering.
+      const down = S.listFailed ? 'Not connected: sign in to Tailscale, or open the link /console app printed' : S.streamFailed ? 'Flight not answering; retrying' : 'Connecting to Flight…'
+      $('link-text').textContent = S.live ? (busy ? `Live · ${fleet().flight?.activity || 'Flight is working'}` : 'Live · connected to Flight') : S.state ? 'Reconnecting…' : down
       document.querySelector('.dot').className = `dot ${S.live ? (busy ? 'busy' : 'live') : ''}`
       const others = S.flights.filter(f => f.profile !== S.profile && (f.gates || f.busy))
-      $('profile').hidden = S.flights.length < 2 && !S.profile
+      // The switcher names only a listed profile and shows only while there is another to switch to: it waits for the
+      // first listing and hides while fewer than two profiles are listed or the Mac cannot be reached.
+      const hideSwitcher = !S.resolved || S.listFailed || !S.profile || S.flights.length < 2
+      // A switcher that hides while it has focus hands focus to the menu beside it, so a keyboard user is not dropped.
+      if (hideSwitcher && document.activeElement === $('profile')) $('menu').focus()
+      $('profile').hidden = hideSwitcher
       $('profile-name').textContent = S.profile ? label(S.profile) : 'Profile'
       $('profile').setAttribute('aria-label', `Profile: ${S.profile ? label(S.profile) : 'none'}${others.length ? `, ${others.length} other ${others.length === 1 ? 'profile needs' : 'profiles need'} a look` : ''}. Switch profile`)
       $('profile-dot').className = `dot ${others.some(f => f.gates) ? 'busy' : 'live'}`
       $('profile-dot').hidden = !others.length
       $('composer').hidden = S.tab !== 'flight'
+      $('tray').hidden = !S.files.length
+      paint($('tray-items'), 'tray', trayItems())
+      const hint = trayHint()
+      if ($('tray-hint').textContent !== hint) $('tray-hint').textContent = hint
       paint($('quick'), 'quick', ['/console list', '/briefing', '/standup', '/debrief'].map(q => `<button type="button" data-a="quick" data-v="${esc(q)}">${esc(q)}</button>`).join(''))
-      const n = openGates().length
+      const n = waitingOn().length + pollItems().filter(undelivered).length
       paint($('tabs'), 'tabs', TABS.map(([k, l]) => `<button class="tab" type="button" role="tab" data-a="tab" data-v="${k}" aria-selected="${S.tab === k}">${ICONS[k]}${l}${k === 'poll' && n ? `<span class="badge" aria-label="${n} waiting">${n}</span>` : ''}</button>`).join(''))
       const wasOpen = last.sheet !== ''
       const repainted = paint($('sheet-root'), 'sheet', sheet())
@@ -343,7 +482,9 @@
         const first = document.querySelector('.sheet input, .sheet .sheet-body button, .sheet [data-a="close"]')
         first?.focus()
       } else if (repainted && last.sheet === '' && wasOpen) {
-        S.opener?.focus?.()
+        // The switcher hides when one profile is left, even with its sheet open; focus then goes to the menu beside it.
+        const back = S.opener?.hidden ? $('menu') : S.opener
+        back?.focus?.()
         S.opener = null
       }
       if (S.tab === 'flight' && stick) main.scrollTop = main.scrollHeight
@@ -361,25 +502,43 @@
   function toast(msg, kind = 'info') {
     const t = $('toast')
     t.textContent = msg
-    t.className = `toast${kind === 'error' ? ' error' : ''}`
+    // Above the composer when it shows, however tall the tray makes it, so a toast never covers the draft or
+    // the tray it is about; on the other tabs, where the lift token puts it.
+    const c = $('composer')
+    const top = c.hidden ? 0 : c.getBoundingClientRect().top
+    t.style.setProperty('--toast-above', top > 0 ? `${Math.ceil(innerHeight - top)}px` : '')
+    t.className = `toast${kind === 'error' ? ' error' : ''}${top > 0 ? ' over' : ''}`
     t.hidden = false
     clearTimeout(toastTimer)
     toastTimer = setTimeout(() => { t.hidden = true }, kind === 'error' ? 8000 : 2600)
   }
 
-  async function send(op, text) {
+  // What one Dismiss all tap did: how many dismissals reached Flight, then each console not sent and why.
+  function dismissalsSent(n, failed, why) {
+    if (!n && !failed.length) return 'No console is staffed, so nothing was sent.'
+    const sent =n === 1 ? '1 dismissal sent to Flight; it runs once Flight is free.' : `${n} dismissals sent to Flight; they run once Flight is free.`
+    const not = `Not sent: ${failed.join(', ')}. ${why}`
+    return !failed.length ? sent : n ? `${sent} ${not}` : not
+  }
+
+  const STILL_CONNECTING = 'Still connecting to Flight. Try again in a moment.'
+  // One op, toasting nothing: { id } once the server has it (the fleet's result returns as lastOp with that id), or { error }.
+  async function post(op, text) {
+    // Before the first listing the request would reach the front door's own profile, which may not be the one about to open.
+    if (!S.resolved) return { error: STILL_CONNECTING }
     try {
       const headers = { 'Content-Type': 'application/json', ...authHeaders() }
       const r = await fetch(`${base()}/op`, { method: 'POST', headers, body: JSON.stringify({ op, text }) })
-      if (!r.ok) {
-        toast(r.status === 401 ? "Couldn't send: this link has expired. Open the new link from your Mac." : "Couldn't send that. Try again in a moment.", 'error')
-        return false
-      }
-      return true
+      if (!r.ok) return { error: r.status === 401 ? "Couldn't send: this link has expired. Open the new link from your Mac." : "Couldn't send that. Try again in a moment." }
+      return { id: (await r.json().catch(() => null))?.id ?? 0 }
     } catch {
-      toast("Couldn't reach Flight. Check that the Mac is awake and connected.", 'error')
-      return false
+      return { error: "Couldn't reach Flight. Check that the Mac is awake and connected." }
     }
+  }
+  async function send(op, text) {
+    const { error } = await post(op, text)
+    if (error) toast(error, error === STILL_CONNECTING ? 'info' : 'error')
+    return !error
   }
 
   // ---------- events ----------
@@ -427,19 +586,78 @@
       case 'standdown': S.sheet = 'standdown'; break
       case 'sdyes': await send('console', `stand-down ${S.sel}`); S.sheet = null; break
       case 'dismiss': await send('console', `dismiss ${S.sel}`); S.sheet = null; break
-      case 'go': case 'nogo': {
-        const note = (S.notes[v] ?? '').trim()
-        if (await send('console', `${a} ${v}${note ? ` ${note}` : ''}`)) delete S.notes[v]
+      case 'decpick': {
+        const [id, i] = [v.slice(0, v.lastIndexOf(':')), Number(v.slice(v.lastIndexOf(':') + 1))]
+        S.picks[id] = S.picks[id] === i ? undefined : i
         break
       }
+      case 'decsend': {
+        const pick = S.picks[v]
+        if (pick === undefined || S.sending) return
+        const note = (S.notes[v] ?? '').trim()
+        S.sending = true
+        const ok = await send('console', `decide ${v} ${pick + 1}${note ? ` ${note}` : ''}`)
+        S.sending = false
+        if (ok) {
+          S.sentPick[v] = pick
+          delete S.notes[v]
+          toast('Answer sent to Flight. It runs once Flight is free.')
+        }
+        break
+      }
+      case 'toask': {
+        // The Poll's way to a question: the Flight tab, at that question's card.
+        S.tab = 'flight'
+        S.sheet = null
+        stick = false
+        unstickUntil = Date.now() + 1000
+        try { sessionStorage.setItem('mcapp-tab', 'flight') } catch {}
+        render()
+        const card = document.getElementById(`ask-${v}`)
+        if (card) {
+          card.scrollIntoView({ block: 'start' })
+          card.focus()
+        }
+        return
+      }
+      case 'tododone': await send('console', `done ${v}`); break
       case 'gatedismiss': await send('console', `dismiss-gate ${v}`); break
-      case 'ask': S.tab = 'flight'; render(); $('draft').value = `About ${v}: `; $('draft').focus(); return
+      case 'gateretry': await send('console', `retry ${v}`); break
       case 'filter': S.filter = v; break
       case 'expand': S.open.has(v) ? S.open.delete(v) : S.open.add(v); break
       case 'stopask': S.sheet = 'stop'; break
-      case 'stopyes': for (const c of consoles().filter(x => x.status !== 'stood-down')) await send('console', `dismiss ${c.callSign}`); toast('Every console is dismissed.'); S.sheet = null; break
+      case 'stopyes': {
+        // A dismissal is relayed and runs once Flight's turn ends, so the toast says what was sent, never what is done.
+        let sent = 0
+        let why = ''
+        const failed = []
+        for (const c of consoles().filter(x => x.status !== 'stood-down')) {
+          const r = await post('console', `dismiss ${c.callSign}`)
+          if (r.error) {
+            failed.push(c.callSign)
+            why = r.error
+          } else {
+            sent++
+            if (r.id) summed.add(r.id)
+          }
+        }
+        toast(dismissalsSent(sent, failed, why), failed.length ? 'error' : 'info')
+        S.sheet = null
+        break
+      }
       case 'appstopask': S.sheet = 'appstop'; break
       case 'appstopyes': await send('console', 'app stop'); S.sheet = null; break
+      case 'unattach': {
+        const i = S.files.findIndex(f => String(f.key) === v)
+        if (i < 0 || S.sending) return
+        const [gone] = S.files.splice(i, 1)
+        if (!gone.shared) URL.revokeObjectURL(gone.url)
+        render()
+        // Focus stays in the tray: the item now in that place, else the last one, else the paperclip.
+        const rest = document.querySelectorAll('[data-a="unattach"]')
+        ;(rest[Math.min(i, rest.length - 1)] ?? $('attach')).focus()
+        return
+      }
       default: return
     }
     render()
@@ -463,7 +681,7 @@
   document.addEventListener('toggle', e => {
     if (e.target.tagName === 'DETAILS' && e.target.dataset.id) e.target.open ? S.details.add(e.target.dataset.id) : S.details.delete(e.target.dataset.id)
   }, true)
-  $('profile').addEventListener('click', () => { S.opener = $('profile'); S.sheet = 'profiles'; render(); void loadFlights() })
+  $('profile').addEventListener('click', () => { S.opener = $('profile'); S.sheet = 'profiles'; render(); void loadFlights(false) })
   $('menu').addEventListener('click', () => { S.opener = $('menu'); S.sheet = 'menu'; render() })
   $('slash').addEventListener('click', () => { S.opener = $('slash'); S.sheet = 'slash'; S.query = ''; render() })
   $('send').addEventListener('submit', async e => {
@@ -472,34 +690,79 @@
     const box = $('draft')
     const typedText = box.value.trim()
     let text = typedText
-    const photo = S.photo
-    if (!text && !photo) return
-    if (photo && text.startsWith('/')) return toast('Remove the photo to run a command.', 'error')
-    if (photo) {
-      // Locked while it uploads, so the photo and the draft sent are the ones on screen.
+    const picked = S.files.slice()
+    if (!text && !picked.length) return
+    if (!S.resolved) return toast(STILL_CONNECTING)
+    if (picked.length && text.startsWith('/')) return toast('Remove the attachments to run a command.', 'error')
+    // A draft already over the limit is refused before any file goes up.
+    if (text.length > TEXT_MAX) return tooLong(text.length, false)
+    if (picked.length) {
+      // Locked while the files go up, one at a time, so the files and the draft sent are the ones on screen.
+      const where = S.profile
+      const unlock = () => {
+        S.sending = false
+        S.upload = null
+        lock(false)
+      }
       S.sending = true
-      lockPhoto(true)
-      render()
-      const stored = await upload(photo.blob)
-      S.sending = false
-      lockPhoto(false)
-      if (!stored) return render()
-      text = `${text || 'A photo for you.'}\n\n[Photo from the app: ${stored.path} - open it with Read]`
+      lock(true)
+      const lines = []
+      for (const [i, f] of picked.entries()) {
+        S.upload = { at: i + 1, of: picked.length }
+        render()
+        if (!f.stored) {
+          const r = await upload(f)
+          if (S.profile !== where) {
+            unlock()
+            toast('The profile changed while the files were going up, so nothing was sent. Send it again.', 'error')
+            return render()
+          }
+          if (r.error) {
+            // The tray stays as it is for a retry, which does not send a stored file twice.
+            unlock()
+            toast(r.error, 'error')
+            return render()
+          }
+          f.stored = r.stored
+          // The server keeps a file by its own bytes (a PDF picked as notes.txt is stored as a PDF, a photo
+          // picked under a text name as the photo it is), so its line and its blob follow the stored type.
+          const ext = f.stored.id.split('.').pop()
+          if (ext !== f.ext) {
+            if (!f.shared) URL.revokeObjectURL(f.url)
+            f.kind = PHOTO_EXTS.includes(ext) ? 'photo' : 'document'
+            f.ext = ext
+            f.url = URL.createObjectURL(new Blob([f.blob], { type: TYPE_OF[ext] }))
+          }
+          // The page holds the file already: its bubble shows it at once, queued and once Flight has it.
+          kept.set(`${S.profile}/${f.stored.id}`, { state: 'ready', url: f.url })
+          f.shared = true
+        }
+        lines.push(line({ kind: f.kind, path: f.stored.path, name: f.name }))
+      }
+      unlock()
+      text = `${text || forYou(picked)}\n\n${lines.join('\n')}`
     }
-    const op = !photo && text.startsWith('/console ') ? ['console', text.slice(9)] : !photo && text.startsWith('/') ? ['command', text.slice(1)] : ['prompt', text]
-    const item = { id: ++queueSeq, text, sent: false, preview: photo?.url }
+    const op = !picked.length && text.startsWith('/console ') ? ['console', text.slice(9)] : !picked.length && text.startsWith('/') ? ['command', text.slice(1)] : ['prompt', text]
+    // What is posted, each file's line included, holds at most TEXT_MAX characters; on a refusal the files stay
+    // stored and in the tray, so a shorter retry sends none of them twice.
+    if (op[1].length > TEXT_MAX) return tooLong(op[1].length, picked.length > 0)
+    // What the transcript held when it was sent, and the fleet's last answer then: neither is this message's arrival.
+    const item = { id: ++queueSeq, text, sent: false, op: 0, before: said(), lastAt: fleet().lastOp?.at }
     S.queued.push(item)
     S.sending = true
     box.value = ''
     render()
-    const ok = await send(op[0], op[1])
+    const r = await post(op[0], op[1])
     S.sending = false
-    if (ok) {
-      // The photo leaves the composer only once Flight has the message; a failed send keeps it for a retry.
-      if (photo && S.photo === photo) clearPhoto(false)
+    if (!r.error) {
+      // The files leave the composer only once Flight has the message; a failed send keeps them for a retry.
+      S.files = S.files.filter(f => !picked.includes(f))
       item.sent = true
+      // The fleet answers this op by its id (lastOp), which clears the queued copy of a command it ran itself.
+      item.op = r.id
       if (fleet().flight?.busy) toast('Queued: Flight runs it when the current turn ends.')
     } else {
+      toast(r.error, r.error === STILL_CONNECTING ? 'info' : 'error')
       S.queued = S.queued.filter(q => q.id !== item.id)
       if (!box.value) box.value = typedText
     }
@@ -534,8 +797,39 @@
   }
   themeBar()
 
-  // ---------- photos ----------
-  // Scaled on the device to 1600 px on the long side as JPEG, so a 10 MB camera file goes up as a few hundred KB.
+  // ---------- attachments ----------
+  // What one message may carry (DESIGN.md, Attachments). The server holds the per-file limit and reads each
+  // file's own bytes (uploads.mjs), so that check only spares the founder an upload bound to be refused; the
+  // count and the total are the page's own, since each file goes up on its own.
+  const LIMIT = { files: 10, file: 8 * 1024 * 1024, total: 32 * 1024 * 1024 }
+  // The longest message the page sends, each file's line included. The /op route takes 8000 (server.mjs), but
+  // the transcript the page reads back keeps only a message's first 6000 characters, the engine's frame around
+  // a prompt included (snapshot, in the mod's hooks/register.ts): a longer one comes back cut, its file lines
+  // lost, and its queued copy never matches it.
+  const TEXT_MAX = 5800
+  const tooLong = (n, withFiles) => {
+    toast(`That message is ${n} characters${withFiles ? ' with its file lines' : ''}, and Flight takes ${TEXT_MAX}. Shorten it${withFiles ? ' or send fewer files' : ''}, then send again.`, 'error')
+    render()
+  }
+  const DOCS = new Set(DOC_EXTS)
+  const PHOTO_NAME = /\.(jpe?g|png|webp|gif|heic|heif|avif)$/i
+  const total = () => S.files.reduce((n, f) => n + f.size, 0)
+  // Rounded up to a tenth, so a few small photos read 0.1 MB and the count never shows less than the limit sees.
+  const mb = n => (Math.ceil(n / 104857.6) / 10).toFixed(1)
+  const MB = n => `${n / 1048576} MB`
+  let fileSeq = 0
+  // Two files of one name (a phone names every photo alike) are told apart by place in their remove buttons.
+  function trayItems() {
+    return S.files.map((f, i) => {
+      const twin = S.files.some(g => g !== f && g.name === f.name)
+      const shown = f.kind === 'photo' ? `<img src="${esc(f.url)}" alt="">` : `<span class="ftype" aria-hidden="true">${esc(f.ext)}</span>`
+      return `<li class="att">${shown}<span class="att-name">${esc(f.name)}</span><button class="att-x" type="button" data-a="unattach" data-v="${f.key}" aria-label="Remove ${esc(f.name)}${twin ? `, ${i + 1} of ${S.files.length}` : ''}"${S.sending ? ' disabled' : ''}>${ICONS.close}</button></li>`
+    }).join('')
+  }
+  const trayHint = () => (S.upload ? `Sending ${S.upload.at} of ${S.upload.of}…` : S.files.length ? `${S.files.length} of ${LIMIT.files} files · ${mb(total())} of ${MB(LIMIT.total)}` : '')
+  const forYou = list => (list.length === 1 ? (list[0].kind === 'photo' ? 'A photo for you.' : 'A file for you.') : list.every(f => f.kind === 'photo') ? `${list.length} photos for you.` : `${list.length} files for you.`)
+
+  // Photos are scaled on the device to 1600 px on the long side as JPEG, so a 10 MB camera file goes up as a few hundred KB.
   async function shrink(file) {
     const url = URL.createObjectURL(file)
     try {
@@ -559,52 +853,65 @@
       URL.revokeObjectURL(url)
     }
   }
-  async function upload(blob) {
+  // One file to the Mac, its picked type named for the server's check: { stored: { id, path } }, or
+  // { error } naming the file and the server's own reason.
+  async function upload(f) {
     try {
-      const r = await fetch(`${base()}/upload`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg', ...authHeaders() }, body: blob })
-      if (!r.ok) {
-        toast(r.status === 413 ? 'That photo is too large to send.' : r.status === 415 ? "That file isn't a photo the app can send." : "Couldn't send the photo. Try again.", 'error')
-        return null
-      }
-      return await r.json()
+      const r = await fetch(`${base()}/upload`, { method: 'POST', headers: { 'Content-Type': f.blob.type || 'application/octet-stream', 'x-mcapp-ext': f.ext, ...authHeaders() }, body: f.blob })
+      if (r.ok) return { stored: await r.json() }
+      const why = r.status === 401 ? 'this link has expired; open the new link from your Mac' : (await r.text().catch(() => '')).trim().slice(0, 200)
+      return { error: `Couldn't send ${f.name}${why ? `: ${why}` : '. Try again in a moment'}.` }
     } catch {
-      toast("Couldn't reach Flight. Check that the Mac is awake and connected.", 'error')
-      return null
+      return { error: "Couldn't reach Flight. Check that the Mac is awake and connected." }
     }
   }
-  function lockPhoto(on) {
-    for (const id of ['attach', 'preview-remove', 'draft']) $(id).disabled = on
+  function lock(on) {
+    for (const id of ['attach', 'draft']) $(id).disabled = on
   }
-  function clearPhoto(revoke = true) {
-    // A sent photo's blob URL stays alive for its queued bubble until the recorded message replaces it.
-    if (revoke && S.photo) URL.revokeObjectURL(S.photo.url)
-    S.photo = null
-    $('preview').hidden = true
-    $('preview-img').removeAttribute('src')
-  }
-  $('attach').addEventListener('click', () => $('photo').click())
-  $('photo').addEventListener('change', async e => {
-    const file = e.target.files?.[0]
+  $('attach').addEventListener('click', () => $('files').click())
+  // Each pick joins the tray in order until a limit is reached; the ones not added are named in one toast, with why.
+  $('files').addEventListener('change', async e => {
+    const picks = [...(e.target.files ?? [])]
     e.target.value = ''
-    if (!file) return
-    const blob = await shrink(file).catch(() => null)
-    if (!blob) return toast("Couldn't read that photo.", 'error')
-    if (S.photo) URL.revokeObjectURL(S.photo.url)
-    S.photo = { blob, url: URL.createObjectURL(blob) }
-    $('preview-img').src = S.photo.url
-    $('preview').hidden = false
+    if (!picks.length) return
+    const refused = []
+    for (const file of picks) {
+      const ext = (/\.([a-z0-9]+)$/i.exec(file.name)?.[1] ?? '').toLowerCase()
+      const photo = file.type.startsWith('image/') || PHOTO_NAME.test(file.name)
+      let why = ''
+      let item = null
+      if (S.files.length >= LIMIT.files) why = `a message carries ${LIMIT.files} files at most`
+      else if (!photo && !DOCS.has(ext)) why = 'only photos, PDF, or .txt, .md, .csv and .json files'
+      else if (!file.size) why = 'the file is empty'
+      else if (!photo && file.size > LIMIT.file) why = `over ${MB(LIMIT.file)}`
+      else if (photo) {
+        const blob = await shrink(file).catch(() => null)
+        if (blob) item = { kind: 'photo', ext: 'jpg', blob, url: URL.createObjectURL(blob) }
+        else why = "it can't be read as a photo"
+      } else item = { kind: 'document', ext, blob: file, url: URL.createObjectURL(new Blob([file], { type: OPENS_AS[ext] })) }
+      if (item) {
+        // Shrinking a photo takes a moment, and a second pick can land meanwhile: the count is asked again here.
+        if (S.files.length >= LIMIT.files) why = `a message carries ${LIMIT.files} files at most`
+        else if (item.blob.size > LIMIT.file) why = `over ${MB(LIMIT.file)}`
+        else if (total() + item.blob.size > LIMIT.total) why = `the message would pass ${MB(LIMIT.total)}`
+        if (why) URL.revokeObjectURL(item.url)
+        else S.files.push({ ...item, key: ++fileSeq, name: file.name, size: item.blob.size })
+      }
+      if (why) refused.push(`${file.name} (${why})`)
+      render()
+    }
+    if (refused.length) toast(`Not added: ${refused.join('; ')}.`, 'error')
     $('draft').focus()
   })
-  $('preview-remove').addEventListener('click', clearPhoto)
 
   let es = null
   function connect() {
     if (es) es.close()
     // Over the tailnet the signed-in Tailscale identity is enough; a token is needed only on the Mac's own address.
     es = new EventSource(token ? `${base()}/events?t=${encodeURIComponent(token)}` : `${base()}/events`)
-    es.onopen = () => { S.live = true; render() }
+    es.onopen = () => { S.live = true; S.streamFailed = false; render() }
     // A non-200 (the profile's server restarting) closes an EventSource for good; open a new one.
-    es.onerror = () => { S.live = false; render(); if (es.readyState === EventSource.CLOSED) setTimeout(() => es.readyState === EventSource.CLOSED && connect(), 3000) }
+    es.onerror = () => { S.live = false; if (!S.state) S.streamFailed = true; render(); if (es.readyState === EventSource.CLOSED) setTimeout(() => es.readyState === EventSource.CLOSED && connect(), 3000) }
     es.onmessage = m => {
       const first = S.state === null
       try { S.state = JSON.parse(m.data) } catch { return }
@@ -613,66 +920,93 @@
       if (first && op) seenOp = Number(op.id) || 0
       else if (op && op.id && op.id > seenOp) {
         seenOp = op.id
-        if (op.text && !/^Sent to Flight\.$/.test(op.text)) toast(str(op.text).split('\n').slice(0, 3).join(' · ').slice(0, 220))
+        const echo = summed.has(op.id)
+        for (const id of summed) if (id <= op.id) summed.delete(id)
+        if (op.text && !echo && !/^Sent to Flight\.$/.test(op.text)) toast(str(op.text).split('\n').slice(0, 3).join(' · ').slice(0, 220))
       }
-      const said = new Set((fleet().flight?.messages ?? []).filter(x => x.role === 'user').map(x => typed(x.text)))
-      for (const q of S.queued) if (q.sent && said.has(q.text) && q.preview) URL.revokeObjectURL(q.preview)
-      S.queued = S.queued.filter(q => !(q.sent && said.has(q.text)))
+      // A queued message leaves once its own copy reaches Flight's transcript or the fleet answered its op (transcript.js, waiting).
+      S.queued = waiting(S.queued, said(), fleet().lastOp)
       render()
     }
   }
-  // The live profiles, refreshed every few seconds; a remembered profile that is gone falls back to the front door's own.
+  // The live profiles, refreshed every few seconds. The first listing that names a profile decides which one opens:
+  // the remembered one when it is listed, else the front door's own, else the first listed; until then the front door's own
+  // Flight is shown unnamed. A profile missing from two timed listings in a row is left the same way; a listing a tap
+  // asks for refreshes the list but never counts as a miss, so a restarting profile keeps its grace. Every move is
+  // remembered, so a profile that stopped never pulls the app back when it runs again.
   let misses = 0
-  async function loadFlights() {
+  async function loadFlights(counted = true) {
+    let list
     try {
       const r = await fetch('/flights.json', { headers: authHeaders() })
-      if (!r.ok) return
-      S.flights = await r.json()
+      if (!r.ok) throw new Error(`flights ${r.status}`)
+      list = await r.json()
     } catch {
-      return
+      S.listFailed = true
+      return render()
     }
-    let chosen = ''
-    try { chosen = localStorage.getItem('mcapp-profile') ?? '' } catch {}
-    if (chosen && chosen !== S.profile && S.flights.some(f => f.profile === chosen)) return switchProfile(chosen, false)
-    // A profile missing from one listing is often only restarting; fall back after two misses in a row.
-    misses = S.flights.some(f => f.profile === S.profile) ? 0 : misses + 1
-    if (misses >= 2 || (!S.profile && S.flights.length)) {
-      const fallback = S.flights.find(f => f.self)?.profile ?? S.flights[0]?.profile ?? ''
-      if (fallback && fallback !== S.profile) {
-        if (S.profile) toast(`${label(S.profile)} is not running; showing ${label(fallback)}.`)
-        // The first profile resolved is remembered, so a later message cannot land in a different profile unseen.
-        return switchProfile(fallback, !chosen)
-      }
+    S.listFailed = false
+    S.flights = Array.isArray(list) ? list : []
+    const listed = p => S.flights.some(f => f.profile === p)
+    const fallback = S.flights.find(f => f.self)?.profile ?? S.flights[0]?.profile ?? ''
+    if (!S.resolved || !S.profile) {
+      const opening = !S.resolved
+      S.resolved = true
+      let chosen = ''
+      try { chosen = localStorage.getItem('mcapp-profile') ?? '' } catch {}
+      const pick = chosen && listed(chosen) ? chosen : fallback
+      // An empty listing (the front door's own entry missing) names no profile and says nothing about the remembered
+      // one: the front door's own Flight opens unnamed, and the next listing that names a profile decides.
+      if (!pick) return opening ? switchProfile('', false) : render()
+      if (chosen && pick !== chosen) toast(`${label(chosen)} is not running; showing ${label(pick)}.`)
+      return switchProfile(pick)
+    }
+    // A profile missing from one listing is often only restarting; it is left after two timed misses in a row.
+    if (listed(S.profile)) misses = 0
+    else if (counted) misses++
+    if (misses >= 2 && fallback && fallback !== S.profile) {
+      toast(`${label(S.profile)} is not running; showing ${label(fallback)}.`)
+      return switchProfile(fallback)
     }
     render()
   }
   function switchProfile(p, remember = true) {
     if (remember) try { localStorage.setItem('mcapp-profile', p) } catch {}
-    if (p === S.profile) return render()
+    misses = 0
+    if (p === S.profile && es) return render()
     S.profile = p
     stick = true
     S.state = null
     S.live = false
+    S.streamFailed = false
     S.queued = []
+    // The tray keeps its files; they go up to the new profile when the message is sent.
+    for (const f of S.files) f.stored = null
     S.sel = null
     S.tune = null
     S.notes = {}
+    // Poll ids repeat across profiles, so a pick made in one is never sent in another.
+    S.picks = {}
+    S.sentPick = {}
     S.details = new Set()
-    S.sheet = null
+    // A move the app makes keeps the profiles sheet open, so a tap on the switcher is never closed underneath;
+    // a profile picked in the sheet closes it in the click handler.
+    if (S.sheet !== 'profiles') S.sheet = null
     seenOp = 0
+    summed.clear()
     connect()
     render()
   }
   $('main').addEventListener('scroll', () => {
     const m = $('main')
     if (S.tab !== 'flight' && !restoreScroll) tabScroll[S.tab] = m.scrollTop
-    if (S.tab === 'flight') stick = m.scrollHeight - m.scrollTop - m.clientHeight < 40
+    if (S.tab === 'flight') stick = Date.now() < unstickUntil ? false : m.scrollHeight - m.scrollTop - m.clientHeight < 40
   }, { passive: true })
   const repin = () => { if (document.visibilityState === 'visible') { stick = true; render() } }
   document.addEventListener('visibilitychange', repin)
   window.addEventListener('pageshow', repin)
   render()
-  connect()
+  // The stream opens once the first listing has chosen a profile (switchProfile connects).
   void loadFlights()
-  setInterval(loadFlights, 5000)
+  setInterval(() => loadFlights(), 5000)
 })()

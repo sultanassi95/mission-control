@@ -16,8 +16,9 @@ description: >-
 Distills what this session actually taught, guards hard against writing a
 bad lesson, and saves each survivor to the correct store. This skill never
 touches doctrine files (`framework/CONSTITUTION.md`, `CONSTITUTION.local.md`,
-`CLAUDE.md`); promoting a lesson into standing rules is `/promote-learnings`,
-and it always requires founder sign-off.
+`CLAUDE.md`, `_command/CLAUDE.operating.md`); promoting a lesson into
+standing rules is `/promote-learnings`, and it always requires founder
+sign-off.
 
 ## Mission Control has two lesson stores, not one
 

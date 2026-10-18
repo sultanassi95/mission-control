@@ -10,6 +10,17 @@ export type Console = {
   budget: number
   /** Branches this console never pushes to: the spoke base branches, beyond the always-protected list. */
   protectedBranches: string[]
+  /**
+   * The front's own folder, `<root>/fronts/<front>`: a clone the Controller has not pinned is told to
+   * run here. Absent on a console staffed before clones were allowed, which clones nothing.
+   */
+  cloneHome?: string
+  /**
+   * The portfolio's fronts at staffing (each folder under `_command/portfolio` with a hub): a clone of
+   * any repository lands one level under any of their folders, `<root>/fronts/<front>/<repo>`. Absent on
+   * a console staffed while a clone landed only in its own front, which keeps that.
+   */
+  cloneFronts?: string[]
   model: string
   /** Set by /console retune or staff --effort; applied on each of the Controller's model requests. */
   tune?: { model?: string; effort?: string }
@@ -25,19 +36,38 @@ export type Reservation = { controller: string; token: string; at: number }
 
 export type LoopEntry = { at: string; from: string; to: string; kind: 'status' | 'call' | 'decision' | 'advisory'; text: string }
 
+/** One answer a Controller offers the founder: its label, and what choosing it does. */
+export type DecisionOption = { label: string; does?: string }
+
 export type PollItem = {
   id: string
   at: string
   from: string
-  kind: 'gate' | 'advisory'
+  /**
+   * question: a decision the Controller asked, with its own options. gate: a report's blocked line
+   * with no decisions block (a Controller staffed before questions), asked as Go or No-go.
+   * advisory: a contract change naming dependent fronts, asked as Tell them or Don't tell.
+   * todo: an action only the founder can take; never asked, checked off with Done.
+   */
+  kind: 'gate' | 'advisory' | 'question' | 'todo'
   title: string
   detail: string
-  state: 'open' | 'go' | 'no-go' | 'superseded' | 'dismissed'
+  /** answered: a question's option was chosen (choice names it). done: a to-do was checked off. */
+  state: 'open' | 'go' | 'no-go' | 'answered' | 'done' | 'superseded' | 'dismissed'
+  /** A question's options as the Controller wrote them. */
+  options?: DecisionOption[]
+  /** The option the founder chose, counted from 1. */
+  choice?: number
   /** The agent that raised it: a decision goes to this agent only. */
   agentId: string
   /** Set when a decision could not be delivered. */
   undelivered?: string
-  /** When the app sent a decision on it to Flight; the gate takes no other tap until Flight runs it or the code expires. */
+  /**
+   * Set when a go or no-go was decided after the Controller that raised it stood down: the time it was
+   * held for the next Controller staffed under the same call sign. Cleared once that Controller has it.
+   */
+  held?: string
+  /** When the app sent an answer on it to Flight; a later answer replaces it until Flight runs it or the code expires. */
   sentAt?: string
   decidedAt?: string
   note?: string
@@ -50,6 +80,13 @@ export type PrWatch = { callSign: string; agentId: string; cwd: string; pr: numb
 export type PendingAdvisory = { id: string; front: string; text: string; at: string }
 
 export type AuditEntry = { at: string; op: string; target: string; result: string }
+
+/**
+ * Each call sign's colour slot in the app, 0 to 7 for the tokens --slot-1 to --slot-8. Kept in the
+ * plugin's store, so a Controller keeps its colour after a reload and in the next session; a
+ * stood-down call sign keeps its entry, so the messages about it keep their colour.
+ */
+export type Slots = Record<string, number>
 
 declare module 'claude-code' {
   interface PluginState {

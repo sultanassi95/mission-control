@@ -8,6 +8,8 @@
   --fail: #A3262A; --fail-tint: #F8E1E1;
   --done: #2E6B2F; --done-tint: #E2F1E0;
   --idle: #56696E; --idle-tint: #E9EEEF;
+  --slot-1: #1C4E88; --slot-2: #A4592B; --slot-3: #824AE4; --slot-4: #86256D;
+  --slot-5: #746F2A; --slot-6: #2E748E; --slot-7: #8F30AA; --slot-8: #3233CE;
   --scrim: rgba(17, 24, 25, 0.45);
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px;
   --t-xs: 12px; --t-sm: 13px; --t-md: 15px; --t-lg: 18px;
@@ -20,6 +22,7 @@
   --rise: 220ms;
   --pulse: 1.2s; --pulse-step: .2s; --dim: .25; --bubble: 88%;
   --toast-lift: 96px;
+  --prof-max: min(9.5em, 40vw); --att-name: 8em;
   --rail: 220px; --read: 760px; --wide: 1200px; --card-min: 320px; --sheet-w: 640px;
   color-scheme: light;
 }
@@ -34,6 +37,8 @@
     --fail: #F29A9C; --fail-tint: #3D1E1F;
     --done: #8FD48F; --done-tint: #1E3520;
     --idle: #94A8AC; --idle-tint: #222D2F;
+    --slot-1: #458FE9; --slot-2: #D2743A; --slot-3: #BEAEF2; --slot-4: #ED48C2;
+    --slot-5: #968F38; --slot-6: #52C5ED; --slot-7: #D580EE; --slot-8: #899EED;
     --scrim: rgba(0, 0, 0, 0.6);
     color-scheme: dark;
   }
@@ -47,6 +52,8 @@
   --fail: #F29A9C; --fail-tint: #3D1E1F;
   --done: #8FD48F; --done-tint: #1E3520;
   --idle: #94A8AC; --idle-tint: #222D2F;
+  --slot-1: #458FE9; --slot-2: #D2743A; --slot-3: #BEAEF2; --slot-4: #ED48C2;
+  --slot-5: #968F38; --slot-6: #52C5ED; --slot-7: #D580EE; --slot-8: #899EED;
   --scrim: rgba(0, 0, 0, 0.6);
   color-scheme: dark;
 }

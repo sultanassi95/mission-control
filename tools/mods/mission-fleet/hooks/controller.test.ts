@@ -11,18 +11,41 @@ test('the controller prompt carries the status format and the hard limits', () =
   expect(CONTROLLER_PROMPT).toContain('answer in one line')
 })
 
+test('the controller prompt asks each decision as its own question with options, and keeps notes and to-dos apart', () => {
+  for (const line of ['decisions:', 'notes:', 'for you to do:', 'contract:']) expect(CONTROLLER_PROMPT).toContain(line)
+  // The exact shape the parser reads (parseDecision in loops.ts).
+  expect(CONTROLLER_PROMPT).toContain('- <question> | 1) <option>: <what it does> | 2) <option>: <what it does>')
+  expect(CONTROLLER_PROMPT).toContain('one you leave out is withdrawn')
+  // The founder is reached only through these lines, still.
+  expect(CONTROLLER_PROMPT).toContain('You cannot ask the founder directly')
+})
+
+const ORDER = {
+  front: 'fieldkit', project: 'api', callSign: 'FIELDKIT-API', root: '/p',
+  hub: '/p/_command/portfolio/fieldkit/_front.md', spokes: ['/p/_command/portfolio/fieldkit/api/api.md'],
+  cwd: '/p/fronts/fieldkit/api', budget: 2, progress: '/p/_command/portfolio/fieldkit/progress.md',
+  clone: { home: '/p/fronts/fieldkit', fronts: ['fieldkit', 'kiln', 'shelf'] },
+}
+
 test('the staffing order names the scope, the files, the directory and the budget', () => {
-  const order = staffingOrder({
-    front: 'fieldkit', project: 'api', callSign: 'FIELDKIT-API', root: '/p',
-    hub: '/p/_command/portfolio/fieldkit/_front.md', spokes: ['/p/_command/portfolio/fieldkit/api/api.md'],
-    cwd: '/p/fronts/fieldkit/api', budget: 2, progress: '/p/_command/portfolio/fieldkit/progress.md',
-  })
+  const order = staffingOrder(ORDER)
   expect(order).toContain('FIELDKIT-API console, owning the project "api" of front "fieldkit"')
   expect(order).toContain('Hub: /p/_command/portfolio/fieldkit/_front.md')
   expect(order).toContain('Your repo directory: /p/fronts/fieldkit/api')
   expect(order).toContain('cd /p/fronts/fieldkit/api && git')
   expect(order).toContain('Progress log: /p/_command/portfolio/fieldkit/progress.md')
   expect(order).toContain('up to 2 sub-agents')
+})
+
+test('the staffing order states the clone rule and its refusals in one line', () => {
+  const lines = staffingOrder(ORDER).split('\n').filter(l => /clone/i.test(l))
+  expect(lines).toEqual([
+    'Clones: any repository URL (https://, http://, ssh://, git+ssh://, ssh+git://, git:// or USER@HOST:PATH) may land one level under a front\'s folder, /p/fronts/<front>/<repo>, for fieldkit, kiln, shelf;'
+      + ' run it from exactly a front\'s folder or your console\'s directory, named by its full path with no ..: `cd /p/fronts/fieldkit && git clone <url>`.'
+      + ' Refused: a remote helper (HELPER::), a file:// or local-path source, this Mac as the host (localhost, 127.x.x.x, 0.x.x.x) or a host written as a number other than a.b.c.d,'
+      + ' a host or user starting with -, a folder starting with ., a .. after a folder name in the destination, a landing anywhere else,'
+      + ' and any option but --depth N, --branch NAME or -b NAME, --single-branch, --no-single-branch, --filter=blob:none, --origin NAME, -q or --quiet, --no-tags.',
+  ])
 })
 
 test('a spoke path is the first token of its frontmatter path line', () => {

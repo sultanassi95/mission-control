@@ -11,11 +11,11 @@ OUT="$(dirname "$0")/../samples"
 mkdir -p "$OUT"
 
 echo "1. seed plot $PLOT note"
-curl -sf "$API/notes" -d "{\"plot\":$PLOT,\"ph\":6.1,\"moisture\":30}" >"$OUT/seed.json"
+curl -sf "$API/notes" -H 'Content-Type: application/json' -d "{\"plot\":$PLOT,\"ph\":6.1,\"moisture\":30}" >"$OUT/seed.json"
 
 echo "2. device A edits pH offline; device B edits moisture offline"
-curl -sf "$API/sync" -d @<(echo "{\"plot\":$PLOT,\"ph\":6.4}")      >"$OUT/a-sync.json"
-curl -sf "$API/sync" -d @<(echo "{\"plot\":$PLOT,\"moisture\":42}") >"$OUT/b-sync.json"
+curl -sf "$API/sync" -H 'Content-Type: application/json' -d @<(echo "{\"plot\":$PLOT,\"ph\":6.4}")      >"$OUT/a-sync.json"
+curl -sf "$API/sync" -H 'Content-Type: application/json' -d @<(echo "{\"plot\":$PLOT,\"moisture\":42}") >"$OUT/b-sync.json"
 
 echo "3. read the terminal artifact - the stored note (NOT the sync event count)"
 curl -sf "$API/notes/$PLOT" | tee "$OUT/after.json"

@@ -3,9 +3,10 @@ name: new-front
 description: >-
   Onboard a new project (front) into an existing mission-control
   portfolio: a short detect-first interview, then the front hub, per-repo
-  spokes with git-memory, a board row, and a today entry. Use whenever the
-  founder says "add a front", "new project", "onboard <name> into the
-  portfolio", or points at a repo that is not yet on the board.
+  spokes with git-memory, a board row, a today entry, and its bullet in
+  the operating file's front list. Use whenever the founder says "add a
+  front", "new project", "onboard <name> into the portfolio", or points at
+  a repo that is not yet on the board.
 ---
 
 # New Front
@@ -22,7 +23,10 @@ repo cannot answer, and stop for approval before the front goes live.
   `_command/daily/today.md` first, so the new front lands in the real
   current picture.
 - Adding a project to an EXISTING front? Same skill: the intake runs per
-  project, and Step 4's promotion rule handles the restructure.
+  project, the repo moves in beside the front's others
+  (`fronts/<front>/<repo>`), and Step 4's promotion rule handles the
+  restructure. If `fronts/<front>` is itself the first repo (the older
+  layout), house it first: `/preflight`'s layout check prints the commands.
 
 ## Step 1 - Intake (ask only the path)
 
@@ -44,19 +48,27 @@ anything."* Confirming beats answering.
 
 ## Step 2 - The move-in-or-register choice (approval gate)
 
-Offer, with the exact command shown:
+Every front is a folder in the portfolio's `fronts/` container, and its
+repos live inside that folder, even when there is only one: the front's
+folder is never the repo itself, so a second repo lands beside the first
+instead of inside it. Offer, with the exact command shown:
 
 > I'd bring it into the portfolio's `fronts/` container so every session
-> sees it: `mv <current-path> ./fronts/<front-name>` - it stays its own git
-> repo, untouched; the portfolio repo cannot even see its files (the
-> allowlist .gitignore). Move it, or register it where it is?
+> sees it: `mkdir -p ./fronts/<front> && mv <current-path> ./fronts/<front>/<repo>`.
+> It stays its own git repo, untouched; the portfolio repo cannot even see
+> its files (the allowlist .gitignore). Move it, or register it where it is?
 
-- **Move-in (recommended):** run the move only after an explicit yes.
+- **Move-in (recommended):** run the move only after an explicit yes. The
+  spoke's `path:` is `fronts/<front>/<repo>`, where `<repo>` is the repo's
+  own folder name, so a front named after its only repo reads
+  `fronts/<front>/<front>`.
 - **Register-in-place:** the spoke records the external absolute path,
-  and the root `CLAUDE.md` gains a note that this front's directory must
-  be added to sessions that work on it.
+  and the front's bullet in the operating file (written at Step 4) carries
+  a note that this directory must be added to sessions that work on it.
 - **Non-git fronts** (a design folder, a course, a consulting gig) are
-  first-class: hub without git-memory, spoke fields marked `N/A`.
+  first-class: their folder is `fronts/<front>/`, made when there are
+  files and holding them directly, with no repo inside; hub without
+  git-memory, spoke fields marked `N/A`.
 
 ## Step 3 - Ask only what a repo cannot answer
 
@@ -100,6 +112,17 @@ Using `framework/kit/templates/_front.template.md`,
   narrative goes in the hub's Status block, never the board).
 - Append the front's next action to `_command/daily/today.md` (one line).
 - Update the fronts branch of `_command/mental-model.md`.
+- Add the front's bullet to the `## The fronts` list in the operating file
+  `_command/CLAUDE.operating.md`, after the list's last bullet, in the
+  shape `framework/kit/templates/_portfolio-claude.template.md` gives it:
+  name, posture, one line, and its folder, as in
+  `` - **<front>** - <posture>. <one line>. `fronts/<front>/` ``. A repo
+  registered in place adds its external path and the note that sessions
+  working on it add that directory (`/add-dir <path>`). A project joining
+  an existing front adds no second bullet: when its repo is registered in
+  place, that repo's note joins the front's bullet; otherwise the bullet
+  stays as it is. Every session boots with this list, so a front missing
+  from it stays invisible until someone adds it by hand.
 - (The mirror skill is `/retire-front` - fronts leave the portfolio with
   the same rigor they join it.)
 - Multi-project front? Suggest the follow-up:

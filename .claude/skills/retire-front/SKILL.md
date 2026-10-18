@@ -4,9 +4,10 @@ description: >-
   Retires a front from the active portfolio: founder-gated archiving of
   its hub, spokes, and boards to _command/portfolio/_archive/ with
   history intact, its board row moved to the Archived section, and its
-  removal from the daily rotation. Use when an engagement ends, an
-  experiment concludes, or a product sunsets - whenever the founder says
-  "retire <front>", "close <front>", or "archive <front>".
+  removal from the daily rotation and the operating file's front list.
+  Use when an engagement ends, an experiment concludes, or a product
+  sunsets - whenever the founder says "retire <front>", "close <front>",
+  or "archive <front>".
 ---
 
 # Retire Front
@@ -22,8 +23,9 @@ a front that no longer exists.
 Name the front and show exactly what will move:
 - `_command/portfolio/<front>/` - the hub, every spoke, every `tasks/`
   board and task file (done and dropped included - they are the record).
-- Its row in `trackers/fronts.md`, its line(s) in `daily/today.md`, any
-  registered-in-place note in the root `CLAUDE.md`.
+- Its row in `trackers/fronts.md`, its line(s) in `daily/today.md`, and its
+  bullet in the `## The fronts` list of the operating file
+  `_command/CLAUDE.operating.md`, with any registered-in-place note.
 
 State what does NOT move: the project repos themselves (the founder's
 code stays wherever it lives - retiring a front never touches a repo),
@@ -48,8 +50,9 @@ with `/console stand-down <sign>`, so its handoff lands in the front's
 3. Remove the front's line(s) from `daily/today.md`; lift any of its
    founder-gated items into the closing report instead (they do not
    silently vanish).
-4. If registered in place: remove the added-directory note from the root
-   `CLAUDE.md`.
+4. Remove the front's bullet from the `## The fronts` list in
+   `_command/CLAUDE.operating.md`, its registered-in-place note with it:
+   every session boots with that list, and a retired front is not on it.
 5. Update `_command/mental-model.md`'s fronts branch.
 
 ## Step 3 - Close the record
@@ -62,6 +65,7 @@ with `/console stand-down <sign>`, so its handoff lands in the front's
 ## Un-retiring
 
 Move `_archive/<front>/` back to `portfolio/<front>/`, restore the board
-row from the Archived section, re-add the today.md line and (if needed)
-the CLAUDE.md note. Task history resumes exactly where it stopped - task
-ids never changed.
+row from the Archived section, re-add the today.md line and the front's
+bullet in `_command/CLAUDE.operating.md` (its note too, when registered
+in place). Task history resumes exactly where it stopped - task ids never
+changed.

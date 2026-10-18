@@ -1,7 +1,7 @@
 ---
 repo: fieldkit-app
 front: fieldkit
-path: fieldkit-app
+path: fronts/fieldkit/fieldkit-app
 remote: private origin on the founder's account
 trust: yours
 tracker: tasks
@@ -18,8 +18,8 @@ gotchas: "field devices are old Androids - bundle size and battery are real budg
 # fieldkit-app - repo context (spoke)
 
 > The one repo of the fieldkit front: an offline-first field-data app, local-first
-> storage on SQLite, sync over a small REST API. Moved into the portfolio root at
-> liftoff (hub: [_front.md](./_front.md)).
+> storage on SQLite, sync over a small REST API. Moved into the front's folder,
+> `fronts/fieldkit/`, at liftoff (hub: [_front.md](./_front.md)).
 
 ## Layout / where things live
 - Node 20 (per `package.json` engines); tests via vitest.

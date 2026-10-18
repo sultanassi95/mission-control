@@ -2,7 +2,8 @@
 
 > Per machine, gitignored, never travels. Missing or `os:` mismatched
 > with the running OS? Regenerate by detection (`framework/platform.md`
-> rule 4). Loaded every session via the root CLAUDE.md.
+> rule 4). Loaded every session by an import in
+> `_command/CLAUDE.operating.md`.
 
 detected: <YYYY-MM-DD>
 os: <windows 11 | macos <v> | linux <distro>>

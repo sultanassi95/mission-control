@@ -69,7 +69,7 @@ default):
 | | `retro` | Shipped / live / stuck per front, scoreboard, week-scale lessons, next week locked | Fridays |
 | **Delivery** | `mission-flow` | One ticket to a checks-green PR: the fixed playbook, Phase 0 to 8 (Jira, GitHub Issues, or the native task board) | per work item |
 | | `product-flow` | A product from an idea to launch: frame, research, define, design, architect, then each epic via epic-flow, verify, deploy, beta, launch; five founder gates, at irreversibility, money and the design; `--learn` weeks later | an idea, a vision or a problem to build for |
-| | `console` | Flight's fleet: staff a kept-alive Controller per front or project, call and retune it, keep the go/no-go poll, stand it down; the Mission Control App drives the same. Needs the `mission-fleet` mod loaded | when work runs on several fronts at once |
+| | `fleet` | Flight's fleet, run with `/console`: staff a kept-alive Controller per front or project, call and retune it, keep the poll of the questions and to-dos it leaves you, stand it down; the Mission Control App drives the same. Needs the `mission-fleet` mod loaded | when work runs on several fronts at once |
 | | `epic-flow` | Work too big for one ticket: gated stages E0-E6 plan it into decoupled fragments behind a founder-locked tree, E7 runs each fragment as a mission-flow child - one squashed commit each - and E8 closes with one epic PR | when the shape is several tickets |
 | | `triage` | Messy inbox to per-project task boards, one table, STOP-gated | when items pile up |
 | | `log-deviation` | Canonical register row + body, logged BEFORE the fix | on any drift from plan |
@@ -101,9 +101,13 @@ Want them in ALL your projects, not just this portfolio? Copy the
 folders to `~/.claude/skills/` (and re-copy after doctrine pulls, since
 global copies do not auto-update).
 
-`/console` is the one exception: it needs the `mission-fleet` mod
-(`tools/mods/mission-fleet`, with the local app in `tools/app`) loaded into
-the session. How to load it, and the app, are in `tools/README.md`.
+`fleet` is the one exception: the `/console` commands it describes come from
+the `mission-fleet` mod (`tools/mods/mission-fleet`, with the local app in
+`tools/app`), which must be loaded into the session. How to load it, and the
+app, are in `tools/README.md`. Never name a skill `console`, here or in
+`~/.claude/skills/`: the engine gives the name to the skill and refuses the
+mod's command, and a typed `/console` can then load the skill's text instead
+of running.
 
 Invoke as `/<name>` (e.g. `/briefing`). Skills are plain markdown - read
 any `SKILL.md` to see exactly what it will do before you run it. Name
@@ -123,11 +127,11 @@ skeleton, and running each epic stacked on the one before, each with its own
 PR that the founder merges; the deploy and go-public gates grant the deploy
 and the launch steps. It never merges a PR, and nothing is ever posted, sent
 or paid on the founder's behalf.
-A `console` Controller, staffed by Flight, may commit, push its own feature
-branches and open PRs inside its scope. It never merges a PR, never pushes a
-base or deploy branch, never force-pushes and never stashes; the mission-fleet
-guard refuses those calls (`tools/mods/mission-fleet/hooks/controller.ts`,
-`guards.ts`).
+A Controller, staffed by Flight with `/console staff`, may commit, push its
+own feature branches and open PRs inside its scope. It never merges a PR,
+never pushes a base or deploy branch, never force-pushes and never stashes;
+the mission-fleet guard refuses those calls
+(`tools/mods/mission-fleet/hooks/controller.ts`, `guards.ts`).
 Every other skill observes the standing default: no git writes
 unless the founder asks in the moment. Skills that write files
 (`triage`, `as-built`, `promote-learnings`, `retire-front`) carry their

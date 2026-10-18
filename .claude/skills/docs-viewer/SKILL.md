@@ -69,6 +69,7 @@ Write `docs-viewer-server.cjs` using the template below. This file:
 - Opens the browser on start via `execFile` (no shell injection risk)
 - `GET /` → serves `docs-viewer.html`
 - Warns on startup if the client libs are missing
+- Without `mmdc` in the project's `node_modules/.bin`, serves every document anyway, each mermaid block as its source, and prints `DEGRADED: mmdc unavailable - mermaid blocks served as source` on stderr (`framework/engineering-standard.md`, Optional augmentation; in this repository `tools/tests/docs-viewer-degraded.tests.sh` runs both cases against this template)
 
 ```js
 #!/usr/bin/env node
@@ -288,7 +289,9 @@ function renderMermaidSvg(mmdcPath, content, outputPath, callback) {
 function generateMermaidImages() {
   const mmdcPath = findMmdc();
   if (!mmdcPath) {
-    process.stderr.write('[docs-viewer] Mermaid: @mermaid-js/mermaid-cli not found - run `pnpm install` to enable diagram rendering.\n');
+    // One named line in a fixed shape, then the way to get the tool.
+    process.stderr.write('DEGRADED: mmdc unavailable - mermaid blocks served as source\n');
+    process.stderr.write('[docs-viewer] Mermaid: install @mermaid-js/mermaid-cli (`pnpm install`) to render diagrams.\n');
     return;
   }
   const tasks = [];
