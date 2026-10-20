@@ -7,12 +7,16 @@ changes should never reach you silently.
 ## Unreleased (pre-publish)
 
 - 2026-10-20 (latest): a Controller's `cd <its shell's own directory> && gh ...`
-  is no longer refused as unpinned (MC-168, MC-155). The engine drops a leading
+  is pinned where the engine says its shell is (MC-168, MC-155). The engine drops a leading
   `cd` to the directory the shell is already in before the guard reads the
   command, so the guard saw a bare `gh` with no pin. The fleet now records where
   each agent's shell is from the engine's CwdChanged event and pins such a call
-  there, only when nothing earlier on the line moved the shell (`cd`, `pushd`,
-  `popd`), and only inside the console's directory as before.
+  there, only when every command before it on the line is a known program that
+  cannot move the shell (an allowlist: git, gh, npm, ls, echo and the like; a
+  builtin, a function, eval or a zsh modifier counts as a move), and only inside
+  the console's directory as before. An agent with no recorded move is refused
+  as before, and each call pinned this way is audited
+  (`pinned by the shell directory <dir>`).
 
 - 2026-10-20: a Controller's question is one of Flight's own, and the
   Poll is gone (MC-163). The fleet queues each open question and, while Flight
