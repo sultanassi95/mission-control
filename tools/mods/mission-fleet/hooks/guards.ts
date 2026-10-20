@@ -90,6 +90,17 @@ function isFrontFolder(dir: string, clone: CloneScope | undefined): boolean {
 }
 
 /**
+ * True when dir is in a worktree beside the console's repo, `<front folder>/<repo>-<slug>[/...]`, where
+ * the delivery flows place one (framework/task-board.md). Only for a console whose directory is a repo
+ * one level under its own front's folder: beside a front's folder lies another front.
+ */
+function isSiblingWorktree(dir: string, scope: string, clone: CloneScope | undefined): boolean {
+  if (!clone || foldPath(`${scope}/..`) !== foldPath(clone.home)) return false
+  const rest = dir.startsWith(`${scope}-`) ? dir.slice(scope.length + 1) : ''
+  return /^[A-Za-z0-9._-]+(\/|$)/.test(rest) && !NO_NAME.test(rest.split('/')[0] ?? '')
+}
+
+/**
  * The folder git names for a clone of `source` when no destination is given, as git's
  * guess_dir_name (builtin/clone.c) derives it: skip the scheme and any user, strip trailing
  * slashes and a `/.git`, strip a port when there is no path, take the last part after `/` or
@@ -206,13 +217,98 @@ export function cloneRefusal(args: Word[], pin: string | undefined, clone: Clone
   return `it would land in ${target}; ${use}`
 }
 
+// gh resolves the repository from the pinned directory's remote (-R is refused), so these verbs act on the
+// Controller's own repo; a write verb naming a PR or issue by URL could reach another one, and is refused.
 const GH_ALLOWED: Record<string, Set<string> | 'any'> = {
-  pr: new Set(['create', 'view', 'list', 'checks', 'diff', 'status', 'comment']),
-  issue: 'any',
-  run: new Set(['list', 'view', 'watch']),
+  pr: new Set(['create', 'view', 'list', 'checks', 'diff', 'status', 'comment', 'edit', 'ready']),
+  issue: new Set(['list', 'view', 'status', 'create', 'comment', 'edit', 'close', 'reopen', 'pin', 'unpin', 'lock', 'unlock']),
+  run: new Set(['list', 'view', 'watch', 'rerun']),
   repo: new Set(['view']),
   auth: new Set(['status']),
   search: 'any',
+}
+const GH_READ_VERBS = new Set(['view', 'list', 'checks', 'diff', 'status', 'watch'])
+// Each write verb's options that take the next word as their value, from its `gh <group> <verb> --help`
+// (gh 2.97): what follows one is not the item. A flag off its own verb's list is a boolean, so a URL after
+// it is read as the item. TEXT values (body, title, a close comment) may hold a URL; no other word may.
+const BODY = ['-b', '--body', '-F', '--body-file']
+const EDITS = ['--add-assignee', '--remove-assignee', '--add-label', '--remove-label', '--add-project', '--remove-project']
+const GH_VALUED: Record<string, Set<string>> = {
+  'pr create': new Set([...BODY, '-t', '--title', '-a', '--assignee', '-B', '--base', '-H', '--head', '-l', '--label', '-m', '--milestone', '-p', '--project', '-r', '--reviewer', '-T', '--template', '--recover']),
+  'pr comment': new Set(BODY),
+  'pr edit': new Set([...BODY, '-t', '--title', '-B', '--base', '-m', '--milestone', ...EDITS, '--add-reviewer', '--remove-reviewer']),
+  'issue create': new Set([...BODY, '-t', '--title', '-a', '--assignee', '-l', '--label', '-m', '--milestone', '-p', '--project', '-T', '--template', '--recover']),
+  'issue comment': new Set(BODY),
+  'issue edit': new Set([...BODY, '-t', '--title', '-m', '--milestone', ...EDITS]),
+  'issue close': new Set(['-c', '--comment', '-r', '--reason']),
+  'issue reopen': new Set(['-c', '--comment']),
+  'issue lock': new Set(['-r', '--reason']),
+  'run rerun': new Set(['-j', '--job']),
+}
+const GH_TEXT = new Set([...BODY, '-t', '--title', '-c', '--comment'])
+const LINKS_ELSEWHERE = /:\/\/|[^/\s]+\/[^/\s#]+#[0-9]+/
+// The item a write verb acts on, in the pinned repo: a number or a branch name. gh reads a URL with any tail
+// (/files, #comment, ?x=1) or OWNER/REPO#N as another repo's item, so nothing else passes.
+const GH_ITEM = /^([0-9]+|[A-Za-z0-9][A-Za-z0-9._/-]*)$/
+
+// gh api options that take the next word as their value (or attached, -XPOST, --method=POST).
+const GH_API_VALUED = new Set(['-X', '--method', '-f', '--raw-field', '-F', '--field', '-H', '--header', '--input', '-q', '--jq', '-t', '--template', '--cache', '-p', '--preview', '--hostname'])
+const GH_API_BODY = new Set(['-f', '--raw-field', '-F', '--field', '--input'])
+// Writes go only to the pinned repo (gh fills {owner} and {repo} from it), and only to PR, issue, comment
+// and CI-rerun endpoints: none of them moves a branch, merges, changes settings or deletes.
+const GH_API_WRITABLE = [
+  /^issues\/[0-9]+$/, /^issues\/[0-9]+\/(comments|labels|assignees)$/, /^issues\/comments\/[0-9]+$/,
+  /^pulls\/[0-9]+$/, /^pulls\/[0-9]+\/(comments|requested_reviewers)$/, /^pulls\/comments\/[0-9]+$/, /^pulls\/[0-9]+\/comments\/[0-9]+\/replies$/,
+  /^actions\/runs\/[0-9]+\/(rerun|rerun-failed-jobs)$/, /^actions\/jobs\/[0-9]+\/rerun$/,
+]
+const GH_API_MERGE = /(^|\/)(pulls\/[^/]+\/merge|merges)\/?$/i
+const OWN_REPO = /^\/?repos\/\{owner\}\/\{repo\}\/(.+?)\/?$/
+
+/** Why a Controller may not run this gh api call, or undefined when it may: reads anywhere, writes as GH_API_WRITABLE lists. */
+function ghApiRefusal(args: Word[]): string | undefined {
+  let method: string | undefined
+  let body = false
+  const positional: Word[] = []
+  // A variable or glob can expand to a method, a field or a whole option; {owner} and {repo} are the one brace form taken.
+  for (const w of args) {
+    const placeholders = !w.text.startsWith('-') && /^[^*?[\]~]*$/.test(w.text) && !/\{(?!owner\}|repo\})/.test(w.text)
+    if (w.dynamic || (w.glob && !placeholders)) return 'gh api words must be literal (no variables, globs or braces but {owner} and {repo}): the shell could turn one into a method, a field or an option.'
+  }
+  for (let i = 0; i < args.length; i++) {
+    const w = args[i] as Word
+    const t = w.text
+    const eq = t.indexOf('=')
+    const long = t.startsWith('--') && eq > 2 ? t.slice(0, eq) : t
+    const short = /^-[A-Za-z]./.test(t) && !t.startsWith('--') ? t.slice(0, 2) : t
+    const opt = GH_API_VALUED.has(long) ? long : GH_API_VALUED.has(short) ? short : undefined
+    if (opt) {
+      const value = opt === t ? args[++i] : undefined
+      // pflag reads -X=DELETE as -X DELETE: an attached short value drops one leading =.
+      const text = value ? value.text : opt === long ? t.slice(eq + 1) : t.slice(2).replace(/^=/, '')
+      if (opt === '--hostname') return 'gh api --hostname is not allowed here: it reaches another GitHub host than the pinned repo\'s.'
+      if (opt === '-X' || opt === '--method') method = text.toUpperCase()
+      if (GH_API_BODY.has(opt)) body = true
+      if ((opt === '-H' || opt === '--header') && /method/i.test(text)) return 'gh api takes no header that overrides its method.'
+      continue
+    }
+    // pflag reads -iX POST as -i plus -X POST: a cluster could hide a method, so options come one at a time.
+    if (/^-[A-Za-z]{2,}/.test(t)) return `gh api ${t}: write its options one at a time (-i -X POST), so the method and fields are readable.`
+    if (!t.startsWith('-')) positional.push(w)
+  }
+  const endpoint = positional[0]
+  if (positional.some(p => p.text === 'graphql')) return 'gh api graphql is not allowed here (it can merge and push).'
+  const writes = (method !== undefined && method !== 'GET' && method !== 'HEAD') || (method === undefined && body)
+  if (!writes) return undefined
+  if (method === 'DELETE') return 'gh api -X DELETE is not allowed here: a delete cannot be undone.'
+  if (!endpoint) return 'Name the gh api endpoint.'
+  if (GH_API_MERGE.test(endpoint.text)) return 'Merging is the founder\'s, never a Controller\'s.'
+  const own = OWN_REPO.exec(endpoint.text)
+  // The {owner} and {repo} braces read as a glob; any other glob, a variable or a substitution is unreadable.
+  const literal = !endpoint.dynamic && !/[*?[\]~]/.test(endpoint.text) && !/\{(?!owner\}|repo\})/.test(endpoint.text)
+  if (!own || !literal || !GH_API_WRITABLE.some(r => r.test(own[1] ?? ''))) {
+    return 'gh api writes only to the pinned repo\'s PR, issue, comment and CI-rerun endpoints, written as repos/{owner}/{repo}/<endpoint> (pulls/N, issues/N/comments, actions/runs/N/rerun and the like); reads (GET) go anywhere.'
+  }
+  return undefined
 }
 
 const SHELL_KEYWORDS = new Set(['if', 'then', 'else', 'elif', 'fi', 'do', 'done', 'while', 'until', 'for', 'case', 'esac', 'in', 'function', 'time', '!', '{', '}', '[[', ']]'])
@@ -680,16 +776,36 @@ function ghRefusal(rest: Word[]): string | undefined {
   }
   const [group, verb] = pos
   if (!group || group.dynamic || verb?.dynamic) return 'The gh subcommand must be literal.'
-  if (group.text === 'api') {
-    if (pos.some(p => p.text === 'graphql')) return 'gh api graphql is not allowed here (it can merge and push).'
-    const m = rest.findIndex(w => w.text === '-X' || w.text === '--method')
-    if (m >= 0 && (rest[m + 1]?.text ?? '').toUpperCase() !== 'GET') return 'gh api is read-only here (GET only).'
-    if (rest.some(w => /^(-[fF]|--field|--raw-field|--input)/.test(w.text) || (/^(-X.|--method=)/.test(w.text) && !/^(-XGET|--method=GET)$/i.test(w.text)))) return 'gh api is read-only here (GET only, no fields).'
-    return undefined
-  }
+  if (group.text === 'api') return ghApiRefusal(rest.slice(rest.indexOf(group) + 1))
   const allowed = GH_ALLOWED[group.text]
   if (!allowed) return `gh ${group.text} is not allowed here.`
-  if (allowed !== 'any' && (!verb || !allowed.has(verb.text))) return verb?.text === 'merge' ? 'Merging is the founder\'s, never a Controller\'s.' : `gh ${group.text} ${verb?.text ?? ''} is not allowed here.`
+  if (allowed !== 'any' && (!verb || !allowed.has(verb.text))) {
+    if (verb?.text === 'merge') return 'Merging is the founder\'s, never a Controller\'s.'
+    if (group.text === 'issue' && (verb?.text === 'delete' || verb?.text === 'transfer')) return `gh issue ${verb.text} is not allowed here: it cannot be undone from this repo.`
+    if (group.text === 'auth') return 'gh auth is read-only here (status): switching or logging in changes the account every session on this Mac uses.'
+    return `gh ${group.text} ${verb?.text ?? ''} is not allowed here.`
+  }
+  if (verb && !GH_READ_VERBS.has(verb.text)) {
+    if (rest.some(w => w.text.startsWith('--delete-last'))) return `gh ${group.text} ${verb.text} --delete-last is not allowed here: a deleted comment cannot be restored.`
+    const NEVER = `gh ${group.text} ${verb.text} names its PR or issue by number or branch here, never by URL: a URL can name another repo.`
+    const valued = GH_VALUED[`${group.text} ${verb.text}`] ?? new Set<string>()
+    const at = rest.indexOf(verb)
+    for (let i = at + 1; i < rest.length; i++) {
+      const w = rest[i] as Word
+      if (w.text.startsWith('-')) {
+        const eq = w.text.indexOf('=')
+        const opt = eq > 0 ? w.text.slice(0, eq) : w.text
+        // Fail closed: outside body, title and comment text, nothing may link to another repo.
+        if (eq > 0 && !GH_TEXT.has(opt) && LINKS_ELSEWHERE.test(w.text.slice(eq + 1))) return NEVER
+        if (eq < 0 && valued.has(opt)) {
+          const value = rest[++i]
+          if (value && !GH_TEXT.has(opt) && LINKS_ELSEWHERE.test(value.text)) return NEVER
+        }
+        continue
+      }
+      if (w.dynamic || w.glob || !GH_ITEM.test(w.text)) return NEVER
+    }
+  }
   return undefined
 }
 
@@ -866,7 +982,8 @@ export function shellRefusal(role: Role, command: string, protectedBranches: str
       if (!dir) return `Pin the repo on every ${name} call: \`cd ${scope} && ${name} ...\`${name === 'git' ? ` or \`git -C ${scope} ...\`` : ''}. Your shell may start in another repo.`
       // A Controller's clone may also run from a front's folder, where it lands one level down; nothing else runs there.
       const cloning = role === 'controller' && clone !== undefined && name === 'git' && isClone(rest)
-      if (dir !== scope && !dir.startsWith(`${scope}/`) && !(cloning && isFrontFolder(dir, clone))) return `${dir} is outside your console's directory (${scope}).`
+      const sibling = role === 'controller' && isSiblingWorktree(dir, scope, clone)
+      if (dir !== scope && !dir.startsWith(`${scope}/`) && !sibling && !(cloning && isFrontFolder(dir, clone))) return `${dir} is outside your console's directory (${scope}).`
       pin = dir
       // A clone's pin decides where it writes, and the guard reads it as text while the disk follows links (a
       // cloned repository can hold one). So it must not hang on a cd that CDPATH could resolve elsewhere, step

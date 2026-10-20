@@ -214,9 +214,9 @@ test('gh: merges and remote writes are refused, reads and PR creation pass', () 
   expect(C('gh api repos/o/r/pulls/12')).toBeUndefined()
   expect(C('gh pr merge 12 --squash')).toContain('founder')
   expect(C('gh pr -R o/r merge 12')).toContain('founder')
-  expect(C('gh api -X PUT repos/o/r/pulls/12/merge')).toContain('read-only')
-  expect(C('gh api repos/o/r/merges -f base=main -f head=x')).toContain('read-only')
-  expect(C('gh api -X PATCH repos/o/r/git/refs/heads/main -f sha=1')).toContain('read-only')
+  expect(C('gh api -X PUT repos/o/r/pulls/12/merge')).toContain('founder')
+  expect(C('gh api repos/o/r/merges -f base=main -f head=x')).toContain('founder')
+  expect(C('gh api -X PATCH repos/o/r/git/refs/heads/main -f sha=1')).toContain('writes only to the pinned repo')
   expect(C("gh api graphql -f query='mutation{mergePullRequest(input:{pullRequestId:\"X\"}){clientMutationId}}'")).toContain('graphql')
   expect(C('gh repo delete o/r')).toContain('not allowed')
 })
@@ -1000,4 +1000,155 @@ test('redirects do not change ordinary commands, and a Flight-only file is seen 
   expect(tokenize('cat < _command/daily/today.md').commands[0]?.redirects.map(w => w.text)).toContain('_command/daily/today.md')
   expect(C('cat < _command/daily/today.md')).toContain("Flight's to write")
   expect(C('echo x > _command/trackers/fronts.md')).toContain("Flight's to write")
+})
+
+// ---- What the skills run (MC-162) ----
+// The acme Controller's repo, one level under its front's folder, as /console staff sets it for a one-repo front.
+
+const REPO = '/w/fronts/acme/acme'
+const R = (cmd: string, role: 'controller' | 'back room' = 'controller', clone: CloneScope | undefined = ACME) => shellRefusal(role, cmd, [], REPO, clone)
+const IN = `cd ${REPO} && `
+
+test('a Controller edits its own PR: body, title, base and labels', () => {
+  expect(R(`${IN}gh pr edit 40 --body "${sub('## Summary\n\nx')}"`)).toBeUndefined()
+  expect(R(`${IN}gh pr edit 40 --title 'fix(mc-1): x' --add-label bug`)).toBeUndefined()
+  expect(R(`${IN}gh pr edit fix/mc-1-x --base fix/mc-0-y`)).toBeUndefined()
+})
+
+test('a Controller marks its own PR ready for review, and back to draft', () => {
+  expect(R(`${IN}gh pr ready 40`)).toBeUndefined()
+  expect(R(`${IN}gh pr ready 40 --undo`)).toBeUndefined()
+})
+
+test('a Controller reruns its own CI', () => {
+  expect(R(`${IN}gh run rerun 39037584041 --failed`)).toBeUndefined()
+  expect(R(`${IN}gh run view 39037584041 --log-failed`)).toBeUndefined()
+})
+
+test('a Controller writes through gh api to its own repo\'s PR, issue, comment and CI-rerun endpoints', () => {
+  expect(R(`${IN}gh api -X PATCH repos/{owner}/{repo}/pulls/40 -f body=x`)).toBeUndefined()
+  expect(R(`${IN}gh api repos/{owner}/{repo}/issues/40/comments -f body=x`)).toBeUndefined()
+  expect(R(`${IN}gh api --method POST 'repos/{owner}/{repo}/actions/runs/9/rerun-failed-jobs'`)).toBeUndefined()
+  expect(R(`${IN}gh api -XPATCH repos/{owner}/{repo}/issues/comments/7 --input body.json`)).toBeUndefined()
+  // Reads go anywhere, as before.
+  expect(R(`${IN}gh api repos/other/repo/pulls/3/comments`)).toBeUndefined()
+  expect(R(`${IN}gh api -X GET search/issues -f q=repo:o/r`)).toBeUndefined()
+})
+
+test('gh api refuses a delete, a merge, another repo and every endpoint off the list', () => {
+  expect(R(`${IN}gh api -X DELETE repos/{owner}/{repo}/issues/comments/7`)).toContain('-X DELETE is not allowed')
+  expect(R(`${IN}gh api --method=delete repos/{owner}/{repo}/pulls/comments/7`)).toContain('-X DELETE is not allowed')
+  expect(R(`${IN}gh api -X PUT repos/{owner}/{repo}/pulls/40/merge`)).toContain('founder')
+  expect(R(`${IN}gh api repos/{owner}/{repo}/merges -f base=main -f head=x`)).toContain('founder')
+  const OFF = 'writes only to the pinned repo'
+  expect(R(`${IN}gh api -X PATCH repos/other/repo/pulls/3 -f body=x`)).toContain(OFF)
+  expect(R(`${IN}gh api -X PATCH repos/{owner}/{repo}/git/refs/heads/main -f sha=1`)).toContain(OFF)
+  expect(R(`${IN}gh api -X PUT repos/{owner}/{repo}/contents/README.md -f message=x -f content=eA==`)).toContain(OFF)
+  expect(R(`${IN}gh api -X PATCH repos/{owner}/{repo} -f default_branch=x`)).toContain(OFF)
+  expect(R(`${IN}gh api -X POST repos/{owner}/{repo}/actions/workflows/deploy.yml/dispatches -f ref=main`)).toContain(OFF)
+  // Cancelling a run can stop a deploy halfway.
+  expect(R(`${IN}gh api -X POST repos/{owner}/{repo}/actions/runs/9/cancel`)).toContain(OFF)
+  expect(R(`${IN}gh api -X PATCH repos/{owner}/{repo}/pulls/$N -f body=x`)).toContain('must be literal')
+  expect(R(`${IN}gh api -X PATCH repos/{owner}/{repo}/pulls/{1,2} -f body=x`)).toContain('must be literal')
+  expect(R(`${IN}gh api --hostname ghe.example.com repos/{owner}/{repo}/pulls/3`)).toContain('--hostname')
+  expect(R(`${IN}gh api -H 'X-HTTP-Method-Override: DELETE' repos/{owner}/{repo}/pulls/3 -f x=1`)).toContain('overrides its method')
+  expect(R(`${IN}gh api -iX DELETE repos/{owner}/{repo}/pulls/comments/7`)).toContain('one at a time')
+  expect(R(`${IN}gh api graphql -f query=x`)).toContain('graphql')
+})
+
+test('gh write verbs name their PR or issue in the pinned repo, never by URL', () => {
+  expect(R(`${IN}gh pr edit https://github.com/other/repo/pull/3 --body x`)).toContain('never by URL')
+  // With no scheme gh reads it as a branch name of the pinned repo, which is no other repo's item.
+  expect(R(`${IN}gh pr comment github.com/other/repo/pull/3 --body x`)).toBeUndefined()
+  expect(R(`${IN}gh issue close https://github.com/other/repo/issues/9`)).toContain('never by URL')
+  expect(R(`${IN}gh pr view https://github.com/other/repo/pull/3`)).toBeUndefined()
+})
+
+test('gh refuses what cannot be undone or reaches every session: issue delete and transfer, auth switch, merge', () => {
+  expect(R(`${IN}gh issue delete 9 --yes`)).toContain('cannot be undone')
+  expect(R(`${IN}gh issue transfer 9 other/repo`)).toContain('cannot be undone')
+  expect(R(`${IN}gh issue comment 9 --body x`)).toBeUndefined()
+  expect(R(`${IN}gh auth switch --user acme-bot`)).toContain('every session on this Mac')
+  expect(R(`${IN}gh pr merge 40 --squash`)).toContain('founder')
+})
+
+test('a Controller runs git and gh from a worktree beside its repo, fronts/<front>/<repo>-<slug> (MC-160)', () => {
+  expect(R('cd /w/fronts/acme/acme-beta-318 && gh run view 5 --log-failed')).toBeUndefined()
+  expect(R('cd /w/fronts/acme/acme-beta-318 && gh pr edit 3 --body x')).toBeUndefined()
+  expect(R('cd /w/fronts/acme/acme-beta-318/src && git status')).toBeUndefined()
+  expect(R('git -C /w/fronts/acme/acme-beta-318 push -u origin feat/beta-318')).toBeUndefined()
+})
+
+test('only a worktree beside the repo counts: not another folder, not beside a front, not for the back room', () => {
+  expect(R('cd /w/fronts/acme/other && git status')).toContain('outside your console')
+  expect(R('cd /w/fronts/acme/acmeX && git status')).toContain('outside your console')
+  expect(R('cd /w/fronts/acme/acme-.. && git status')).toContain('outside your console')
+  expect(R('cd /w/fronts/acme/acme-x/../../globex && git status')).toContain('outside your console')
+  expect(R('cd /w/fronts/acme/acme-x && git status', 'back room')).toContain('outside your console')
+  expect(shellRefusal('controller', 'cd /w/fronts/acme/acme-x && git status', [], REPO)).toContain('outside your console')
+  // A console whose directory is its front's folder: beside it lies another front.
+  expect(shellRefusal('controller', 'cd /w/fronts/acme-x && git status', [], '/w/fronts/acme', ACME)).toContain('outside your console')
+  // A sibling worktree is still no place to clone from.
+  expect(R('cd /w/fronts/acme/acme-x && git clone https://github.com/o/r.git')).toContain('clones only into a front')
+})
+
+test('gh api reads a method written -X=VALUE as pflag does, so -X=DELETE is a delete', () => {
+  expect(R(`${IN}gh api -X=DELETE repos/{owner}/{repo}/issues/comments/7`)).toContain('-X DELETE is not allowed')
+  expect(R(`${IN}gh api -X=PATCH repos/{owner}/{repo}/pulls/40 -f body=x`)).toBeUndefined()
+})
+
+test('gh api takes no word the shell expands: a variable or glob could become a method, a field or an option', () => {
+  const NOT = 'must be literal'
+  expect(R(`${IN}gh api -X$M repos/{owner}/{repo}/issues/comments/7`)).toContain(NOT)
+  expect(R(`${IN}gh api -X "$M" repos/{owner}/{repo}/issues/comments/7`)).toContain(NOT)
+  expect(R(`${IN}gh api -X DEL* repos/{owner}/{repo}/issues/comments/7`)).toContain(NOT)
+  expect(R(`${IN}gh api repos/{owner}/{repo}/pulls/40 $OPTS`)).toContain(NOT)
+  expect(R(`${IN}gh api repos/{owner}/{repo}/pulls/40 -f body=$B`)).toContain(NOT)
+  // The {owner} and {repo} placeholders are the one brace form taken, and only in the endpoint.
+  expect(R(`${IN}gh api repos/{owner}/{repo}/pulls/40/comments`)).toBeUndefined()
+})
+
+test('gh issue develop is refused: it makes a branch under any name, in any repo', () => {
+  expect(R(`${IN}gh issue develop 9 --name release/x`)).toContain('gh issue develop is not allowed')
+})
+
+test('a gh write verb refuses an OWNER/REPO#N reference, and a body that only mentions a URL passes', () => {
+  expect(R(`${IN}gh issue comment other/repo#1 --body x`)).toContain('never by URL')
+  expect(R(`${IN}gh pr comment 40 --body "https://github.com/o/r/pull/3 follow-up"`)).toBeUndefined()
+})
+
+test('a gh write verb takes only a number or a branch as its item: gh reads a URL with any tail as that URL', () => {
+  const URL = 'never by URL'
+  expect(R(`${IN}gh pr edit https://github.com/other/repo/pull/3/files --body x`)).toContain(URL)
+  expect(R(`${IN}gh pr edit 'https://github.com/other/repo/pull/3#issuecomment-1' --body x`)).toContain(URL)
+  expect(R(`${IN}gh pr ready 'https://github.com/other/repo/pull/3?x=1'`)).toContain(URL)
+  expect(R(`${IN}gh pr comment owner/repo#3 --body x`)).toContain(URL)
+  expect(R(`${IN}gh issue close http://github.com/other/repo/issues/9`)).toContain(URL)
+  expect(R(`${IN}gh pr edit $PR --body x`)).toContain(URL)
+  // A branch with a slash, a body or title holding a URL, and a valued option before the item all pass.
+  expect(R(`${IN}gh pr ready feat/x`)).toBeUndefined()
+  expect(R(`${IN}gh pr edit --title 'see https://github.com/o/r/pull/3/files' 40`)).toBeUndefined()
+  expect(R(`${IN}gh issue comment 9 --body 'https://github.com/o/r/issues/9#x'`)).toBeUndefined()
+  expect(R(`${IN}gh pr comment 40 --delete-last --yes`)).toContain('cannot be restored')
+})
+
+test('each gh write verb reads only its own valued options, so a boolean flag cannot pass a URL off as its value', () => {
+  const URL = 'never by URL'
+  // gh issue comment and gh pr comment take no -c, -a or -r value: what follows is the item.
+  expect(R(`${IN}gh issue comment -c https://github.com/o/r/issues/3 -b x`)).toContain(URL)
+  expect(R(`${IN}gh pr comment -a https://github.com/o/r/pull/3 -b x`)).toContain(URL)
+  expect(R(`${IN}gh pr ready -r https://github.com/o/r/pull/3`)).toContain(URL)
+  expect(R(`${IN}gh pr edit -c https://github.com/o/r/pull/3 -b x`)).toContain(URL)
+  // gh issue close -c is its comment: text that may hold a URL.
+  expect(R(`${IN}gh issue close 9 -c 'https://github.com/o/r/issues/9 covers it'`)).toBeUndefined()
+  expect(R(`${IN}gh issue close 9 -c https://github.com/o/r/issues/9`)).toBeUndefined()
+})
+
+test('a URL or OWNER/REPO#N anywhere in a gh write command fails closed unless it is body, title or comment text', () => {
+  const URL = 'never by URL'
+  expect(R(`${IN}gh pr create --head https://github.com/o/r/pull/3 --title t --body b`)).toContain(URL)
+  expect(R(`${IN}gh pr edit 40 --add-label o/r#3`)).toContain(URL)
+  expect(R(`${IN}gh pr edit 40 --base=https://github.com/o/r/pull/3`)).toContain(URL)
+  expect(R(`${IN}gh pr edit 40 --title 'see https://github.com/o/r/pull/3' --body 'and o/r#3'`)).toBeUndefined()
+  expect(R(`${IN}gh pr edit 40 --body=https://github.com/o/r/pull/3`)).toBeUndefined()
 })
