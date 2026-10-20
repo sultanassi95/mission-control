@@ -4,6 +4,12 @@
  * every agent() is a direct call whose options are a plain object with a literal model and effort,
  * nothing reaches the global object or builds a function, and the number of agents it can start is
  * counted from the code, so a run never starts more than the Controller's back room has room for.
+ *
+ * Every name the script reads is either one it declares itself or one on a short allowlist (the
+ * workflow API and plain data builtins); a name it does not declare and the list lacks is refused,
+ * so a global the guard has never heard of is refused rather than trusted. The workflow API
+ * functions are only ever called, never read as values, and no key the script writes is computed
+ * from anything but a plain literal.
  */
 
 import { parse } from './vendor/acorn.mjs'
@@ -17,6 +23,11 @@ const NAMES = new Set(['globalThis', 'self', 'window', 'global', 'eval', 'Functi
 const PROPS = new Set(['constructor', 'prototype', '__proto__', 'bind', 'call', 'apply', 'caller', 'callee', '__defineGetter__', '__defineSetter__', '__lookupGetter__', '__lookupSetter__',
   // Reflection that hands back a constructor or a prototype by name, without a member access the guard reads.
   'getPrototypeOf', 'setPrototypeOf', 'getOwnPropertyDescriptor', 'getOwnPropertyDescriptors', 'getOwnPropertyNames', 'getOwnPropertySymbols', 'defineProperty', 'defineProperties', 'prepareStackTrace'])
+/** The workflow API: each is only ever called directly, never read as a value, destructured or passed on. */
+const API = new Set(['agent', 'parallel', 'pipeline', 'phase', 'log'])
+/** Names a script may read without declaring them: its arguments, its token budget, and plain data builtins. */
+const GLOBALS = new Set(['args', 'budget', 'undefined', 'NaN', 'Infinity', 'JSON', 'Math', 'Number', 'String', 'Boolean', 'Array', 'Object', 'Date',
+  'Promise', 'Set', 'Map', 'isNaN', 'isFinite', 'parseInt', 'parseFloat', 'Error', 'TypeError', 'RangeError'])
 const LOOPS = new Set(['ForStatement', 'ForInStatement', 'ForOfStatement', 'WhileStatement', 'DoWhileStatement'])
 const FUNCTIONS = new Set(['ArrowFunctionExpression', 'FunctionExpression', 'FunctionDeclaration'])
 /** The Workflow tool inputs a Controller may pass: an inline script and its arguments. */
@@ -62,6 +73,43 @@ function optionsRefusal(call: Node): string | undefined {
   }
   if (!seen.has('model') || !seen.has('effort')) return 'it must state model and effort'
   return undefined
+}
+
+/** The names a binding pattern declares: `x`, `{ a, b: c }`, `[d, ...e]`, `f = 1`. */
+function patternNames(n: unknown, out: string[] = []): string[] {
+  if (!isNode(n)) return out
+  if (n.type === 'Identifier') out.push(n.name as string)
+  else if (n.type === 'ObjectPattern') for (const p of n.properties as Node[]) patternNames(p.type === 'RestElement' ? p.argument : p.value, out)
+  else if (n.type === 'ArrayPattern') for (const e of n.elements as (Node | null)[]) patternNames(e, out)
+  else if (n.type === 'RestElement') patternNames(n.argument, out)
+  else if (n.type === 'AssignmentPattern') patternNames(n.left, out)
+  return out
+}
+
+/** Statements that declare into the scope holding them; a `var` counts only in its own block, which refuses more, never less. */
+function statementNames(st: Node, out: string[]) {
+  const d = st.type === 'ExportNamedDeclaration' ? (st.declaration as Node | undefined) : st
+  if (!d) return
+  if (d.type === 'VariableDeclaration') for (const v of d.declarations as Node[]) patternNames(v.id, out)
+  if (d.type === 'FunctionDeclaration' && isId(d.id)) out.push(d.id.name)
+}
+
+const scopes = new WeakMap<Node, Set<string>>()
+/** The names a node declares for the code inside it, or undefined when it opens no scope. */
+function declares(n: Node): Set<string> | undefined {
+  const known = scopes.get(n)
+  if (known) return known
+  const out: string[] = []
+  if (n.type === 'Program' || n.type === 'BlockStatement' || n.type === 'StaticBlock') for (const st of n.body as Node[]) statementNames(st, out)
+  else if (n.type === 'SwitchStatement') for (const c of n.cases as Node[]) for (const st of c.consequent as Node[]) statementNames(st, out)
+  else if (FUNCTIONS.has(n.type)) for (const p of n.params as Node[]) patternNames(p, out)
+  else if (n.type === 'ForStatement' && isNode(n.init) && n.init.type === 'VariableDeclaration') statementNames(n.init, out)
+  else if ((n.type === 'ForInStatement' || n.type === 'ForOfStatement') && isNode(n.left) && n.left.type === 'VariableDeclaration') statementNames(n.left, out)
+  else if (n.type === 'CatchClause') patternNames(n.param, out)
+  else return undefined
+  const set = new Set(out)
+  scopes.set(n, set)
+  return set
 }
 
 /** A call `<callee>(...)` with the callee a plain identifier of this name. */
@@ -145,21 +193,46 @@ export function workflowCheck(input: unknown, room: number): WorkflowCheck {
       }
       case 'Literal': if (typeof n.value === 'string' && PROPS.has(n.value)) return refuse(`The workflow script may not name ${n.value}, even as a string.`); break
       case 'Property': {
+        // In an object literal or a destructuring pattern alike: a computed key may only be a plain literal.
+        if (n.computed && !(isNode(n.key) && n.key.type === 'Literal' && (typeof n.key.value === 'string' || typeof n.key.value === 'number'))) {
+          return refuse('The workflow script computes an object key only from a plain string or number literal: a computed key can reach a constructor.')
+        }
         const name = keyName(n)
-        if (name !== undefined && PROPS.has(name)) return refuse(`The workflow script may not define ${name}.`)
+        if (name !== undefined && PROPS.has(name)) return refuse(`The workflow script may not define or read ${name}.`)
         break
       }
+      case 'TemplateLiteral':
+        for (const q of n.quasis as Node[]) {
+          const v = q.value as { cooked?: string; raw?: string }
+          for (const text of [v.cooked, v.raw]) if (typeof text === 'string' && PROPS.has(text)) return refuse(`The workflow script may not name ${text}, even as a string.`)
+        }
+        break
       case 'Identifier': {
         const name = n.name as string
         // A property name after a dot, or a plain object key, names no variable.
         const asProp = parent?.type === 'MemberExpression' && parent.property === n && !parent.computed
         const asKey = parent?.type === 'Property' && parent.key === n && !parent.computed && !parent.shorthand
-        if (asProp || asKey) break
+        const asLabel = parent !== undefined && ['LabeledStatement', 'BreakStatement', 'ContinueStatement'].includes(parent.type) && parent.label === n
+        if (asProp || asKey || asLabel) break
         if (NAMES.has(name) || PROPS.has(name)) return refuse(`The workflow script may not use ${name}.`)
+        const directCall = parent?.type === 'CallExpression' && parent.callee === n && !parent.optional
+        if (API.has(name)) {
+          if (!directCall) return refuse(`The workflow script uses ${name} other than as a direct call ${name === 'agent' ? 'agent(prompt, { model, effort })' : `${name}(...)`}: no alias, no shadowing, no destructuring, no passing it on.`)
+        } else {
+          // Resolved through the scopes around it; a named function expression may not name itself (it could recurse past the count).
+          let declared = false
+          for (let k = chain.length - 1; k >= 0 && !declared; k--) {
+            const s = chain[k] as Node
+            if (s.type === 'FunctionExpression' && isId(s.id, name)) {
+              if (s.id === n) { declared = true; break }
+              return refuse(`The workflow script's function ${name} names itself: a function that calls itself can start more agents than the guard counts.`)
+            }
+            declared = declares(s)?.has(name) ?? false
+          }
+          if (!declared && !GLOBALS.has(name)) return refuse(`The workflow script reads ${name}, which it does not declare and the guard does not allow (allowed: the workflow API, args, budget and plain data builtins such as JSON, Math, Object, Array, Promise).`)
+        }
         if (name === 'agent') {
-          // agent only as the callee of a direct call: no alias, no shadowing, no optional call.
-          if (!(parent?.type === 'CallExpression' && parent.callee === n && !parent.optional)) return refuse('The workflow script uses agent other than as a direct call agent(prompt, { model, effort }).')
-          const why = optionsRefusal(parent)
+          const why = optionsRefusal(parent as Node)
           if (why) return refuse(`An agent() call in the workflow script is refused: ${why}, as in agent(prompt, { model: 'sonnet', effort: 'medium' }).`)
           let times = 1
           for (let k = chain.length - 1; k >= 0; k--) {

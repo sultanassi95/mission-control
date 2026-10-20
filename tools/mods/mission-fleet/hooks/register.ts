@@ -260,7 +260,7 @@ export const register: Register = on => {
     if (!role) {
       // Fail closed while a Controller's workflow runs: an agent the engine does not list and the fleet
       // cannot place (a workflow agent whose spawn the fleet did not see, say a retried one) writes nothing.
-      if (activeRuns() && UNPLACED_REFUSED.test(e.tool) && !(await $.agent.list()).some(a => a.id === e.agentId)) {
+      if (activeRuns() && UNPLACED_REFUSED.test(e.tool) && !unguarded.has(e.agentId) && !(await $.agent.list()).some(a => a.id === e.agentId)) {
         await log($, 'guard', 'unplaced', `${e.tool} denied for agent ${e.agentId} while a Controller workflow runs`)
         return { decision: 'deny' as const, reason: 'An agent the fleet cannot place runs no shell command or file write while a Controller\'s workflow runs.' }
       }
@@ -281,7 +281,7 @@ export const register: Register = on => {
       (room !== undefined && !e.tool_use_id ? 'This Workflow call has no id the guard can follow its agents by, so it is refused.' : undefined)
     // An admitted workflow is remembered by its tool call, so each agent it starts is known as this Controller's.
     if (!why && room !== undefined) {
-      admit(e.tool_use_id as string, { callSign: c.callSign, agentId: c.agentId, cap: workflowCheck(e.input, room).agents, started: 0, at: Date.now() })
+      admit(e.tool_use_id as string, { callSign: c.callSign, agentId: c.agentId, cap: workflowCheck(e.input, room).agents, started: 0, live: new Set(), at: Date.now() })
       await log($, 'workflow', c.callSign, `admitted: up to ${workflowCheck(e.input, room).agents} agents of ${room} room`)
     }
     if (!why) {
@@ -307,22 +307,40 @@ export const register: Register = on => {
           await log($, 'workflow', run.callSign, `spawn denied: agent ${e.workflow.agentIndex} (${run.started} started) of a run admitted for ${run.cap}`)
           return { deny: `${run.callSign}'s workflow was admitted for ${run.cap} agents and has started ${run.started}.` }
         }
+        // The parser read a literal model on every agent(); a spawn that arrives without one was not what it read.
+        if (!e.model) {
+          await log($, 'workflow', run.callSign, `spawn denied: agent ${e.workflow.agentIndex} has no model`)
+          return { deny: `${run.callSign}'s workflow started an agent with no model.` }
+        }
         run.started++
         run.at = Date.now()
         run.runId ??= e.workflow.runId || undefined
         const started = await next(e)
         // The engine does not list a workflow's agents, so the parent link recorded here is what makes each one this Controller's back room.
-        if (started.agentId) await update($, lineage, list => [...list.filter(l => l.agentId !== started.agentId), { agentId: started.agentId as string, parentId: run.agentId }].slice(-2000))
-        else if (started.deny === undefined) await log($, 'workflow', run.callSign, `agent ${e.workflow.agentIndex} started with no id to guard`)
+        if (started.agentId) {
+          run.live.add(started.agentId)
+          await update($, lineage, list => [...list.filter(l => l.agentId !== started.agentId), { agentId: started.agentId as string, parentId: run.agentId }].slice(-2000))
+        } else if (started.deny === undefined) await log($, 'workflow', run.callSign, `agent ${e.workflow.agentIndex} started with no id to guard`)
         return started
       }
       // A workflow raised in a fleet agent's loop that the guard never admitted runs nothing.
       if (e.parentAgentId && (await roleOf($, e.parentAgentId))) return { deny: 'A fleet agent\'s workflow runs only as the guard admitted it.' }
-      return next(e)
+      // With no call id it cannot be told from a Controller's run, so while one is live it is refused.
+      if (!e.tool_use_id && activeRuns()) return { deny: 'A workflow agent with no call id is refused while a Controller\'s workflow runs.' }
+      const started = await next(e)
+      if (started.agentId) keepUnguarded(started.agentId)
+      return started
     }
     if (!e.parentAgentId) return next(e)
     const role = await roleOf($, e.parentAgentId)
-    if (!role) return next(e)
+    if (!role) {
+      // An agent the fleet cannot place and the engine does not list (a retried workflow agent, say) starts nothing while a Controller's workflow runs.
+      if (activeRuns() && !unguarded.has(e.parentAgentId) && !(await $.agent.list()).some(a => a.id === e.parentAgentId)) {
+        await log($, 'guard', 'unplaced', `spawn denied under agent ${e.parentAgentId} while a Controller workflow runs`)
+        return { deny: 'An agent the fleet cannot place starts no agent while a Controller\'s workflow runs.' }
+      }
+      return next(e)
+    }
     const c = role.console
     const live = liveBackRoom(await $.agent.list(), c)
     // Reserve inside the state write, so parallel spawns in one turn cannot all pass the check.
@@ -466,6 +484,7 @@ export const register: Register = on => {
     try {
       done = await next(e)
     } finally {
+      if (e.agentId) for (const r of runs.values()) r.live.delete(e.agentId)
       if (!e.agentId) {
         flightBusy = false
         flightActivity = ''
@@ -634,10 +653,18 @@ const WORKFLOWS = 'controllerWorkflows'
  * while it may still spawn (only the oldest beyond 200 are dropped); the half hour since its last start
  * decides only whether it still holds room and keeps unplaced agents refused.
  */
-type Run = { callSign: string; agentId: string; cap: number; started: number; at: number; runId?: string }
+type Run = { callSign: string; agentId: string; cap: number; started: number; live: Set<string>; at: number; runId?: string }
 const runs = new Map<string, Run>()
 const RUN_TTL = 30 * 60_000
-const recent = (r: Run) => Date.now() - r.at <= RUN_TTL
+// A run with an agent that has not ended stays live this long after its last start, in case an end is never seen.
+const RUN_MAX = 6 * 60 * 60_000
+const recent = (r: Run) => Date.now() - r.at <= (r.live.size > 0 ? RUN_MAX : RUN_TTL)
+/** Agents of workflows the fleet does not guard (Flight's own), so the unplaced-agent refusal leaves them alone. */
+const unguarded = new Set<string>()
+const keepUnguarded = (id: string) => {
+  unguarded.add(id)
+  if (unguarded.size > 2000) unguarded.delete(unguarded.values().next().value as string)
+}
 
 /** The admitted run a workflow agent belongs to: by its Workflow call, or by the run id its first agent showed. */
 function runOf(toolUseId: string, runId: string): Run | undefined {
@@ -651,7 +678,7 @@ function admit(toolUseId: string, run: Run) {
   while (runs.size > 200) runs.delete(runs.keys().next().value as string)
 }
 /** Tools an unplaced agent may not use while a Controller's workflow runs: the shell, file writes and MCP shells. */
-const UNPLACED_REFUSED = /^(Bash|Write|Edit|NotebookEdit|Monitor|mcp__.*(shell|exec|terminal|run_?command|run_?code|bash|write|edit|create).*)$/i
+const UNPLACED_REFUSED = /^(Bash|Write|Edit|NotebookEdit|Monitor|Agent|Task\w*|Workflow|SendMessage|mcp__.*(shell|exec|terminal|run_?command|run_?code|bash|write|edit|create).*)$/i
 
 /** True while any admitted Controller workflow is within its half hour. */
 function activeRuns(): boolean {
@@ -663,7 +690,8 @@ function activeRuns(): boolean {
  * agents of its workflows admitted in the last half hour, which the engine does not list.
  */
 function workflowRoom(c: Console, agents: Parameters<typeof liveBackRoom>[0]): number {
-  const running = [...runs.values()].filter(r => r.agentId === c.agentId && recent(r)).reduce((n, r) => n + r.cap - r.started, 0)
+  // A run holds its whole cap less the agents that have ended: one started and still running holds its place.
+  const running = [...runs.values()].filter(r => r.agentId === c.agentId && recent(r)).reduce((n, r) => n + r.cap - (r.started - r.live.size), 0)
   return Math.max(0, c.budget - liveBackRoom(agents, c) - running)
 }
 

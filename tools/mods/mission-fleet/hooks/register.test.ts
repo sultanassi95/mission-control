@@ -1062,8 +1062,8 @@ test('the guard admits a folder beside a Controller\'s repo only when its .git f
 const WF_SCRIPT = "export const meta = { name: 'scan', description: 'd' }\nawait parallel(['a', 'b'].map(f => () => agent(f, { model: 'sonnet', effort: 'low' })))"
 const workflowBy = ($: Engine, script: string, toolUseId: string, agentId = 'f1') =>
   $.tool.check({ tool: 'Workflow', input: { script }, agentId, tool_use_id: toolUseId } as Parameters<Engine['tool']['check']>[0])
-const workflowAgent = ($: Engine, toolUseId: string, runId: string, agentIndex: number, parentAgentId?: string) =>
-  $.agent.spawn({ prompt: 'read', tool_use_id: toolUseId, workflow: { runId, agentIndex }, parentAgentId } as Parameters<Engine['agent']['spawn']>[0])
+const workflowAgent = ($: Engine, toolUseId: string, runId: string, agentIndex: number, parentAgentId?: string, model: string | undefined = 'sonnet') =>
+  $.agent.spawn({ prompt: 'read', model, tool_use_id: toolUseId, workflow: { runId, agentIndex }, parentAgentId } as Parameters<Engine['agent']['spawn']>[0])
 
 test('a Controller\'s workflow is refused until the founder turns workflows on, and the switch is the founder\'s', async ($, on) => {
   portfolio(on)
@@ -1101,6 +1101,8 @@ test('an admitted workflow starts only the agents it was admitted for, each guar
   expect((await workflowBy($, WF_SCRIPT, 'tu1')).decision).toBe('allow')
   expect(audit.join('\n')).toContain('\tworkflow\tFIELDKIT\tadmitted: up to 2 agents of 4 room')
   // Its two agents start; a third, by the engine's place or the plugin's own count, does not.
+  // A spawn with no model is not what the parser read, and it starts nothing (nor counts).
+  expect((await workflowAgent($, 'tu1', 'wf_1', 1, 'f1', undefined)).deny).toContain('no model')
   expect((await workflowAgent($, 'tu1', 'wf_1', 1, 'f1')).agentId).toBe('w1')
   expect((await workflowAgent($, 'tu1', 'wf_1', 2)).agentId).toBe('w2')
   const third = await workflowAgent($, 'tu1', 'wf_1', 3)
@@ -1118,6 +1120,13 @@ test('an admitted workflow starts only the agents it was admitted for, each guar
   const unplaced = await bashBy($, 'echo hi > /tmp/x', 'w-unknown')
   expect(unplaced.decision).toBe('deny')
   expect(unplaced.reason).toContain('cannot place')
+  // Flight's own workflow agents are not the fleet's to place, and keep their tools.
+  const flights = await workflowAgent($, 'tu-flight', 'wf_f', 1)
+  expect(flights.agentId).toBe('w3')
+  expect((await bashBy($, 'echo hi > /tmp/x', 'w3')).decision).toBe('allow')
+  // An unplaced agent starts nothing either, and a workflow agent with no call id is refused while the run is live.
+  expect((await $.agent.spawn({ prompt: 'x', parentAgentId: 'w-unknown' } as Parameters<Engine['agent']['spawn']>[0])).deny).toContain('cannot place')
+  expect((await workflowAgent($, '', 'wf_x', 1)).deny).toContain('no call id')
   // A workflow agent of a run the guard never admitted, under a fleet agent, is refused.
   expect((await workflowAgent($, 'tu-unknown', 'wf_9', 1, 'f1')).deny).toContain('runs only as the guard admitted it')
 })

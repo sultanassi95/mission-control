@@ -1185,3 +1185,42 @@ test('a .git file registers a worktree of the repo only by a gitdir line under t
   expect(registersWorktree('', REPO)).toBe(false)
   expect(registersWorktree('[core]\n\tbare = false', REPO)).toBe(false)
 })
+
+// ---- A Controller's workflow script, read by the parser (MC-166) ----
+
+const WF = (body: string, room = 100) => toolRefusal('controller', 'Workflow', { script: `export const meta = { name: 'x', description: 'd' }\n${body}\nawait agent('q', { model: 'sonnet', effort: 'low' })` }, [], undefined, undefined, undefined, undefined, room)
+
+test('workflow: a computed key reaches no constructor, in a pattern or an object literal, nor does a template spelling', () => {
+  for (const [body, why] of [
+    ["const { ['constr' + 'uctor']: F } = { a: 1 }\nF('return this')()", 'computes an object key only from a plain string or number literal'],
+    ['const { [`constructor`]: F } = { a: 1 }', 'computes an object key only from a plain string or number literal'],
+    ["const { a: { ['proto' + 'type']: P } } = { a: {} }", 'computes an object key only from a plain string or number literal'],
+    ["const f = ({ ['constr' + 'uctor']: F }) => F", 'computes an object key only from a plain string or number literal'],
+    ["const o = { ['constr' + 'uctor']: 1 }", 'computes an object key only from a plain string or number literal'],
+    ["const o = { [args.k]: 1 }", 'computes an object key only from a plain string or number literal'],
+    ["const { ['constructor']: F } = { a: 1 }", 'may not name constructor, even as a string'],
+    ["const { constructor: F } = { a: 1 }", 'may not define or read constructor'],
+    ['const k = `constructor`', 'may not name constructor, even as a string'],
+    ['const k = `${1}prototype`', 'may not name prototype, even as a string'],
+  ] as const) expect(`${body} -> ${WF(body) ?? 'admitted'}`).toContain(why)
+})
+
+test('workflow: the API is only called, never read as a value, destructured or passed on', () => {
+  for (const body of ['const { name } = log', 'const [a] = parallel', 'const f = x => x\nf(log)', "const o = { pipeline }", 'const p = phase']) {
+    expect(`${body} -> ${WF(body) ?? 'admitted'}`).toContain('other than as a direct call')
+  }
+  expect(WF("log('x')\nawait phase('p')")).toBeUndefined()
+})
+
+test('workflow: every name the script reads is its own or on the allowlist; a function never names itself', () => {
+  for (const name of ['fetch', 'setTimeout', 'structuredClone', 'Symbol', 'WebAssembly', 'queueMicrotask', 'Intl']) {
+    expect(`${name} -> ${WF(`${name}()`) ?? 'admitted'}`).toContain(`reads ${name}, which it does not declare`)
+  }
+  // A name declared in an inner scope is not declared outside it.
+  expect(WF('{ const fetch = 1 }\nfetch()')).toContain('reads fetch, which it does not declare')
+  expect(WF('const g = (fetch) => fetch\nfetch()')).toContain('reads fetch, which it does not declare')
+  // A named function expression that calls itself could recurse past the count.
+  expect(WF("await parallel(['a'].map(function go(f) { go(f); return agent(f, { model: 'sonnet', effort: 'low' }) }))")).toContain('names itself')
+  // Its own declarations, parameters, catch bindings, loop bindings and labels are read freely.
+  expect(WF("const files = args.files ?? []\nlet n = 0\nfor (const f of files) n += f.length\ntry { JSON.parse('{}') } catch (err) { log(String(err)) }\nouter: for (const a of [1]) { break outer }\nconst { a, b: [c] } = { a: 1, b: [2] }\nlog(Math.max(n, a, c))")).toBeUndefined()
+})

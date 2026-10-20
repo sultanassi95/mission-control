@@ -85,7 +85,7 @@ test('nothing reaches the global object, builds a function or runs a script the 
     ["log`x`", 'may not use a tagged template'],
     ["class A {}", 'may not use a class'],
     ["with (args) { log(x) }", 'does not parse'],
-    ["if (x) /'/.test(s); agent('p')", 'An agent() call in the workflow script is refused'],
+    ["const x = 1, s = ''\nif (x) /'/.test(s); agent('p')", 'An agent() call in the workflow script is refused'],
   ] as const) expect(`${body} -> ${W(`${body}\nawait agent('q', ${SIZED})`).refusal ?? 'admitted'}`).toContain(why)
 })
 
