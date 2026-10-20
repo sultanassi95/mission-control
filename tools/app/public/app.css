@@ -168,9 +168,23 @@ button { cursor: pointer; }
 .msg.md blockquote { border-left: var(--s1) solid var(--line); padding-left: var(--s3); color: var(--ink-soft); }
 .msg.md hr { border: 0; border-top: 1px solid var(--line); margin: var(--s3) 0; }
 .msg.md a { color: var(--accent); }
-.md-table { overflow-x: auto; }
+/* A table scrolls sideways in its own box, and a shadow at an edge shows there is more that way (the
+   surface-coloured covers scroll with the table and hide a shadow at the end it has reached). */
+.md-table {
+  overflow-x: auto;
+  background:
+    linear-gradient(to right, var(--surface) 30%, transparent) left / var(--s5) 100% no-repeat local,
+    linear-gradient(to left, var(--surface) 30%, transparent) right / var(--s5) 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, color-mix(in srgb, var(--ink) 35%, transparent), transparent) left / var(--s4) 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, color-mix(in srgb, var(--ink) 35%, transparent), transparent) right / var(--s4) 100% no-repeat scroll;
+}
+.md-table:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .md-table table { border-collapse: collapse; font-size: var(--t-sm); line-height: var(--lh-sm); min-width: 100%; }
-.md-table th, .md-table td { text-align: left; vertical-align: top; padding: var(--s1) var(--s2); border-bottom: 1px solid var(--line); }
+/* The bubble's overflow-wrap: anywhere would break a word to fit the screen; a cell breaks only at a space, and a short one not at all. */
+.md-table th, .md-table td { text-align: left; vertical-align: top; padding: var(--s1) var(--s2); border-bottom: 1px solid var(--line); overflow-wrap: normal; white-space: nowrap; }
+.md-table td.long { white-space: normal; min-width: var(--cell-long); }
+/* A reply holding a table may use the chat column's whole width. */
+.msg.assistant:has(.md-table) { max-width: 100%; }
 .md-table th { color: var(--ink-faint); font-weight: 600; }
 
 /* Desktop: a left navigation rail, a reading width for the conversation, cards in columns. */
