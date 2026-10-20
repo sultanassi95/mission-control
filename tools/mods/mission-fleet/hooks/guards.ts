@@ -16,6 +16,8 @@
  * folder read later) is outside it; only an OS-level boundary closes that.
  */
 
+import { workflowCheck } from './workflow'
+
 /** Branches no Controller pushes to, whatever its spoke says. */
 export const ALWAYS_PROTECTED = ['main', 'master', 'dev', 'develop', 'test', 'staging', 'stage', 'production', 'prod', 'release']
 
@@ -1048,9 +1050,18 @@ export function isShellLikeTool(tool: string): boolean {
   return tool.startsWith('mcp__') && /(shell|exec|terminal|run_?command|run_?code|bash)/i.test(tool)
 }
 
-/** The refusal for any tool call by a fleet role, if any. */
-export function toolRefusal(role: Role, tool: string, input: unknown, protectedBranches: string[], scopeDir?: string, clone?: CloneScope, start?: string, worktrees?: readonly string[]): string | undefined {
-  if (tool === 'Workflow') return 'Workflows are Flight\'s to run; a Controller dispatches its back room with the Agent tool.'
+/**
+ * The refusal for any tool call by a fleet role, if any. `room` is how many agents a Controller's
+ * workflow may start, given only while the founder has turned Controller workflows on
+ * (/console workflows on); without it a Controller's Workflow call is refused.
+ */
+export function toolRefusal(role: Role, tool: string, input: unknown, protectedBranches: string[], scopeDir?: string, clone?: CloneScope, start?: string, worktrees?: readonly string[], room?: number): string | undefined {
+  if (tool === 'Workflow') {
+    if (role !== 'controller') return 'A back-room agent never runs a workflow; report to your Controller instead.'
+    if (room === undefined) return 'Workflows are Flight\'s to run until the founder turns Controller workflows on (/console workflows on); a Controller dispatches its back room with the Agent tool.'
+    const checked = workflowCheck(input, room)
+    if (checked.refusal) return checked.refusal
+  }
   if (isShellLikeTool(tool)) return `${tool} runs shell commands the fleet guard cannot read; use Bash.`
   const args = (input ?? {}) as Record<string, unknown>
   if (typeof args.command === 'string') {

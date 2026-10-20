@@ -6,7 +6,17 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
-- 2026-10-20 (latest): a folder beside a Controller's repo counts as its worktree
+- 2026-10-21 (latest): a Controller may run a Workflow script the guard can read, once
+  the founder turns it on (MC-166). `/console workflows on|off` is the founder's
+  switch, off by default. With it on, the guard parses a Controller's inline script
+  with a vendored JavaScript parser (acorn 8.14.0, MIT) and admits it only when every
+  `agent()` is a direct call with a literal model and effort, nothing reaches the
+  global object, a constructor or `eval`, and the agents the code can start fit the
+  room left in the back-room budget. Each agent the run starts is capped by that
+  count and recorded as the Controller's back room. The text scan this replaces
+  admitted `parallel.constructor(...)`, `this[...]` and an unbounded loop.
+
+- 2026-10-20: a folder beside a Controller's repo counts as its worktree
   only when it is one (MC-167). Before, any `<repo>-<slug>` folder in the front's
   folder passed by its name, a separate repository named that way included; now
   the fleet reads each such folder's `.git` file and admits it only when its
