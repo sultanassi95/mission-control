@@ -206,7 +206,8 @@ export const register: Register = on => {
     // Questions stored before Flight asked them itself: an undelivered or held answer is open again.
     await step('poll.migrate', async () => {
       await migrate($)
-      void askQueue($).catch((err: unknown) => log($, 'ask', 'queue', `not put to Flight: ${String(err).slice(0, 160)}`))
+      // Awaited inside the step, whose failure is audited: a promise left running past session start had nothing to catch it.
+      await askQueue($)
     })
     await step('app.supervise', async () => {
       if ((await $.store.get(APP_ALWAYS).catch(() => false)) === true) void superviseApp($)
@@ -408,7 +409,7 @@ export const register: Register = on => {
         flightActivity = ''
         if (app) void pushState($, app).catch(() => undefined)
         // Questions that arrived while Flight worked are put to it now its turn has ended.
-        void askQueue($).catch((err: unknown) => log($, 'ask', 'queue', `not put to Flight: ${String(err).slice(0, 160)}`))
+        void askQueue($).catch((err: unknown) => log($, 'ask', 'queue', `not put to Flight: ${String(err).slice(0, 160)}`).catch(() => undefined))
       }
     }
     const agentId = e.agentId
