@@ -6,7 +6,15 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
-- 2026-10-20 (latest): a Controller's question is one of Flight's own, and the
+- 2026-10-20 (latest): a Controller's `cd <its shell's own directory> && gh ...`
+  is no longer refused as unpinned (MC-168, MC-155). The engine drops a leading
+  `cd` to the directory the shell is already in before the guard reads the
+  command, so the guard saw a bare `gh` with no pin. The fleet now records where
+  each agent's shell is from the engine's CwdChanged event and pins such a call
+  there, only when nothing earlier on the line moved the shell (`cd`, `pushd`,
+  `popd`), and only inside the console's directory as before.
+
+- 2026-10-20: a Controller's question is one of Flight's own, and the
   Poll is gone (MC-163). The fleet queues each open question and, while Flight
   is idle, puts up to four to it in one prompt (urgent first, then oldest);
   Flight asks them with AskUserQuestion, each header the item's id, in the app
