@@ -244,3 +244,20 @@ span.doc { flex-wrap: wrap; column-gap: var(--s2); row-gap: 0; padding-block: va
 .top .grow { min-width: 0; }
 #link { min-width: 0; }
 #link-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+
+/* A phone on its side (MC-164): the tabs become a rail on the left, the header one line, and the
+   quick chips give way (the / button lists every command), so the chat keeps most of the height. */
+@media (orientation: landscape) and (max-height: 540px) {
+  .app { max-width: none; display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; grid-template-areas: "rail top" "rail main" "rail composer"; }
+  .top { grid-area: top; padding: var(--s1) max(var(--s4), env(safe-area-inset-right, 0px)) var(--s1) var(--s4); gap: var(--s2); }
+  .top .grow { display: flex; align-items: baseline; gap: var(--s3); }
+  .top h1 { font-size: var(--t-md); line-height: var(--lh-md); flex: none; }
+  .main { grid-area: main; padding: var(--s2) max(var(--s4), env(safe-area-inset-right, 0px)) var(--s2) var(--s4); }
+  .composer { grid-area: composer; padding: var(--s1) max(var(--s3), env(safe-area-inset-right, 0px)) calc(var(--s1) + env(safe-area-inset-bottom, 0px)) var(--s3); }
+  .quick { display: none; }
+  .tabs { grid-area: rail; display: flex; flex-direction: column; justify-content: center; gap: var(--s1); border-top: 0; border-right: 1px solid var(--line); padding: var(--s1) var(--s1) var(--s1) max(var(--s1), env(safe-area-inset-left, 0px)); }
+  .tab { min-height: var(--target); padding: var(--s1) var(--s2); }
+  .view-flight > * { width: 100%; max-width: var(--read); margin-inline: auto; }
+  .composer > * { width: 100%; max-width: var(--read); margin-inline: auto; }
+  .sheet { max-height: 92vh; }
+}
