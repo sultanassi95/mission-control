@@ -1058,7 +1058,8 @@ test('gh api refuses a delete, a merge, another repo and every endpoint off the 
 
 test('gh write verbs name their PR or issue in the pinned repo, never by URL', () => {
   expect(R(`${IN}gh pr edit https://github.com/other/repo/pull/3 --body x`)).toContain('never by URL')
-  expect(R(`${IN}gh pr comment github.com/other/repo/pull/3 --body x`)).toContain('never by URL')
+  // With no scheme gh reads it as a branch name of the pinned repo, which is no other repo's item.
+  expect(R(`${IN}gh pr comment github.com/other/repo/pull/3 --body x`)).toBeUndefined()
   expect(R(`${IN}gh issue close https://github.com/other/repo/issues/9`)).toContain('never by URL')
   expect(R(`${IN}gh pr view https://github.com/other/repo/pull/3`)).toBeUndefined()
 })
@@ -1114,4 +1115,19 @@ test('gh issue develop is refused: it makes a branch under any name, in any repo
 test('a gh write verb refuses an OWNER/REPO#N reference, and a body that only mentions a URL passes', () => {
   expect(R(`${IN}gh issue comment other/repo#1 --body x`)).toContain('never by URL')
   expect(R(`${IN}gh pr comment 40 --body "https://github.com/o/r/pull/3 follow-up"`)).toBeUndefined()
+})
+
+test('a gh write verb takes only a number or a branch as its item: gh reads a URL with any tail as that URL', () => {
+  const URL = 'never by URL'
+  expect(R(`${IN}gh pr edit https://github.com/other/repo/pull/3/files --body x`)).toContain(URL)
+  expect(R(`${IN}gh pr edit 'https://github.com/other/repo/pull/3#issuecomment-1' --body x`)).toContain(URL)
+  expect(R(`${IN}gh pr ready 'https://github.com/other/repo/pull/3?x=1'`)).toContain(URL)
+  expect(R(`${IN}gh pr comment owner/repo#3 --body x`)).toContain(URL)
+  expect(R(`${IN}gh issue close http://github.com/other/repo/issues/9`)).toContain(URL)
+  expect(R(`${IN}gh pr edit $PR --body x`)).toContain(URL)
+  // A branch with a slash, a body or title holding a URL, and a valued option before the item all pass.
+  expect(R(`${IN}gh pr ready feat/x`)).toBeUndefined()
+  expect(R(`${IN}gh pr edit --title 'see https://github.com/o/r/pull/3/files' 40`)).toBeUndefined()
+  expect(R(`${IN}gh issue comment 9 --body 'https://github.com/o/r/issues/9#x'`)).toBeUndefined()
+  expect(R(`${IN}gh pr comment 40 --delete-last --yes`)).toContain('cannot be restored')
 })

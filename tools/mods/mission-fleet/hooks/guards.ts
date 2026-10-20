@@ -228,8 +228,13 @@ const GH_ALLOWED: Record<string, Set<string> | 'any'> = {
   search: 'any',
 }
 const GH_READ_VERBS = new Set(['view', 'list', 'checks', 'diff', 'status', 'watch'])
-// A PR or issue in another repo: its URL, or OWNER/REPO#N. A word that only starts with one (a body) is not.
-const GH_ITEM_URL = /^((https?:\/\/)?[^/\s]+\/[^/\s]+\/[^/\s]+\/(pull|issues)\/[0-9]+\/?|[^/\s]+\/[^/\s#]+#[0-9]+)$/i
+// gh pr, issue and run options that take the next word as their value: what follows one is not the item.
+const GH_VALUED = new Set(['-b', '--body', '-F', '--body-file', '-t', '--title', '-B', '--base', '-H', '--head', '-a', '--assignee', '-l', '--label', '-m', '--milestone',
+  '-p', '--project', '-r', '--reviewer', '--reason', '-c', '--comment', '-T', '--template', '-j', '--job', '--recover',
+  '--add-assignee', '--remove-assignee', '--add-label', '--remove-label', '--add-project', '--remove-project', '--add-reviewer', '--remove-reviewer'])
+// The item a write verb acts on, in the pinned repo: a number or a branch name. gh reads a URL with any tail
+// (/files, #comment, ?x=1) or OWNER/REPO#N as another repo's item, so nothing else passes.
+const GH_ITEM = /^([0-9]+|[A-Za-z0-9][A-Za-z0-9._/-]*)$/
 
 // gh api options that take the next word as their value (or attached, -XPOST, --method=POST).
 const GH_API_VALUED = new Set(['-X', '--method', '-f', '--raw-field', '-F', '--field', '-H', '--header', '--input', '-q', '--jq', '-t', '--template', '--cache', '-p', '--preview', '--hostname'])
@@ -765,7 +770,18 @@ function ghRefusal(rest: Word[]): string | undefined {
     if (group.text === 'auth') return 'gh auth is read-only here (status): switching or logging in changes the account every session on this Mac uses.'
     return `gh ${group.text} ${verb?.text ?? ''} is not allowed here.`
   }
-  if (verb && !GH_READ_VERBS.has(verb.text) && pos.some(p => GH_ITEM_URL.test(p.text))) return `gh ${group.text} ${verb.text} names its PR or issue by number or branch here, never by URL: a URL can name another repo.`
+  if (verb && !GH_READ_VERBS.has(verb.text)) {
+    if (rest.some(w => w.text.startsWith('--delete-last'))) return `gh ${group.text} ${verb.text} --delete-last is not allowed here: a deleted comment cannot be restored.`
+    const at = rest.indexOf(verb)
+    for (let i = at + 1; i < rest.length; i++) {
+      const w = rest[i] as Word
+      if (w.text.startsWith('-')) {
+        if (GH_VALUED.has(w.text)) i++
+        continue
+      }
+      if (w.dynamic || w.glob || !GH_ITEM.test(w.text)) return `gh ${group.text} ${verb.text} names its PR or issue by number or branch here, never by URL: a URL can name another repo.`
+    }
+  }
   return undefined
 }
 
