@@ -90,6 +90,17 @@ function isFrontFolder(dir: string, clone: CloneScope | undefined): boolean {
 }
 
 /**
+ * True when dir is in a worktree beside the console's repo, `<front folder>/<repo>-<slug>[/...]`, where
+ * the delivery flows place one (framework/task-board.md). Only for a console whose directory is a repo
+ * one level under its own front's folder: beside a front's folder lies another front.
+ */
+function isSiblingWorktree(dir: string, scope: string, clone: CloneScope | undefined): boolean {
+  if (!clone || foldPath(`${scope}/..`) !== foldPath(clone.home)) return false
+  const rest = dir.startsWith(`${scope}-`) ? dir.slice(scope.length + 1) : ''
+  return /^[A-Za-z0-9._-]+(\/|$)/.test(rest) && !NO_NAME.test(rest.split('/')[0] ?? '')
+}
+
+/**
  * The folder git names for a clone of `source` when no destination is given, as git's
  * guess_dir_name (builtin/clone.c) derives it: skip the scheme and any user, strip trailing
  * slashes and a `/.git`, strip a port when there is no path, take the last part after `/` or
@@ -206,13 +217,74 @@ export function cloneRefusal(args: Word[], pin: string | undefined, clone: Clone
   return `it would land in ${target}; ${use}`
 }
 
+// gh resolves the repository from the pinned directory's remote (-R is refused), so these verbs act on the
+// Controller's own repo; a write verb naming a PR or issue by URL could reach another one, and is refused.
 const GH_ALLOWED: Record<string, Set<string> | 'any'> = {
-  pr: new Set(['create', 'view', 'list', 'checks', 'diff', 'status', 'comment']),
-  issue: 'any',
-  run: new Set(['list', 'view', 'watch']),
+  pr: new Set(['create', 'view', 'list', 'checks', 'diff', 'status', 'comment', 'edit', 'ready']),
+  issue: new Set(['list', 'view', 'status', 'create', 'comment', 'edit', 'close', 'reopen', 'pin', 'unpin', 'lock', 'unlock', 'develop']),
+  run: new Set(['list', 'view', 'watch', 'rerun']),
   repo: new Set(['view']),
   auth: new Set(['status']),
   search: 'any',
+}
+const GH_READ_VERBS = new Set(['view', 'list', 'checks', 'diff', 'status', 'watch'])
+const GH_ITEM_URL = /^(https?:\/\/)?[^/\s]+\/[^/\s]+\/[^/\s]+\/(pull|issues)\/[0-9]+/i
+
+// gh api options that take the next word as their value (or attached, -XPOST, --method=POST).
+const GH_API_VALUED = new Set(['-X', '--method', '-f', '--raw-field', '-F', '--field', '-H', '--header', '--input', '-q', '--jq', '-t', '--template', '--cache', '-p', '--preview', '--hostname'])
+const GH_API_BODY = new Set(['-f', '--raw-field', '-F', '--field', '--input'])
+// Writes go only to the pinned repo (gh fills {owner} and {repo} from it), and only to PR, issue, comment
+// and CI-rerun endpoints: none of them moves a branch, merges, changes settings or deletes.
+const GH_API_WRITABLE = [
+  /^issues\/[0-9]+$/, /^issues\/[0-9]+\/(comments|labels|assignees)$/, /^issues\/comments\/[0-9]+$/,
+  /^pulls\/[0-9]+$/, /^pulls\/[0-9]+\/(comments|requested_reviewers)$/, /^pulls\/comments\/[0-9]+$/, /^pulls\/[0-9]+\/comments\/[0-9]+\/replies$/,
+  /^actions\/runs\/[0-9]+\/(rerun|rerun-failed-jobs|cancel)$/, /^actions\/jobs\/[0-9]+\/rerun$/,
+]
+const GH_API_MERGE = /(^|\/)(pulls\/[^/]+\/merge|merges)\/?$/i
+const OWN_REPO = /^\/?repos\/\{owner\}\/\{repo\}\/(.+?)\/?$/
+
+/** Why a Controller may not run this gh api call, or undefined when it may: reads anywhere, writes as GH_API_WRITABLE lists. */
+function ghApiRefusal(args: Word[]): string | undefined {
+  let method: string | undefined
+  let body = false
+  const positional: Word[] = []
+  for (let i = 0; i < args.length; i++) {
+    const w = args[i] as Word
+    const t = w.text
+    const eq = t.indexOf('=')
+    const long = t.startsWith('--') && eq > 2 ? t.slice(0, eq) : t
+    const short = /^-[A-Za-z]./.test(t) && !t.startsWith('--') ? t.slice(0, 2) : t
+    const opt = GH_API_VALUED.has(long) ? long : GH_API_VALUED.has(short) ? short : undefined
+    if (opt) {
+      const value = opt === t ? args[++i] : undefined
+      const text = value ? value.text : opt === long ? t.slice(eq + 1) : t.slice(2)
+      if (opt === '--hostname') return 'gh api --hostname is not allowed here: it reaches another GitHub host than the pinned repo\'s.'
+      if (opt === '-X' || opt === '--method') {
+        if (value?.dynamic) return 'The gh api method must be literal.'
+        method = text.toUpperCase()
+      }
+      if (GH_API_BODY.has(opt)) body = true
+      if ((opt === '-H' || opt === '--header') && /method/i.test(text)) return 'gh api takes no header that overrides its method.'
+      continue
+    }
+    // pflag reads -iX POST as -i plus -X POST: a cluster could hide a method, so options come one at a time.
+    if (/^-[A-Za-z]{2,}/.test(t)) return `gh api ${t}: write its options one at a time (-i -X POST), so the method and fields are readable.`
+    if (!t.startsWith('-')) positional.push(w)
+  }
+  const endpoint = positional[0]
+  if (positional.some(p => p.text === 'graphql')) return 'gh api graphql is not allowed here (it can merge and push).'
+  const writes = (method !== undefined && method !== 'GET' && method !== 'HEAD') || (method === undefined && body)
+  if (!writes) return undefined
+  if (method === 'DELETE') return 'gh api -X DELETE is not allowed here: a delete cannot be undone.'
+  if (!endpoint) return 'Name the gh api endpoint.'
+  if (GH_API_MERGE.test(endpoint.text)) return 'Merging is the founder\'s, never a Controller\'s.'
+  const own = OWN_REPO.exec(endpoint.text)
+  // The {owner} and {repo} braces read as a glob; any other glob, a variable or a substitution is unreadable.
+  const literal = !endpoint.dynamic && !/[*?[\]~]/.test(endpoint.text) && !/\{(?!owner\}|repo\})/.test(endpoint.text)
+  if (!own || !literal || !GH_API_WRITABLE.some(r => r.test(own[1] ?? ''))) {
+    return 'gh api writes only to the pinned repo\'s PR, issue, comment and CI-rerun endpoints, written as repos/{owner}/{repo}/<endpoint> (pulls/N, issues/N/comments, actions/runs/N/rerun and the like); reads (GET) go anywhere.'
+  }
+  return undefined
 }
 
 const SHELL_KEYWORDS = new Set(['if', 'then', 'else', 'elif', 'fi', 'do', 'done', 'while', 'until', 'for', 'case', 'esac', 'in', 'function', 'time', '!', '{', '}', '[[', ']]'])
@@ -680,16 +752,16 @@ function ghRefusal(rest: Word[]): string | undefined {
   }
   const [group, verb] = pos
   if (!group || group.dynamic || verb?.dynamic) return 'The gh subcommand must be literal.'
-  if (group.text === 'api') {
-    if (pos.some(p => p.text === 'graphql')) return 'gh api graphql is not allowed here (it can merge and push).'
-    const m = rest.findIndex(w => w.text === '-X' || w.text === '--method')
-    if (m >= 0 && (rest[m + 1]?.text ?? '').toUpperCase() !== 'GET') return 'gh api is read-only here (GET only).'
-    if (rest.some(w => /^(-[fF]|--field|--raw-field|--input)/.test(w.text) || (/^(-X.|--method=)/.test(w.text) && !/^(-XGET|--method=GET)$/i.test(w.text)))) return 'gh api is read-only here (GET only, no fields).'
-    return undefined
-  }
+  if (group.text === 'api') return ghApiRefusal(rest.slice(rest.indexOf(group) + 1))
   const allowed = GH_ALLOWED[group.text]
   if (!allowed) return `gh ${group.text} is not allowed here.`
-  if (allowed !== 'any' && (!verb || !allowed.has(verb.text))) return verb?.text === 'merge' ? 'Merging is the founder\'s, never a Controller\'s.' : `gh ${group.text} ${verb?.text ?? ''} is not allowed here.`
+  if (allowed !== 'any' && (!verb || !allowed.has(verb.text))) {
+    if (verb?.text === 'merge') return 'Merging is the founder\'s, never a Controller\'s.'
+    if (group.text === 'issue' && (verb?.text === 'delete' || verb?.text === 'transfer')) return `gh issue ${verb.text} is not allowed here: it cannot be undone from this repo.`
+    if (group.text === 'auth') return 'gh auth is read-only here (status): switching or logging in changes the account every session on this Mac uses.'
+    return `gh ${group.text} ${verb?.text ?? ''} is not allowed here.`
+  }
+  if (verb && !GH_READ_VERBS.has(verb.text) && pos.some(p => GH_ITEM_URL.test(p.text))) return `gh ${group.text} ${verb.text} names its PR or issue by number or branch here, never by URL: a URL can name another repo.`
   return undefined
 }
 
@@ -866,7 +938,8 @@ export function shellRefusal(role: Role, command: string, protectedBranches: str
       if (!dir) return `Pin the repo on every ${name} call: \`cd ${scope} && ${name} ...\`${name === 'git' ? ` or \`git -C ${scope} ...\`` : ''}. Your shell may start in another repo.`
       // A Controller's clone may also run from a front's folder, where it lands one level down; nothing else runs there.
       const cloning = role === 'controller' && clone !== undefined && name === 'git' && isClone(rest)
-      if (dir !== scope && !dir.startsWith(`${scope}/`) && !(cloning && isFrontFolder(dir, clone))) return `${dir} is outside your console's directory (${scope}).`
+      const sibling = role === 'controller' && isSiblingWorktree(dir, scope, clone)
+      if (dir !== scope && !dir.startsWith(`${scope}/`) && !sibling && !(cloning && isFrontFolder(dir, clone))) return `${dir} is outside your console's directory (${scope}).`
       pin = dir
       // A clone's pin decides where it writes, and the guard reads it as text while the disk follows links (a
       // cloned repository can hold one). So it must not hang on a cd that CDPATH could resolve elsewhere, step
@@ -889,6 +962,135 @@ export function shellRefusal(role: Role, command: string, protectedBranches: str
   return undefined
 }
 
+/**
+ * A workflow script with the text of its strings, template text and comments blanked to spaces (quotes and
+ * `${...}` code kept), so what is left is the code that runs. Regex literals are found by the usual
+ * heuristic (a `/` where an operand is expected); undefined when a string, comment or regex never closes.
+ */
+export function workflowCode(script: string): string | undefined {
+  let out = ''
+  let i = 0
+  const n = script.length
+  // Brace depth of each open `${`, innermost last: a `}` at depth 0 there resumes the template.
+  const exprs: number[] = []
+  let prev = ''
+  const blank = (s: string) => s.replace(/[^\n]/g, ' ')
+  const template = (): boolean => {
+    while (i < n) {
+      const c = script[i] ?? ''
+      if (c === '\\') { out += '  '; i += 2; continue }
+      if (c === '`') { out += '`'; i++; return true }
+      if (c === '$' && script[i + 1] === '{') { out += '${'; i += 2; exprs.push(0); return true }
+      out += c === '\n' ? '\n' : ' '
+      i++
+    }
+    return false
+  }
+  while (i < n) {
+    const c = script[i] ?? ''
+    const d = script[i + 1] ?? ''
+    if (c === '/' && d === '/') {
+      const e = script.indexOf('\n', i)
+      const end = e < 0 ? n : e
+      out += blank(script.slice(i, end))
+      i = end
+      continue
+    }
+    if (c === '/' && d === '*') {
+      const e = script.indexOf('*/', i + 2)
+      if (e < 0) return undefined
+      out += blank(script.slice(i, e + 2))
+      i = e + 2
+      continue
+    }
+    if (c === "'" || c === '"') {
+      let j = i + 1
+      for (; j < n && script[j] !== c && script[j] !== '\n'; j++) if (script[j] === '\\') j++
+      if (script[j] !== c) return undefined
+      out += c + blank(script.slice(i + 1, j)) + c
+      i = j + 1
+      prev = 'x'
+      continue
+    }
+    if (c === '`') {
+      out += '`'
+      i++
+      if (!template()) return undefined
+      prev = 'x'
+      continue
+    }
+    if (c === '/' && (prev === '' || /[(,=:[!&|?{};+\-*%<>~^]/.test(prev))) {
+      let j = i + 1
+      let cls = false
+      for (; j < n && script[j] !== '\n'; j++) {
+        const r = script[j]
+        if (r === '\\') { j++; continue }
+        if (r === '[') cls = true
+        else if (r === ']') cls = false
+        else if (r === '/' && !cls) break
+      }
+      if (script[j] !== '/') return undefined
+      out += '/' + blank(script.slice(i + 1, j)) + '/'
+      i = j + 1
+      prev = 'x'
+      continue
+    }
+    if (exprs.length) {
+      const top = exprs.length - 1
+      if (c === '{') exprs[top] = (exprs[top] ?? 0) + 1
+      else if (c === '}') {
+        if (exprs[top] === 0) {
+          exprs.pop()
+          out += '}'
+          i++
+          if (!template()) return undefined
+          prev = 'x'
+          continue
+        }
+        exprs[top] = (exprs[top] ?? 1) - 1
+      }
+    }
+    out += c
+    if (!/\s/.test(c)) prev = /[A-Za-z0-9_$)\]]/.test(c) ? 'x' : c
+    i++
+  }
+  return exprs.length ? undefined : out
+}
+
+const WORKFLOW_KEYS = new Set(['script', 'args', 'description', 'title', 'resumeFromRunId'])
+
+/**
+ * Why a fleet role may not run this workflow, or undefined when it may. A Controller runs one only from
+ * an inline script whose every agent() call names its model and effort as literal strings. A back room never runs one.
+ */
+export function workflowRefusal(role: Role, input: unknown): string | undefined {
+  if (role !== 'controller') return 'A back-room agent never runs a workflow; report to your Controller instead.'
+  const i = (input ?? {}) as Record<string, unknown>
+  const extra = Object.keys(i).filter(k => !WORKFLOW_KEYS.has(k))
+  if (extra.length) return `A Controller runs a workflow only from an inline script: ${extra.join(', ')} ${extra.length > 1 ? 'are' : 'is'} not allowed (a saved workflow or a script file is text the guard cannot read).`
+  if (typeof i.script !== 'string' || i.script.trim() === '') return 'A Controller runs a workflow only from an inline script.'
+  const code = workflowCode(i.script)
+  if (code === undefined) return 'The workflow script has a string, comment or regex the guard cannot read to its end.'
+  if (/\b(workflow|eval|Function|globalThis|import)\b/.test(code)) return 'The workflow script runs only agent(), parallel(), pipeline(), phase() and log() as written: no nested workflow(), eval, Function, globalThis or import.'
+  const NEEDS = 'every agent() call in a Controller\'s workflow states model and effort as literal strings, as in agent(prompt, { model: \'sonnet\', effort: \'medium\' })'
+  let calls = 0
+  for (const m of code.matchAll(/(\.\s*)?\bagent\b(\s*)(\(?)/g)) {
+    if (m[1]) continue
+    if (!m[3]) return `The workflow script uses agent other than as a direct call: ${NEEDS}.`
+    let depth = 0
+    let k = (m.index ?? 0) + m[0].length - 1
+    for (; k < code.length; k++) {
+      if (code[k] === '(') depth++
+      else if (code[k] === ')' && --depth === 0) break
+    }
+    const call = code.slice(m.index, k + 1)
+    if (!/\bmodel\s*:\s*['"`]/.test(call) || !/\beffort\s*:\s*['"`]/.test(call)) return `The workflow script has an agent() call without a literal model and effort: ${NEEDS}.`
+    calls++
+  }
+  if (calls === 0) return 'The workflow script calls no agent(): run that work directly.'
+  return undefined
+}
+
 /** MCP tools that run shell commands are refused for fleet roles: the guard reads Bash only. */
 export function isShellLikeTool(tool: string): boolean {
   return tool.startsWith('mcp__') && /(shell|exec|terminal|run_?command|run_?code|bash)/i.test(tool)
@@ -896,7 +1098,10 @@ export function isShellLikeTool(tool: string): boolean {
 
 /** The refusal for any tool call by a fleet role, if any. */
 export function toolRefusal(role: Role, tool: string, input: unknown, protectedBranches: string[], scopeDir?: string, clone?: CloneScope): string | undefined {
-  if (tool === 'Workflow') return 'Workflows are Flight\'s to run; a Controller dispatches its back room with the Agent tool.'
+  if (tool === 'Workflow') {
+    const why = workflowRefusal(role, input)
+    if (why) return why
+  }
   if (isShellLikeTool(tool)) return `${tool} runs shell commands the fleet guard cannot read; use Bash.`
   const args = (input ?? {}) as Record<string, unknown>
   if (typeof args.command === 'string') {

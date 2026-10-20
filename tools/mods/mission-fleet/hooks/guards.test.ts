@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import type { PollItem } from '../types'
-import { awaitingFlight, dropRelayCodes, fleetSelfApproval, isChoiceVerb, isFlightOnly, isRelayedVerb, RELAY_TTL, relayHold, splitRelayCode, spendRelayCode, isShellLikeTool, pinnedDir, protectedFromSpoke, pushDestination, shellRefusal, tokenize, toolRefusal } from './guards'
+import { awaitingFlight, dropRelayCodes, fleetSelfApproval, isChoiceVerb, isFlightOnly, isRelayedVerb, RELAY_TTL, relayHold, splitRelayCode, spendRelayCode, isShellLikeTool, pinnedDir, protectedFromSpoke, pushDestination, shellRefusal, tokenize, toolRefusal, workflowCode, workflowRefusal } from './guards'
 import type { CloneScope, RelayCodes } from './guards'
 
 const C = (cmd: string, prot: string[] = []) => shellRefusal('controller', cmd, prot)
@@ -214,9 +214,9 @@ test('gh: merges and remote writes are refused, reads and PR creation pass', () 
   expect(C('gh api repos/o/r/pulls/12')).toBeUndefined()
   expect(C('gh pr merge 12 --squash')).toContain('founder')
   expect(C('gh pr -R o/r merge 12')).toContain('founder')
-  expect(C('gh api -X PUT repos/o/r/pulls/12/merge')).toContain('read-only')
-  expect(C('gh api repos/o/r/merges -f base=main -f head=x')).toContain('read-only')
-  expect(C('gh api -X PATCH repos/o/r/git/refs/heads/main -f sha=1')).toContain('read-only')
+  expect(C('gh api -X PUT repos/o/r/pulls/12/merge')).toContain('founder')
+  expect(C('gh api repos/o/r/merges -f base=main -f head=x')).toContain('founder')
+  expect(C('gh api -X PATCH repos/o/r/git/refs/heads/main -f sha=1')).toContain('writes only to the pinned repo')
   expect(C("gh api graphql -f query='mutation{mergePullRequest(input:{pullRequestId:\"X\"}){clientMutationId}}'")).toContain('graphql')
   expect(C('gh repo delete o/r')).toContain('not allowed')
 })
@@ -253,7 +253,8 @@ test('a back-room agent runs no git write beyond add and commit', () => {
 })
 
 test('other tools: Workflow and MCP shells are refused, any tool input naming a Flight file is refused', () => {
-  expect(toolRefusal('controller', 'Workflow', {}, [])).toContain('Workflows')
+  expect(toolRefusal('controller', 'Workflow', {}, [])).toContain('only from an inline script')
+  expect(toolRefusal('back room', 'Workflow', {}, [])).toContain('never runs a workflow')
   expect(isShellLikeTool('mcp__plugin_serena_serena__execute_shell_command')).toBe(true)
   expect(toolRefusal('back room', 'mcp__plugin_serena_serena__execute_shell_command', { command: 'ls' }, [])).toContain('use Bash')
   expect(toolRefusal('controller', 'Monitor', { command: 'git push origin main' }, [])).toContain('base or deploy branch')
@@ -1000,4 +1001,119 @@ test('redirects do not change ordinary commands, and a Flight-only file is seen 
   expect(tokenize('cat < _command/daily/today.md').commands[0]?.redirects.map(w => w.text)).toContain('_command/daily/today.md')
   expect(C('cat < _command/daily/today.md')).toContain("Flight's to write")
   expect(C('echo x > _command/trackers/fronts.md')).toContain("Flight's to write")
+})
+
+// ---- What the skills run (MC-162) ----
+// The acme Controller's repo, one level under its front's folder, as /console staff sets it for a one-repo front.
+
+const REPO = '/w/fronts/acme/acme'
+const R = (cmd: string, role: 'controller' | 'back room' = 'controller', clone: CloneScope | undefined = ACME) => shellRefusal(role, cmd, [], REPO, clone)
+const IN = `cd ${REPO} && `
+
+test('a Controller edits its own PR: body, title, base and labels', () => {
+  expect(R(`${IN}gh pr edit 40 --body "${sub('## Summary\n\nx')}"`)).toBeUndefined()
+  expect(R(`${IN}gh pr edit 40 --title 'fix(mc-1): x' --add-label bug`)).toBeUndefined()
+  expect(R(`${IN}gh pr edit fix/mc-1-x --base fix/mc-0-y`)).toBeUndefined()
+})
+
+test('a Controller marks its own PR ready for review, and back to draft', () => {
+  expect(R(`${IN}gh pr ready 40`)).toBeUndefined()
+  expect(R(`${IN}gh pr ready 40 --undo`)).toBeUndefined()
+})
+
+test('a Controller reruns its own CI', () => {
+  expect(R(`${IN}gh run rerun 39037584041 --failed`)).toBeUndefined()
+  expect(R(`${IN}gh run view 39037584041 --log-failed`)).toBeUndefined()
+})
+
+test('a Controller writes through gh api to its own repo\'s PR, issue, comment and CI-rerun endpoints', () => {
+  expect(R(`${IN}gh api -X PATCH repos/{owner}/{repo}/pulls/40 -f body=x`)).toBeUndefined()
+  expect(R(`${IN}gh api repos/{owner}/{repo}/issues/40/comments -f body=x`)).toBeUndefined()
+  expect(R(`${IN}gh api --method POST 'repos/{owner}/{repo}/actions/runs/9/rerun-failed-jobs'`)).toBeUndefined()
+  expect(R(`${IN}gh api -XPATCH repos/{owner}/{repo}/issues/comments/7 --input body.json`)).toBeUndefined()
+  // Reads go anywhere, as before.
+  expect(R(`${IN}gh api repos/other/repo/pulls/3/comments`)).toBeUndefined()
+  expect(R(`${IN}gh api -X GET search/issues -f q=repo:o/r`)).toBeUndefined()
+})
+
+test('gh api refuses a delete, a merge, another repo and every endpoint off the list', () => {
+  expect(R(`${IN}gh api -X DELETE repos/{owner}/{repo}/issues/comments/7`)).toContain('-X DELETE is not allowed')
+  expect(R(`${IN}gh api --method=delete repos/{owner}/{repo}/pulls/comments/7`)).toContain('-X DELETE is not allowed')
+  expect(R(`${IN}gh api -X PUT repos/{owner}/{repo}/pulls/40/merge`)).toContain('founder')
+  expect(R(`${IN}gh api repos/{owner}/{repo}/merges -f base=main -f head=x`)).toContain('founder')
+  const OFF = 'writes only to the pinned repo'
+  expect(R(`${IN}gh api -X PATCH repos/other/repo/pulls/3 -f body=x`)).toContain(OFF)
+  expect(R(`${IN}gh api -X PATCH repos/{owner}/{repo}/git/refs/heads/main -f sha=1`)).toContain(OFF)
+  expect(R(`${IN}gh api -X PUT repos/{owner}/{repo}/contents/README.md -f message=x -f content=eA==`)).toContain(OFF)
+  expect(R(`${IN}gh api -X PATCH repos/{owner}/{repo} -f default_branch=x`)).toContain(OFF)
+  expect(R(`${IN}gh api -X POST repos/{owner}/{repo}/actions/workflows/deploy.yml/dispatches -f ref=main`)).toContain(OFF)
+  expect(R(`${IN}gh api -X PATCH repos/{owner}/{repo}/pulls/$N -f body=x`)).toContain(OFF)
+  expect(R(`${IN}gh api -X PATCH repos/{owner}/{repo}/pulls/{1,2} -f body=x`)).toContain(OFF)
+  expect(R(`${IN}gh api --hostname ghe.example.com repos/{owner}/{repo}/pulls/3`)).toContain('--hostname')
+  expect(R(`${IN}gh api -H 'X-HTTP-Method-Override: DELETE' repos/{owner}/{repo}/pulls/3 -f x=1`)).toContain('overrides its method')
+  expect(R(`${IN}gh api -iX DELETE repos/{owner}/{repo}/pulls/comments/7`)).toContain('one at a time')
+  expect(R(`${IN}gh api graphql -f query=x`)).toContain('graphql')
+})
+
+test('gh write verbs name their PR or issue in the pinned repo, never by URL', () => {
+  expect(R(`${IN}gh pr edit https://github.com/other/repo/pull/3 --body x`)).toContain('never by URL')
+  expect(R(`${IN}gh pr comment github.com/other/repo/pull/3 --body x`)).toContain('never by URL')
+  expect(R(`${IN}gh issue close https://github.com/other/repo/issues/9`)).toContain('never by URL')
+  expect(R(`${IN}gh pr view https://github.com/other/repo/pull/3`)).toBeUndefined()
+})
+
+test('gh refuses what cannot be undone or reaches every session: issue delete and transfer, auth switch, merge', () => {
+  expect(R(`${IN}gh issue delete 9 --yes`)).toContain('cannot be undone')
+  expect(R(`${IN}gh issue transfer 9 other/repo`)).toContain('cannot be undone')
+  expect(R(`${IN}gh issue comment 9 --body x`)).toBeUndefined()
+  expect(R(`${IN}gh auth switch --user acme-bot`)).toContain('every session on this Mac')
+  expect(R(`${IN}gh pr merge 40 --squash`)).toContain('founder')
+})
+
+test('a Controller runs git and gh from a worktree beside its repo, fronts/<front>/<repo>-<slug> (MC-160)', () => {
+  expect(R('cd /w/fronts/acme/acme-beta-318 && gh run view 5 --log-failed')).toBeUndefined()
+  expect(R('cd /w/fronts/acme/acme-beta-318 && gh pr edit 3 --body x')).toBeUndefined()
+  expect(R('cd /w/fronts/acme/acme-beta-318/src && git status')).toBeUndefined()
+  expect(R('git -C /w/fronts/acme/acme-beta-318 push -u origin feat/beta-318')).toBeUndefined()
+})
+
+test('only a worktree beside the repo counts: not another folder, not beside a front, not for the back room', () => {
+  expect(R('cd /w/fronts/acme/other && git status')).toContain('outside your console')
+  expect(R('cd /w/fronts/acme/acmeX && git status')).toContain('outside your console')
+  expect(R('cd /w/fronts/acme/acme-.. && git status')).toContain('outside your console')
+  expect(R('cd /w/fronts/acme/acme-x/../../globex && git status')).toContain('outside your console')
+  expect(R('cd /w/fronts/acme/acme-x && git status', 'back room')).toContain('outside your console')
+  expect(shellRefusal('controller', 'cd /w/fronts/acme/acme-x && git status', [], REPO)).toContain('outside your console')
+  // A console whose directory is its front's folder: beside it lies another front.
+  expect(shellRefusal('controller', 'cd /w/fronts/acme-x && git status', [], '/w/fronts/acme', ACME)).toContain('outside your console')
+  // A sibling worktree is still no place to clone from.
+  expect(R('cd /w/fronts/acme/acme-x && git clone https://github.com/o/r.git')).toContain('clones only into a front')
+})
+
+const FLOW = "export const meta = { name: 'scan', description: 'd' }\nconst out = await parallel(['a', 'b'].map(f => () => agent(`read ${f}`, { model: 'sonnet', effort: 'low', label: f })))\nreturn out"
+
+test('a Controller runs an inline workflow whose every agent() call states its model and effort', () => {
+  expect(toolRefusal('controller', 'Workflow', { script: FLOW }, [], REPO, ACME)).toBeUndefined()
+  // Text that only mentions agent( is not a call.
+  expect(workflowRefusal('controller', { script: `${FLOW}\nlog('agent(x) and workflow( are words here') // agent(`, args: { n: 1 } })).toBeUndefined()
+  expect(workflowCode("a('x)') + `t ${b('y')}`")).toBe("a('  ') + `  ${b(' ')}`")
+})
+
+test('a Controller workflow is refused without a literal model and effort on every agent() call, or when the guard cannot read it', () => {
+  const NEEDS = 'without a literal model and effort'
+  expect(workflowRefusal('controller', { script: FLOW.replace(", effort: 'low'", '') })).toContain(NEEDS)
+  expect(workflowRefusal('controller', { script: FLOW.replace("model: 'sonnet'", 'model: m') })).toContain(NEEDS)
+  expect(workflowRefusal('controller', { script: `${FLOW}\nawait agent('p', OPTS)` })).toContain(NEEDS)
+  expect(workflowRefusal('controller', { script: `${FLOW}\nconst a = agent\nawait a('p')` })).toContain('other than as a direct call')
+  expect(workflowRefusal('controller', { script: `${FLOW}\nlog(\`\${await agent('p')}\`)` })).toContain(NEEDS)
+  expect(workflowRefusal('controller', { script: `${FLOW}\nawait workflow('other')` })).toContain('no nested workflow()')
+  expect(workflowRefusal('controller', { script: `${FLOW}\nglobalThis['ag' + 'ent']('p')` })).toContain('globalThis')
+  expect(workflowRefusal('controller', { script: "log('open" })).toContain('cannot read to its end')
+  expect(workflowRefusal('controller', { script: "export const meta = { name: 'x', description: 'd' }\nlog('x')" })).toContain('calls no agent()')
+  expect(workflowRefusal('controller', { name: 'review-changes' })).toContain('name is not allowed')
+  expect(workflowRefusal('controller', { script: FLOW, scriptPath: '/tmp/x.js' })).toContain('scriptPath is not allowed')
+  expect(workflowRefusal('back room', { script: FLOW })).toContain('never runs a workflow')
+  // The script is tool input like any other: a Flight-only path in it is still refused.
+  const pointer = '_command/' + 'daily/' + 'today.md'
+  expect(toolRefusal('controller', 'Workflow', { script: `${FLOW}\nlog('${pointer}')` }, [], REPO, ACME)).toContain('Flight')
 })
