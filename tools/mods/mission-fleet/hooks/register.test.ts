@@ -1109,9 +1109,13 @@ test('an admitted workflow starts only the agents it was admitted for, each guar
   expect(third.deny).toContain('admitted for 2 agents')
   // A start over (the engine's place back at 1, by run id only) is still over the count.
   expect((await workflowAgent($, '', 'wf_1', 1)).deny).toContain('has started 2')
-  // The room the run holds is spent: a second workflow of 3 agents no longer fits the budget.
+  // The room the run holds is spent: a second workflow of 3 agents no longer fits the budget,
+  // and the Agent tool's budget counts the agents the run holds too: 2 held, so two more Agent spawns, not four.
   const over = await workflowBy($, "export const meta = { name: 'x', description: 'd' }\nawait parallel(['a', 'b', 'c'].map(f => () => agent(f, { model: 'sonnet', effort: 'low' })))", 'tu2')
   expect(over.reason).toContain('room for 2')
+  expect((await workflowBy($, WF_SCRIPT, 'tu3')).decision).toBe('allow')
+  const agentTool = await $.agent.spawn({ prompt: 'x', parentAgentId: 'f1' } as Parameters<Engine['agent']['spawn']>[0])
+  expect(agentTool.deny).toContain('has 4 of its 4 back-room agents in flight')
   // Each started agent is the Controller's back room: the guard refuses it what it refuses a back room.
   const push = await bashBy($, 'cd /p/fronts/fieldkit && git push origin feat/x', 'w2')
   expect(push.decision).toBe('deny')
@@ -1121,12 +1125,14 @@ test('an admitted workflow starts only the agents it was admitted for, each guar
   expect(unplaced.decision).toBe('deny')
   expect(unplaced.reason).toContain('cannot place')
   // Flight's own workflow agents are not the fleet's to place, and keep their tools.
+  expect((await $.tool.check({ tool: 'Workflow', input: { script: WF_SCRIPT }, tool_use_id: 'tu-flight' } as Parameters<Engine['tool']['check']>[0])).decision).toBe('allow')
   const flights = await workflowAgent($, 'tu-flight', 'wf_f', 1)
   expect(flights.agentId).toBe('w3')
   expect((await bashBy($, 'echo hi > /tmp/x', 'w3')).decision).toBe('allow')
   // An unplaced agent starts nothing either, and a workflow agent with no call id is refused while the run is live.
   expect((await $.agent.spawn({ prompt: 'x', parentAgentId: 'w-unknown' } as Parameters<Engine['agent']['spawn']>[0])).deny).toContain('cannot place')
-  expect((await workflowAgent($, '', 'wf_x', 1)).deny).toContain('no call id')
+  expect((await workflowAgent($, '', 'wf_x', 1)).deny).toContain('did not see start')
+  expect((await workflowAgent($, 'tu-never-seen', 'wf_y', 1)).deny).toContain('did not see start')
   // A workflow agent of a run the guard never admitted, under a fleet agent, is refused.
   expect((await workflowAgent($, 'tu-unknown', 'wf_9', 1, 'f1')).deny).toContain('runs only as the guard admitted it')
 })

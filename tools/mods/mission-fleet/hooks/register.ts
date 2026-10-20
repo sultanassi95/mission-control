@@ -241,6 +241,10 @@ export const register: Register = on => {
 
   // Guards: what a Controller and its back room may run. A guard that fails denies.
   on('tool.check', async ($, e, next) => {
+    if (e.tool === 'Workflow' && e.tool_use_id && (!e.agentId || !(await roleOf($, e.agentId)))) {
+      outsideRuns.add(e.tool_use_id)
+      if (outsideRuns.size > 500) outsideRuns.delete(outsideRuns.values().next().value as string)
+    }
     // Auto mode cannot judge a call a plugin raised, so the fleet approves its own sends and spawns.
     const seat = e.tool === 'SendMessage' || e.tool === 'Agent' ? fleetSelfApproval(e.tool, e.input, await read($, consoles)) : undefined
     if (seat && (next.origin.plugin !== 'mission-fleet' || e.agentId)) {
@@ -325,8 +329,13 @@ export const register: Register = on => {
       }
       // A workflow raised in a fleet agent's loop that the guard never admitted runs nothing.
       if (e.parentAgentId && (await roleOf($, e.parentAgentId))) return { deny: 'A fleet agent\'s workflow runs only as the guard admitted it.' }
-      // With no call id it cannot be told from a Controller's run, so while one is live it is refused.
-      if (!e.tool_use_id && activeRuns()) return { deny: 'A workflow agent with no call id is refused while a Controller\'s workflow runs.' }
+      // Otherwise it runs only when its Workflow call was seen made outside the fleet. A run the fleet never
+      // saw start (one begun before a reload, or with no call id) is refused: it cannot be told from a Controller's.
+      // While Controller workflows are off and none was admitted, every run is Flight's and passes as before.
+      if (!outsideRuns.has(e.tool_use_id) && (runs.size > 0 || (await $.store.get(WORKFLOWS).catch(() => false)) === true)) {
+        await log($, 'workflow', 'unknown', `spawn denied: agent ${e.workflow.agentIndex} of a run the fleet did not see start`)
+        return { deny: 'This workflow agent belongs to a run the fleet did not see start, so it is refused.' }
+      }
       const started = await next(e)
       if (started.agentId) keepUnguarded(started.agentId)
       return started
@@ -342,7 +351,7 @@ export const register: Register = on => {
       return next(e)
     }
     const c = role.console
-    const live = liveBackRoom(await $.agent.list(), c)
+    const live = liveBackRoom(await $.agent.list(), c) + workflowHeld(c)
     // Reserve inside the state write, so parallel spawns in one turn cannot all pass the check.
     const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`
     const fresh = Date.now() - 120000
@@ -658,9 +667,12 @@ const runs = new Map<string, Run>()
 const RUN_TTL = 30 * 60_000
 // A run with an agent that has not ended stays live this long after its last start, in case an end is never seen.
 const RUN_MAX = 6 * 60 * 60_000
-const recent = (r: Run) => Date.now() - r.at <= (r.live.size > 0 ? RUN_MAX : RUN_TTL)
+// A run holds room while it may still start an agent or has one running, up to RUN_MAX after its last start.
+const recent = (r: Run) => Date.now() - r.at <= (r.live.size > 0 || r.started < r.cap ? RUN_MAX : RUN_TTL)
 /** Agents of workflows the fleet does not guard (Flight's own), so the unplaced-agent refusal leaves them alone. */
 const unguarded = new Set<string>()
+/** Workflow calls seen made by an agent outside the fleet (Flight, or one of Flight's own agents): their runs are not the fleet's to cap. */
+const outsideRuns = new Set<string>()
 const keepUnguarded = (id: string) => {
   unguarded.add(id)
   if (unguarded.size > 2000) unguarded.delete(unguarded.values().next().value as string)
@@ -682,7 +694,13 @@ const UNPLACED_REFUSED = /^(Bash|Write|Edit|NotebookEdit|Monitor|Agent|Task\w*|W
 
 /** True while any admitted Controller workflow is within its half hour. */
 function activeRuns(): boolean {
-  return [...runs.values()].some(recent)
+  // The unplaced-agent refusal outlasts the room: a retried agent can outlive its run's last start.
+  return [...runs.values()].some(r => Date.now() - r.at <= RUN_MAX)
+}
+
+/** Agents a Controller's recent workflows hold, which the engine does not list. */
+function workflowHeld(c: Console): number {
+  return [...runs.values()].filter(r => r.agentId === c.agentId && recent(r)).reduce((n, r) => n + r.cap - (r.started - r.live.size), 0)
 }
 
 /**
@@ -691,7 +709,7 @@ function activeRuns(): boolean {
  */
 function workflowRoom(c: Console, agents: Parameters<typeof liveBackRoom>[0]): number {
   // A run holds its whole cap less the agents that have ended: one started and still running holds its place.
-  const running = [...runs.values()].filter(r => r.agentId === c.agentId && recent(r)).reduce((n, r) => n + r.cap - (r.started - r.live.size), 0)
+  const running = workflowHeld(c)
   return Math.max(0, c.budget - liveBackRoom(agents, c) - running)
 }
 
