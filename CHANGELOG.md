@@ -6,7 +6,23 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
-- 2026-10-18 (latest): a Controller asks each decision as its own question
+- 2026-10-20 (latest): a Controller runs what the skills run in its own repo
+  (MC-162, covering MC-160). The fleet guard now allows `gh pr edit`, `gh pr
+  ready`, `gh run rerun`, `gh issue` writes but `delete` and `transfer`, and
+  `gh api` writes to the pinned repo's PR, issue, comment and CI-rerun
+  endpoints spelled `repos/{owner}/{repo}/...` (never `-X DELETE`, a merge
+  endpoint, `graphql` or `--hostname`). A gh write verb names its PR or issue
+  by number or branch, never by URL. git and gh also run from a worktree
+  beside the repo, `fronts/<front>/<repo>-<slug>`. A Controller may run an
+  inline Workflow whose every `agent()` call states model and effort as
+  literal strings; a back room never runs one. `gh auth switch` stays
+  refused: it changes the account every session uses. A new test
+  (`bun test tools/tests/skill-coverage.test.ts`) reads every skill and fails when one a Controller may run names a git or gh command the
+  guard refuses; the skills only Flight runs are listed with the reason in
+  `tools/mods/mission-fleet/hooks/skill-coverage.ts`. The workspace receives
+  the new guard when it pulls main.
+
+- 2026-10-18: a Controller asks each decision as its own question
   with the options it wrote, and the Poll becomes a read-only view (MC-125).
   A status check may add a `decisions:` block (`- <question> | 1) <option>:
   <what it does> | 2) ...`), a `notes:` line and a `for you to do:` block.

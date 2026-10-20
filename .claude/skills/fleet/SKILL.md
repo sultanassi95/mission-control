@@ -176,6 +176,15 @@ stood-down consoles drop out of the watch.
 
 The mission-fleet guard refuses, for Controllers and their back rooms: unpinned git and gh calls (every call is `cd <repo> && git ...` or `git -C <repo> ...`), pushes to base or deploy branches, force pushes and deletions, stash, PR merges, writes to Flight's files, the Claude CLI, the app's port and other processes' environments. What a Controller may do inside its scope: commit, push its own feature branches and open PRs; it never merges a PR (`controller.ts`, `guards.ts`). In git, a back room may only read, add and commit. The guard is a text guard: it catches mistakes and steered agents, and it is **not a sandbox**. Base branches are held by server-side branch protection with administrators included (`framework/remote-access.md`).
 
+A Controller runs what the skills run in its own repo, from the repo itself or a worktree beside it (`fronts/<front>/<repo>-<slug>`, for a console whose directory is a repo one level under its front's folder):
+
+- **gh**: `pr create`, `view`, `list`, `checks`, `diff`, `status`, `comment`, `edit` and `ready`; `issue` but `delete` and `transfer`; `run list`, `view`, `watch` and `rerun`. gh reads the repo from the pinned directory, so a write verb names its PR or issue by number or branch, never by URL.
+- **gh api**: reads (GET) anywhere; writes only to the pinned repo, spelled `repos/{owner}/{repo}/...`, and only to its PR, issue, comment and CI-rerun endpoints (`pulls/N`, `issues/N/comments`, `actions/runs/N/rerun` and the like). Refused by name: `-X DELETE`, a merge endpoint, `graphql`, `--hostname`, a method-override header and clustered short options.
+- **Workflow**: an inline script whose every `agent()` call states `model` and `effort` as literal strings, with no nested `workflow()`, sized inside its back-room budget. A saved workflow or a script file is refused, since the guard cannot read it, and a back room never runs one.
+- **Kept refused**: pushes to a base or deploy branch, force pushes, remote branch deletion, `--mirror` and `--all`, `gh pr merge`, stash, `gh auth switch` (it changes the account every session on this Mac uses), the app's token and ports, and starting another `claude`.
+
+Which skills a Controller runs, and which stay Flight's with the reason, is `FLIGHT_ONLY` in `tools/mods/mission-fleet/hooks/skill-coverage.ts`; `bun test tools/tests/skill-coverage.test.ts` fails when a Controller skill names a git or gh command the guard refuses and the fleet does not keep on purpose.
+
 A Controller may also clone any repository into any front of the portfolio:
 
 - **Source**: a repository URL git fetches over the network, from any owner or
