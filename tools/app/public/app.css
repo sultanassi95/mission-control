@@ -27,7 +27,8 @@ button { cursor: pointer; }
 .iconbtn { width: var(--target); height: var(--target); border-radius: var(--r-field); border: 1px solid var(--line); background: var(--surface); display: grid; place-items: center; flex: none; }
 .iconbtn svg, .send svg, .tab svg { width: var(--t-lg); height: var(--t-lg); stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
-.main { flex: 1; overflow-y: auto; padding: var(--s4); display: flex; flex-direction: column; gap: var(--s3); }
+/* Positioned, so an absolute child (a .visually-hidden label) scrolls with the chat instead of stretching the page. */
+.main { flex: 1; overflow-y: auto; padding: var(--s4); display: flex; flex-direction: column; gap: var(--s3); position: relative; }
 .main > * { flex: none; }
 
 /* Flight */
