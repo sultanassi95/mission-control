@@ -457,15 +457,11 @@ function dropStale(entry) {
   }
 }
 
-// Every live profile with what the switcher shows: items waiting on the founder (open questions not
-// yet sent to Flight, open to-dos, and decisions that never reached a Controller) and whether Flight
-// is working. The count is named gates for the client, which reads it as "N waiting". The same
-// test as the page's waitingOn and undelivered in public/app.js.
+// Every live profile with what the switcher shows: what waits on the founder (the Controllers' open
+// questions, which Flight asks, and their open to-dos) and whether Flight is working. The count is
+// named gates for the client, which reads it as "N waiting"; the page's waiting() counts the same.
 async function flightsSummary() {
-  const decided = p => p.state === 'go' || p.state === 'no-go' || p.state === 'answered'
-  const sent = p => p.kind !== 'todo' && p.sentAt && Date.now() - Date.parse(p.sentAt) <= 10 * 60_000
-  const waiting = p => (p.state === 'open' && !sent(p)) || (Boolean(p.undelivered) && decided(p))
-  const summarise = s => ({ busy: Boolean(s?.fleet?.flight?.busy), gates: (s?.fleet?.poll ?? []).filter(waiting).length })
+  const summarise = s => ({ busy: Boolean(s?.fleet?.flight?.busy), gates: (s?.fleet?.questions ?? []).length + (s?.fleet?.todos ?? []).length })
   return Promise.all(
     flights().map(async e => {
       if (e.profile === PROFILE) return { profile: e.profile, self: true, ...summarise(state) }

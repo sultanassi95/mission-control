@@ -1,4 +1,4 @@
-// Mission Control App (MC-100): Flight, Consoles, Poll and Loops on the live fleet state.
+// Mission Control App (MC-100): Flight, Consoles and Loops on the live fleet state.
 // The token arrives once as ?t= and lives in localStorage, scoped to this exact origin (port included).
 ;(() => {
   const params = new URLSearchParams(location.search)
@@ -17,7 +17,6 @@
   const ICONS = {
     flight: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg>',
     consoles: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>',
-    poll: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg>',
     loops: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 0 1 14-5.3L20 9"/><path d="M20 4v5h-5"/><path d="M20 12a8 8 0 0 1-14 5.3L4 15"/><path d="M4 20v-5h5"/></svg>',
     close: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
   }
@@ -28,12 +27,12 @@
   let seenOp = 0
   // Op ids a toast already summed up; the fleet's echo of each (lastOp, same id) is not toasted over it.
   const summed = new Set()
-  const TABS =[['flight', 'Flight'], ['consoles', 'Consoles'], ['poll', 'Poll'], ['loops', 'Loops']]
+  const TABS =[['flight', 'Flight'], ['consoles', 'Consoles'], ['loops', 'Loops']]
 
   // The remembered profile (localStorage mcapp-profile) is a wish, not the state: nothing is named or
   // connected until the first listing of live profiles decides which one opens (loadFlights).
   // files: the attachment tray, in the order picked; upload: which of them is going up while a message sends.
-  const S = { tab: 'flight', state: null, live: false, sheet: null, sel: null, filter: 'ALL', query: '', open: new Set(), queued: [], files: [], upload: null, tune: null, notes: {}, picks: {}, sentPick: {}, details: new Set(), sending: false, opener: null, flights: [], profile: '', resolved: false, listFailed: false, streamFailed: false }
+  const S = { tab: 'flight', state: null, live: false, sheet: null, sel: null, filter: 'ALL', query: '', open: new Set(), queued: [], files: [], upload: null, tune: null, details: new Set(), sending: false, opener: null, flights: [], profile: '', resolved: false, listFailed: false, streamFailed: false }
   // Every request goes to the chosen profile's Flight through the front door.
   const base = () => (S.profile ? `/p/${encodeURIComponent(S.profile)}` : '')
   const authHeaders = () => (token ? { 'x-mcapp-token': token } : {})
@@ -101,11 +100,16 @@
   let queueSeq = 0
   // The founder's messages in Flight's transcript, as he typed them.
   const said = () => (fleet().flight?.messages ?? []).filter(x => x.role === 'user').map(x => typed(x.text))
+  // A tab that is gone (the Poll, before MC-163) opens Flight.
   try { S.tab = sessionStorage.getItem('mcapp-tab') || 'flight' } catch {}
+  if (!TABS.some(t => t[0] === S.tab)) S.tab = 'flight'
 
   const fleet = () => S.state?.fleet ?? {}
   const consoles = () => fleet().consoles ?? []
-  const pollItems = () => fleet().poll ?? []
+  // What waits on the founder, as the fleet sends it: each Controller's open question (Flight asks it) and to-do.
+  const questions = () => fleet().questions ?? []
+  const todos = () => fleet().todos ?? []
+  const onYou = () => [...questions(), ...todos()]
   // Each call sign's colour slot, 0 to 7, as the fleet keeps it (placeSlots in the mod's hooks/loops.ts).
   const slots = () => fleet().slots ?? {}
   // A call sign as the app draws it everywhere: a chip in its Controller's colour, the idle fill when it
@@ -114,32 +118,15 @@
   const call = sign => (window.mcBadge ? window.mcBadge.chip(sign, slots()) : `<span class="call">${esc(sign)}</span>`)
   // The call signs a Flight message's marker may name: every console's, and every one with a kept colour.
   const knownSigns = () => new Set([...consoles().map(c => c.callSign), ...Object.keys(slots())])
-  // A decision the app sent to Flight holds its gate for the relay code's lifetime (RELAY_TTL in guards.ts).
-  const SENT_HOLD = 10 * 60_000
-  const sentToFlight = p => Boolean(p.sentAt) && Date.now() - Date.parse(p.sentAt) <= SENT_HOLD
-  // An open item a Controller asks the founder (a question, a blocked line, a contract change); a to-do is never asked.
-  const asked = p => p.state === 'open' && p.kind !== 'todo'
-  const todo = p => p.state === 'open' && p.kind === 'todo'
-  // What waits on the founder: a question not yet sent to Flight, and an open to-do.
-  const waitingOn = () => pollItems().filter(p => (asked(p) && !sentToFlight(p)) || todo(p))
-  // A decision sent to a Controller: a go, a no-go or an answered question (isDecided in the mod's hooks/loops.ts).
-  const decided = p => p.state === 'go' || p.state === 'no-go' || p.state === 'answered'
-  // A decision that never reached its Controller (isUndelivered in the mod's hooks/loops.ts).
-  const undelivered = p => Boolean(p.undelivered) && decided(p)
-  // A decision kept for the next Controller under its call sign (isHeld in the mod's hooks/loops.ts).
-  const held = p => Boolean(p.held) && decided(p) && !undelivered(p)
-  // The answer in a word or two, as the fleet words it (answerWord in hooks/loops.ts).
-  const answerOf = p => str(p.answer) || (p.state === 'no-go' ? 'NO-GO' : 'GO')
-  const stoodDown = sign => consoles().some(c => c.callSign === sign && c.status === 'stood-down')
   // A to-do's text with its links live; escaped first, so only an http(s) link becomes markup.
   const linked = t => esc(t).replace(/https?:\/\/[^\s<]+/g, u => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`)
-  // A Poll card's meta line, the same on every card: the call sign, then id and time.
+  // A to-do card's meta line: the call sign, then id and time.
   const meta = (p, at) => `<div class="kind">${call(p.from)}<span>· ${esc(p.id)}${at ? ` · ${esc(time(at))}` : ''}</span></div>`
   const report = (p, key = p.id) => (p.detail ? `<details data-id="${esc(key)}"${S.details.has(key) ? ' open' : ''}><summary>The report it came from</summary><pre>${esc(p.detail)}</pre></details>` : '')
 
   function statusOf(c) {
     if (c.status === 'stood-down') return ['idle', 'Stood down']
-    if (waitingOn().some(p => p.from === c.callSign)) return ['waiting', 'Waiting on you']
+    if (onYou().some(p => p.from === c.callSign)) return ['waiting', 'Waiting on you']
     if (c.status === 'staffing') return ['running', 'Starting']
     if (c.live === 'failed' || c.live === 'killed') return ['failed', 'Stopped']
     if (c.live === 'running' || c.live === 'pending' || c.live === 'waiting') return ['running', 'Running']
@@ -176,8 +163,12 @@
       parts.push(`<div class="msg assistant md"><div class="who">${who}</div>${window.mcMarkdown ? window.mcMarkdown(text) : esc(text)}</div>`)
     }
     for (const q of S.queued) parts.push(userBubble(q.text, `You · ${q.sent ? 'waiting for Flight' : 'sending'}`))
-    // Each Controller's open question, oldest first, answered here (the Poll only lists them).
-    for (const p of pollItems().filter(asked)) parts.push(decisionCard(p))
+    // Each Controller's to-do, oldest first, checked off here.
+    for (const p of todos()) parts.push(todoCard(p))
+    // A Controller's question is asked as one of Flight's own (the card below); one Flight has not asked yet says so.
+    const onCard = new Set((f.ask?.questions ?? []).map(q => str(q.header).toLowerCase()))
+    const queued = questions().filter(p => !onCard.has(str(p.id).toLowerCase()))
+    if (queued.length) parts.push(`<section class="notice" aria-label="Questions Flight has yet to ask"><ul>${queued.map(p => `<li>${call(p.from)} asks${p.urgent ? ' (urgent)' : ''}: ${esc(p.title)}${p.stoodDown ? ` <span class="hint">(its Controller has stood down, so Flight will not ask it; /console dismiss-gate ${esc(p.id)} at the Mac closes it)</span>` : ''}</li>`).join('')}</ul><p>Flight asks ${queued.length === 1 ? 'it' : 'them'} here when its turn ends.</p></section>`)
     if (f.ask) parts.push(askCard(f.ask))
     else if (f.asking) parts.push(`<div class="notice" role="status">Flight is waiting for your answer on the Mac: ${esc(f.asking)}</div>`)
     // What Flight is doing right now, so a long turn never looks like nothing is happening.
@@ -206,96 +197,9 @@
     return h
   }
 
-  // The Poll lists and answers nothing itself: a question is answered in Flight, a to-do is checked
-  // off, an undelivered or held decision is retried or dismissed. No GO or NO-GO here.
-  function viewPoll() {
-    if (!S.state) return '<p class="sys">Checking what is waiting on you…</p>'
-    const items = pollItems()
-    const open = items.filter(asked)
-    const todos = items.filter(todo)
-    const stuck = items.filter(undelivered).reverse()
-    let h = stuck.map(undeliveredCard).join('')
-    if (!open.length && !todos.length && !stuck.length) h += '<p class="empty">Nothing is waiting on you. A Controller\'s questions are asked in Flight.</p>'
-    if (open.length) h += '<p class="section-label">Questions in Flight</p>' + open.map(questionCard).join('')
-    if (todos.length) h += '<p class="section-label">For you to do</p>' + todos.map(todoCard).join('')
-    // Held decisions wait on a staffing, not on the founder, so they sit below what does.
-    const kept = items.filter(held).reverse()
-    if (kept.length) h += '<p class="section-label">Held for the next Controller</p>' + kept.map(heldCard).join('')
-    const past = items.filter(p => (decided(p) || p.state === 'done' || p.state === 'dismissed') && !undelivered(p) && !held(p)).slice(-6).reverse()
-    const replaced = items.filter(p => p.state === 'superseded').slice(-3).reverse()
-    const chip = p => (p.state === 'dismissed' ? ['idle', 'Dismissed'] : p.state === 'done' ? ['done', 'Done'] : p.state === 'no-go' ? ['failed', 'No-go'] : ['done', p.state === 'go' ? 'Go' : answerOf(p)])
-    if (past.length) h += '<p class="section-label">Decided</p>' + past.map(p => `<p class="resolved">${pill(chip(p))}<span>${esc(p.id)} · ${call(p.from)} · ${esc(str(p.title).slice(0, 90))}</span></p>`).join('')
-    if (replaced.length) h += '<p class="section-label">Replaced by a newer report</p>' + replaced.map(p => `<p class="resolved">${pill(['idle', 'Replaced'])}<span>${esc(p.id)} · ${esc(str(p.title).slice(0, 90))}</span></p>`).join('')
-    return h
-  }
-
-  // An open question as the Poll lists it: where it stands, and the way to the card that answers it.
-  function questionCard(p) {
-    const down = stoodDown(p.from)
-    const sent = sentToFlight(p)
-    const state = sent ? `Sent to Flight${S.sentPick[p.id] !== undefined ? `: ${esc(`${S.sentPick[p.id] + 1}) ${p.asks?.[S.sentPick[p.id]]?.label ?? ''}`)}` : ''}. It runs once Flight is free.` : 'Waiting for your answer.'
-    const stood = down ? ` ${esc(p.from)} is stood down: your answer is held for the next ${esc(p.from)} Controller.` : ''
-    const go = `<button class="ghost" type="button" data-a="toask" data-v="${esc(p.id)}">Answer in Flight<span class="visually-hidden"> (${esc(p.id)})</span></button>`
-    const dismiss = down ? `<button class="warn" type="button" data-a="gatedismiss" data-v="${esc(p.id)}">Dismiss<span class="visually-hidden"> ${esc(p.id)}</span></button>` : ''
-    return `<article class="gate">${meta(p, p.at)}<h2>${esc(p.title)}</h2><p class="hint"${sent ? ' role="status"' : ''}>${state}${stood}</p>${p.targets?.length ? `<p class="hint">Tells: ${esc(p.targets.join(', '))}</p>` : ''}<div class="btnrow ${down ? 'two' : 'one'}">${go}${dismiss}</div>${report(p)}</article>`
-  }
-
-  // An action only the founder can take, with its link; Done checks it off and sends nothing.
+  // An action only the founder can take, with its link; Done checks it off and tells the Controller.
   function todoCard(p) {
     return `<article class="gate todo">${meta(p, p.at)}<h2>${linked(p.title)}</h2><div class="btnrow one"><button class="go secondary" type="button" data-a="tododone" data-v="${esc(p.id)}">Done<span class="visually-hidden"> (${esc(p.id)})</span></button></div>${report(p)}</article>`
-  }
-
-  // A Controller's question in Flight's chat: its options as the Controller wrote them, picked one at a
-  // time, then sent. A sent answer can be changed until Flight has delivered it.
-  function decisionCard(p) {
-    const opts = p.asks ?? []
-    const pick = S.picks[p.id]
-    const sent = sentToFlight(p)
-    const sentPick = S.sentPick[p.id]
-    const down = stoodDown(p.from)
-    const options = opts.map((o, i) => `<button type="button" class="ask-opt" data-a="decpick" data-v="${esc(p.id)}:${i}" aria-pressed="${pick === i}"><b>${i + 1}) ${esc(o.label)}</b>${o.does ? `<span>${esc(o.does)}</span>` : ''}</button>`).join('')
-    const status = sent ? `<p class="hint" role="status">Sent to Flight${sentPick !== undefined ? `: ${esc(`${sentPick + 1}) ${opts[sentPick]?.label ?? ''}`)}` : ''}. It runs once Flight is free. Pick another option to change it.</p>` : ''
-    // The same option can be sent again: a plugin reload drops the first one's code, and a repeat only replaces it.
-    const ready = pick !== undefined
-    return `<section class="gate ask decision" id="ask-${esc(p.id)}" tabindex="-1" aria-label="${esc(p.from)} asks, ${esc(p.id)}">
-      ${meta(p, p.at)}
-      <h2>${esc(p.title)}</h2>
-      ${down ? `<p class="hint">${esc(p.from)} is stood down: your answer is held for the next ${esc(p.from)} Controller.</p>` : ''}
-      ${p.targets?.length ? `<p class="hint">Tells: ${esc(p.targets.join(', '))}</p>` : ''}
-      <div class="ask-options" role="group" aria-label="Options for ${esc(p.id)}">${options}</div>
-      <label class="visually-hidden" for="note-${esc(p.id)}">Note for ${esc(p.id)}</label>
-      <input class="note" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="sentences" id="note-${esc(p.id)}" data-id="${esc(p.id)}" placeholder="Note (optional)" value="${esc(S.notes[p.id] ?? '')}">
-      ${status}
-      <button class="go" type="button" data-a="decsend" data-v="${esc(p.id)}" ${ready ? '' : 'disabled'}>${!sent ? 'Send answer' : sentPick === pick ? 'Send again' : 'Change answer'}</button>
-      ${report(p)}
-    </section>`
-  }
-
-  // A decision that did not reach its Controller: why, in one plain sentence (the engine's own words
-  // behind Technical details), then Retry while the Controller that raised it is staffed, and Dismiss.
-  // The mod's snapshot says why (p.why) and where that Controller stands (p.seat: live, replaced, gone).
-  function undeliveredCard(p) {
-    const verdict = answerOf(p)
-    const what = p.state === 'answered' ? `answer ${verdict}` : verdict
-    const why = esc(p.why || 'The message could not be delivered.')
-    const key = `${p.id}:why`
-    const raw = `<details data-id="${esc(key)}"${S.details.has(key) ? ' open' : ''}><summary>Technical details</summary><pre>${esc(p.undelivered)}</pre></details>`
-    // Beside Retry, Dismiss is neutral so Retry stays the card's one primary action; alone, it is .warn.
-    const dismiss = cls => `<button class="${cls}" type="button" data-a="gatedismiss" data-v="${esc(p.id)}">Dismiss<span class="visually-hidden"> ${esc(p.id)}</span></button>`
-    let body
-    if (sentToFlight(p)) body = '<p class="hint" role="status">Retry sent to Flight. It runs once Flight is free.</p>'
-    else if (p.seat === 'live') body = `<p class="hint">${why} Retry sends the same ${esc(what)} to ${esc(p.from)}.</p>${raw}<div class="btnrow two"><button class="${p.state === 'no-go' ? 'nogo' : 'go secondary'}" type="button" data-a="gateretry" data-v="${esc(p.id)}">Retry${p.state === 'answered' ? '' : ` ${esc(verdict)}`}</button>${dismiss('ghost')}</div>`
-    else if (p.seat === 'replaced') body = `<p class="hint">${why} The ${esc(p.from)} Controller that raised it has been replaced. Tell the new one from Flight, or dismiss this.</p>${raw}<div class="btnrow one">${dismiss('warn')}</div>`
-    else body = `<p class="hint">${why} ${esc(p.from)} is no longer staffed. Staff the console again from Flight, then tell it the decision, or dismiss this.</p>${raw}<div class="btnrow one">${dismiss('warn')}</div>`
-    return `<article class="gate undelivered">${meta(p, p.decidedAt)}<h2>Your ${esc(what)} did not reach ${esc(p.from)}</h2>${body}${report(p, `${p.id}:report`)}</article>`
-  }
-
-  // A decision made after the Controller that raised it stood down: kept until the next Controller
-  // staffed under that call sign gets it with its staffing, or until it is dismissed.
-  function heldCard(p) {
-    const verdict = answerOf(p)
-    const what = p.state === 'answered' ? `answer ${verdict}` : verdict
-    return `<article class="gate held">${meta(p, p.held)}<h2>Your ${esc(what)} is held for the next ${esc(p.from)} Controller</h2><p class="hint">The ${esc(p.from)} Controller that raised it had stood down when you decided. The next Controller staffed under ${esc(p.from)} gets it with its staffing. Dismiss clears it and nothing is sent.</p>${report(p, `${p.id}:held`)}<div class="btnrow one"><button class="warn" type="button" data-a="gatedismiss" data-v="${esc(p.id)}">Dismiss<span class="visually-hidden"> ${esc(p.id)}</span></button></div></article>`
   }
 
   function viewLoops() {
@@ -430,7 +334,10 @@
       else if (q.type === 'number') input = `<input class="note ask-in" type="number" autocomplete="off" inputmode="decimal" data-q="${qi}" min="${esc(q.min ?? '')}" max="${esc(q.max ?? '')}" step="${esc(q.step ?? 'any')}" value="${esc(d.value ?? '')}" placeholder="${esc(q.min ?? '')}–${esc(q.max ?? '')}${q.unit ? ` ${esc(q.unit)}` : ''}">`
       else input = `<div class="ask-options" role="group" aria-label="${esc(q.question)}">${(q.options ?? []).map((o, oi) => `<button type="button" class="ask-opt" data-a="askpick" data-v="${qi}:${oi}" aria-pressed="${Boolean(d.picks?.has(oi))}"><b>${esc(o.label)}</b>${o.description ? `<span>${esc(o.description)}</span>` : ''}</button>`).join('')}</div>
         <input class="note ask-other" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="sentences" data-q="${qi}" placeholder="Or type your own answer" value="${esc(d.other ?? '')}">`
-      return `<div class="ask-q">${q.header ? `<p class="kind">${esc(q.header)}${q.multiSelect ? ' · pick any' : ''}</p>` : ''}<h2>${esc(q.question)}</h2>${input}</div>`
+      // A Controller's question carries its id as the header: shown with that Controller's call sign, as a to-do card is.
+      const from = questions().find(p => str(p.id).toLowerCase() === str(q.header).toLowerCase())
+      const head = from ? `${call(from.from)}<span>· ${esc(from.id)}${from.urgent ? ' · urgent' : ''}</span>` : esc(q.header)
+      return `<div class="ask-q">${q.header ? `<p class="kind">${head}${q.multiSelect ? ' · pick any' : ''}</p>` : ''}<h2>${esc(q.question)}</h2>${input}</div>`
     }).join('')
     // A question may be left unanswered; one answer is enough to send.
     const ready = qs.some((q, qi) => askAnswer(q, draft.q[qi]))
@@ -440,13 +347,11 @@
   // Flight stays pinned to the newest message unless the founder scrolled up to read; opening the
   // app, returning to it, coming back to the Flight tab or switching profile pins it again.
   let stick = true
-  // Set by "Answer in Flight": the scroll its jump causes must not pin the chat back to the bottom.
-  let unstickUntil = 0
   const tabScroll = {}
   let restoreScroll = true
   function render() {
     try {
-      const views = { flight: viewFlight, consoles: viewConsoles, poll: viewPoll, loops: viewLoops }
+      const views = { flight: viewFlight, consoles: viewConsoles, loops: viewLoops }
       const main = $('main')
       $('title').textContent = TABS.find(t => t[0] === S.tab)?.[1] ?? 'Flight'
       main.className = `main view-${S.tab}`
@@ -473,8 +378,8 @@
       const hint = trayHint()
       if ($('tray-hint').textContent !== hint) $('tray-hint').textContent = hint
       paint($('quick'), 'quick', ['/console list', '/briefing', '/standup', '/debrief'].map(q => `<button type="button" data-a="quick" data-v="${esc(q)}">${esc(q)}</button>`).join(''))
-      const n = waitingOn().length + pollItems().filter(undelivered).length
-      paint($('tabs'), 'tabs', TABS.map(([k, l]) => `<button class="tab" type="button" role="tab" data-a="tab" data-v="${k}" aria-selected="${S.tab === k}">${ICONS[k]}${l}${k === 'poll' && n ? `<span class="badge" aria-label="${n} waiting">${n}</span>` : ''}</button>`).join(''))
+      const n = onYou().length
+      paint($('tabs'), 'tabs', TABS.map(([k, l]) => `<button class="tab" type="button" role="tab" data-a="tab" data-v="${k}" aria-selected="${S.tab === k}">${ICONS[k]}${l}${k === 'flight' && n ? `<span class="badge" aria-hidden="true">${n}</span><span class="visually-hidden">, ${n} waiting</span>` : ''}</button>`).join(''))
       const wasOpen = last.sheet !== ''
       const repainted = paint($('sheet-root'), 'sheet', sheet())
       if (repainted && last.sheet !== '' && !wasOpen) {
@@ -586,43 +491,7 @@
       case 'standdown': S.sheet = 'standdown'; break
       case 'sdyes': await send('console', `stand-down ${S.sel}`); S.sheet = null; break
       case 'dismiss': await send('console', `dismiss ${S.sel}`); S.sheet = null; break
-      case 'decpick': {
-        const [id, i] = [v.slice(0, v.lastIndexOf(':')), Number(v.slice(v.lastIndexOf(':') + 1))]
-        S.picks[id] = S.picks[id] === i ? undefined : i
-        break
-      }
-      case 'decsend': {
-        const pick = S.picks[v]
-        if (pick === undefined || S.sending) return
-        const note = (S.notes[v] ?? '').trim()
-        S.sending = true
-        const ok = await send('console', `decide ${v} ${pick + 1}${note ? ` ${note}` : ''}`)
-        S.sending = false
-        if (ok) {
-          S.sentPick[v] = pick
-          delete S.notes[v]
-          toast('Answer sent to Flight. It runs once Flight is free.')
-        }
-        break
-      }
-      case 'toask': {
-        // The Poll's way to a question: the Flight tab, at that question's card.
-        S.tab = 'flight'
-        S.sheet = null
-        stick = false
-        unstickUntil = Date.now() + 1000
-        try { sessionStorage.setItem('mcapp-tab', 'flight') } catch {}
-        render()
-        const card = document.getElementById(`ask-${v}`)
-        if (card) {
-          card.scrollIntoView({ block: 'start' })
-          card.focus()
-        }
-        return
-      }
       case 'tododone': await send('console', `done ${v}`); break
-      case 'gatedismiss': await send('console', `dismiss-gate ${v}`); break
-      case 'gateretry': await send('console', `retry ${v}`); break
       case 'filter': S.filter = v; break
       case 'expand': S.open.has(v) ? S.open.delete(v) : S.open.add(v); break
       case 'stopask': S.sheet = 'stop'; break
@@ -672,7 +541,6 @@
       if (btn) btn.disabled = !ask.questions.some((q, qi) => askAnswer(q, S.ask?.q[qi]))
       return
     }
-    if (e.target.classList?.contains('note')) S.notes[e.target.dataset.id] = e.target.value
     if (e.target.id === 'q' && !e.isComposing) {
       S.query = e.target.value
       render()
@@ -984,10 +852,6 @@
     for (const f of S.files) f.stored = null
     S.sel = null
     S.tune = null
-    S.notes = {}
-    // Poll ids repeat across profiles, so a pick made in one is never sent in another.
-    S.picks = {}
-    S.sentPick = {}
     S.details = new Set()
     // A move the app makes keeps the profiles sheet open, so a tap on the switcher is never closed underneath;
     // a profile picked in the sheet closes it in the click handler.
@@ -1000,7 +864,7 @@
   $('main').addEventListener('scroll', () => {
     const m = $('main')
     if (S.tab !== 'flight' && !restoreScroll) tabScroll[S.tab] = m.scrollTop
-    if (S.tab === 'flight') stick = Date.now() < unstickUntil ? false : m.scrollHeight - m.scrollTop - m.clientHeight < 40
+    if (S.tab === 'flight') stick = m.scrollHeight - m.scrollTop - m.clientHeight < 40
   }, { passive: true })
   const repin = () => { if (document.visibilityState === 'visible') { stick = true; render() } }
   document.addEventListener('visibilitychange', repin)

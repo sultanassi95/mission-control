@@ -16,9 +16,6 @@
  * folder read later) is outside it; only an OS-level boundary closes that.
  */
 
-import type { PollItem } from '../types'
-import { isUndelivered } from './loops'
-
 /** Branches no Controller pushes to, whatever its spoke says. */
 export const ALWAYS_PROTECTED = ['main', 'master', 'dev', 'develop', 'test', 'staging', 'stage', 'production', 'prod', 'release']
 
@@ -1069,7 +1066,7 @@ export function fleetSelfApproval(tool: string, input: unknown, seats: FleetSeat
 }
 
 /** Console verbs that message or start an agent. From the app they run through Flight, never from the app's own loop. */
-const RELAYED = new Set(['staff', 'call', 'go', 'nogo', 'no-go', 'decide', 'retry', 'dismiss', 'stand-down'])
+const RELAYED = new Set(['staff', 'call', 'dismiss', 'stand-down', 'done'])
 export function isRelayedVerb(args: string): boolean {
   return RELAYED.has((args.trim().split(/\s+/)[0] ?? '').toLowerCase())
 }
@@ -1093,45 +1090,4 @@ export function spendRelayCode(codes: RelayCodes, code: string | undefined, args
   codes.delete(code)
   const flat = (t: string) => t.trim().replace(/\s+/g, ' ')
   return minted !== undefined && flat(minted.args) === flat(args) && now - minted.at <= RELAY_TTL
-}
-
-/** A poll decision the app sent to Flight, still inside its code's lifetime: not open for another tap. */
-export function awaitingFlight(sentAt: string | undefined, now: number): boolean {
-  const at = sentAt ? Date.parse(sentAt) : NaN
-  return Number.isFinite(at) && now - at <= RELAY_TTL
-}
-
-/** Console verbs that answer an open poll item: decide <id> <n>, and go or no-go for a blocked line or an advisory. */
-const CHOICE = new Set(['decide', 'go', 'nogo', 'no-go'])
-export function isChoiceVerb(args: string): boolean {
-  return CHOICE.has((args.trim().split(/\s+/)[0] ?? '').toLowerCase())
-}
-
-/**
- * The poll item an app op holds while Flight runs it: an open item that is asked (not a to-do) for an
- * answer, an undelivered decision for retry. Undefined for any other op or item. A retry takes no
- * second tap while held; a later answer replaces the earlier one (dropRelayCodes).
- */
-export function relayHold(args: string, items: readonly PollItem[]): PollItem | undefined {
-  const [verb = '', id = ''] = args.trim().split(/\s+/)
-  const item = items.filter(p => p.id.toLowerCase() === id.toLowerCase()).at(-1)
-  if (!item) return undefined
-  if (verb.toLowerCase() === 'retry') return isUndelivered(item) ? item : undefined
-  return isChoiceVerb(verb) && item.state === 'open' && item.kind !== 'todo' ? item : undefined
-}
-
-/**
- * Drops the codes minted for earlier answers on one poll item, so only the newest answer the app
- * sent can run. Returns how many were dropped. Codes for any other item or verb are kept.
- */
-export function dropRelayCodes(codes: RelayCodes, id: string): number {
-  let n = 0
-  for (const [code, minted] of codes) {
-    const [verb = '', target = ''] = minted.args.trim().split(/\s+/)
-    if (isChoiceVerb(verb) && target.toLowerCase() === id.toLowerCase()) {
-      codes.delete(code)
-      n++
-    }
-  }
-  return n
 }

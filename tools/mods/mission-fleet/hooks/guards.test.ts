@@ -1,7 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import type { PollItem } from '../types'
-import { awaitingFlight, dropRelayCodes, fleetSelfApproval, isChoiceVerb, isFlightOnly, isRelayedVerb, RELAY_TTL, relayHold, splitRelayCode, spendRelayCode, isShellLikeTool, pinnedDir, protectedFromSpoke, pushDestination, shellRefusal, tokenize, toolRefusal } from './guards'
+import { fleetSelfApproval, isFlightOnly, isRelayedVerb, RELAY_TTL, splitRelayCode, spendRelayCode, isShellLikeTool, pinnedDir, protectedFromSpoke, pushDestination, shellRefusal, tokenize, toolRefusal } from './guards'
 import type { CloneScope, RelayCodes } from './guards'
 
 const C = (cmd: string, prot: string[] = []) => shellRefusal('controller', cmd, prot)
@@ -479,9 +478,10 @@ test('the fleet approves its own spawn only of a Controller under a reserved con
   expect(fleetSelfApproval('Bash', { command: 'ls' }, seats)).toBeUndefined()
 })
 
-test('app console ops that message or start an agent are relayed through Flight', () => {
-  for (const a of ['staff acme', 'call ACME hi', 'go MI8', 'nogo MI8 not now', 'no-go MI8', 'retry MI8', 'dismiss ACME', 'stand-down ACME']) expect(isRelayedVerb(a)).toBe(true)
-  for (const a of ['list', 'poll', 'loops ACME', 'retune ACME haiku', 'dismiss-gate MI8', '']) expect(isRelayedVerb(a)).toBe(false)
+test('app console ops that message or start an agent are relayed through Flight; answers are no longer console ops', () => {
+  // A Done tells the Controller, so it is a message and runs through Flight too.
+  for (const a of ['staff acme', 'call ACME hi', 'dismiss ACME', 'stand-down ACME', 'done MI9']) expect(isRelayedVerb(a)).toBe(true)
+  for (const a of ['list', 'poll', 'loops ACME', 'retune ACME haiku', 'dismiss-gate MI8', 'go MI8', 'decide MI7 2', 'retry MI8', '']) expect(isRelayedVerb(a)).toBe(false)
 })
 
 test('a relay code is split off the end of the args, and only a well-formed one', () => {
@@ -502,63 +502,6 @@ test('a relay code works once, for exactly the args it was minted for, within it
   expect(spendRelayCode(codes, 'never-minted', 'go MI8', 2000)).toBe(false)
   codes.set('c4', { args: 'call ACME line one\nline two', at: 1000 })
   expect(spendRelayCode(codes, 'c4', 'call ACME line one line  two', 2000)).toBe(true)
-})
-
-test('a decision sent to Flight holds its gate for the code lifetime, then frees it', () => {
-  const at = Date.parse('2026-10-16T01:57:00Z')
-  expect(awaitingFlight('2026-10-16T01:57:00.000Z', at + 5_000)).toBe(true)
-  expect(awaitingFlight('2026-10-16T01:57:00.000Z', at + RELAY_TTL + 1)).toBe(false)
-  expect(awaitingFlight(undefined, at)).toBe(false)
-  expect(awaitingFlight('not a date', at)).toBe(false)
-})
-
-test('an app op holds only the item it decides while Flight runs it', () => {
-  const base: PollItem = { id: 'MI1', at: '2026-10-16T00:30:12.000Z', from: 'MISSION-CONTROL', kind: 'gate', title: 'approve the plan', detail: 'blocked on you: approve the plan', state: 'go', agentId: 'a1' }
-  const open: PollItem = { ...base, id: 'MI2', state: 'open' }
-  const stuck: PollItem = { ...base, undelivered: 'Auto mode classifier gave no verdict' }
-  const items = [open, stuck]
-  expect(relayHold('go MI2', items)?.id).toBe('MI2')
-  expect(relayHold('nogo mi2 not now', items)?.id).toBe('MI2')
-  expect(relayHold('retry MI1', items)?.id).toBe('MI1')
-  expect(relayHold('retry MI2', items)).toBeUndefined()
-  expect(relayHold('go MI1', items)).toBeUndefined()
-  expect(relayHold('call MISSION-CONTROL go', items)).toBeUndefined()
-  expect(relayHold('retry MI9', items)).toBeUndefined()
-})
-
-// ---- Answers to a Controller's question (MC-125) ----
-
-test('an answer to a question is relayed through Flight; checking off a to-do runs at once', () => {
-  expect(isRelayedVerb('decide MI7 2')).toBe(true)
-  expect(isRelayedVerb('decide MI7 2 after the sweep')).toBe(true)
-  expect(isRelayedVerb('done MI9')).toBe(false)
-  for (const a of ['decide MI7 2', 'go MI7', 'nogo MI7', 'no-go MI7']) expect(isChoiceVerb(a)).toBe(true)
-  for (const a of ['retry MI7', 'done MI7', 'call ACME decide', '']) expect(isChoiceVerb(a)).toBe(false)
-})
-
-test('an answer holds the open question it answers, never a to-do or a closed item', () => {
-  const base: PollItem = { id: 'MI7', at: '2026-10-18T09:12:00.000Z', from: 'MISSION-CONTROL', kind: 'question', title: 'Which branch?', detail: 'decisions: ...', state: 'open', agentId: 'a1', options: [{ label: 'Epic' }, { label: 'Own' }] }
-  const todo: PollItem = { ...base, id: 'MI9', kind: 'todo', title: 'Close PR #31' }
-  const answered: PollItem = { ...base, id: 'MI6', state: 'answered', choice: 1 }
-  const items = [base, todo, answered]
-  expect(relayHold('decide MI7 2', items)?.id).toBe('MI7')
-  expect(relayHold('decide mi7 1 note', items)?.id).toBe('MI7')
-  expect(relayHold('decide MI9 1', items)).toBeUndefined()
-  expect(relayHold('go MI9', items)).toBeUndefined()
-  expect(relayHold('decide MI6 2', items)).toBeUndefined()
-})
-
-test('a later answer drops the codes of earlier answers on the same item, and nothing else', () => {
-  const codes: RelayCodes = new Map([
-    ['c1', { args: 'decide MI7 1', at: 1000 }],
-    ['c2', { args: 'go mi7 note', at: 1000 }],
-    ['c3', { args: 'decide MI70 1', at: 1000 }],
-    ['c4', { args: 'retry MI7', at: 1000 }],
-    ['c5', { args: 'call MISSION-CONTROL decide MI7 1', at: 1000 }],
-  ])
-  expect(dropRelayCodes(codes, 'MI7')).toBe(2)
-  expect([...codes.keys()]).toEqual(['c3', 'c4', 'c5'])
-  expect(spendRelayCode(codes, 'c1', 'decide MI7 1', 2000)).toBe(false)
 })
 
 // ---- Clones (MC-126, MC-135) ----

@@ -2,8 +2,8 @@
 name: fleet
 description: >-
   Flight's console fleet: staff a kept-alive Controller for one front or
-  project, call it, retune its model and effort, keep the poll of the
-  questions and to-dos it leaves the founder, and stand it down - from the
+  project, call it, retune its model and effort, ask the founder the
+  questions it raises and relay the to-dos it leaves, and stand it down - from the
   terminal or the Mission Control App. Use whenever the founder asks to put an
   agent on a front or project, to check on or redirect one, or to answer a
   Controller's question. The commands are /console,
@@ -21,9 +21,9 @@ load this text instead of running.
 The orchestrator session is **Flight**. Each **Controller** owns one front or
 one project of a front, staffed on a **console** with a call sign. A
 Controller's own sub-agents are its **back room**; messages between them are
-the **loops**; whatever needs the founder lands on the **poll**, each decision
-as its own question with the options the Controller wrote, each action only
-the founder can take as a to-do; the
+the **loops**; whatever needs the founder Flight asks as **its own question**
+(AskUserQuestion), one per decision with the options the Controller wrote,
+and each action only the founder can take is a **to-do** in Flight; the
 **Mission Control App** is the Front Room (the console's own name for it).
 
 ```mermaid
@@ -31,12 +31,15 @@ flowchart LR
   F[Flight] -->|/console staff| C[Controller]
   C --> B[back room]
   C -->|status check| L[loops]
-  L -->|decisions, to-dos| P[poll]
-  P -->|founder: the option picked| C
-  P -.->|its Controller stood down| H[held for the next Controller]
-  H -.->|with its staffing| C
+  L -->|decisions| Q[queue: 4 at a time, urgent first]
+  Q -->|when Flight is idle: one prompt| F
+  F -->|AskUserQuestion, header = id| U[founder, in the app or at the Mac]
+  U -->|the pick| M[mod]
+  M -->|delivers it| C
+  L -->|to-dos| T[to-do cards in Flight]
+  T -->|Done| C
   A[Front Room app] -->|prompt with a one-time code| F
-  F -->|fleet, poll, loops| A
+  F -->|fleet, questions, to-dos, loops| A
 ```
 
 ## Commands (the console tool takes the same arguments, plus `--code <code>` when the app relays one)
@@ -47,13 +50,10 @@ flowchart LR
 | `/console list` | the fleet: state, the model its last request ran on, type, scope |
 | `/console call <sign> <message>` | a message to one Controller, taken whole: words that start with two dashes and new lines reach it as written; its answer comes back as a status check |
 | `/console retune <sign> <model\|-> [<effort>]` | changes model and effort from the Controller's next request |
-| `/console poll` · `/console loops [<sign>]` | what waits on the founder, each open question with its numbered options; recent traffic |
-| `/console decide <id> <n> [note]` | **the founder's alone**: answers an open question with option `n`, typed, or relayed from the app with its one-time code; refused when Flight's model sends it on its own. The note is taken whole. The Controller receives the option's label and what it does, the note, its own question, and the time of the report it answers. For a Controller that has stood down, the answer is held for the next one under its call sign |
-| `/console go\|nogo\|no-go <id> [note]` | **the founder's alone**: the same as `decide <id> 1` or `decide <id> 2` for an item asked as Go or No-go (a blocked line from a report with no `decisions:` block) or as Tell them or Don't tell (an advisory); a question with its own options refuses them and names `decide` |
-| `/console done <id>` | **the founder's alone**: checks off a to-do; nothing is sent to the Controller |
-| `/console retry <id>` | **the founder's alone**: sends an undelivered answer again to the Controller that raised it, while that Controller is still staffed |
-| `/console dismiss-gate <id>` | **the founder's alone**: closes a poll item that no longer matters, or clears an undelivered or held answer; nothing is sent to the Controller |
-| `/console answer <n\|text>[ \| <n\|text>]` | **the founder's alone**: answers a question Flight sent to the app, from the Mac (an option number or free text, ` \| ` between several questions) |
+| `/console poll` · `/console loops [<sign>]` | what waits on the founder, each open question with its numbered options and each to-do (read-only; Flight asks the questions); recent traffic |
+| `/console done <id>` | **the founder's alone**: checks off a to-do and tells the Controller that left it |
+| `/console dismiss-gate <id>` | **the founder's alone**: closes a question or to-do that no longer matters; nothing is sent to the Controller |
+| `/console answer <n\|text>[ \| <n\|text>]` | **the founder's alone**: answers a question Flight sent to the app, from the Mac (an option number or free text, ` \| ` between several questions); a Controller's question is answered this way too |
 | `/console stand-down <sign>` | asks the Controller for a dated handoff to the front's progress log and lists it stood down as soon as the request is delivered; the Controller writes the handoff, reports it and ends |
 | `/console dismiss <sign>` | the end, nothing written (tests, or no work done) |
 | `/console app [stop]` | **the founder's alone**: starts the Front Room on 127.0.0.1 and makes it a standing setting for this profile: it starts in every session of the profile, restarts after a plugin reload or a crash, and `/console app stop` stops it and turns the setting off |
@@ -69,11 +69,12 @@ flowchart LR
 ## Flight's duties while consoles run
 
 - **Route advisories.** A Controller's `contract:` line opens an advisory naming the fronts whose `_map.md` names its scope. It is asked as Tell them or Don't tell; on Tell them it reaches the dependent consoles, or waits for them to be staffed. A `contract:` line with no dependent front opens nothing.
+- **Ask what the fleet puts to you.** A prompt that starts `[mission-fleet]` lists up to four Controllers' questions, each with its id and options. Ask them before anything else, in one AskUserQuestion call: each header exactly its id, the question and options exactly as given. The fleet delivers each answer to its Controller and puts a line after the tool's result saying what became of it; when a delivery failed, that line says how to relay it (`/console call <sign> <the answer>`).
 - **Single writer.** Only Flight writes `_command/trackers/fronts.md`, `_command/daily/today.md` and `_command/fleet/`; Controllers propose, Flight writes.
 - **The day's edges read the fleet.** `/briefing` and `/debrief` read each staffed console's last status (`/console list`, `/console loops <sign>`) and the open questions and to-dos (`/console poll`), and put a Controller blocked on the founder first. `/standup` and `/retro` read git, the tracker and the boards only. Between them, use `/console list`, `/console poll` and `/console call <sign> <message>`.
 - **Verify before relaying.** A Controller's state is only as fresh as its front's files; check a PR's real state (`gh pr view`) before reporting it to the founder.
-- **Mark a message about Controllers.** When a message to the founder is about one or more Controllers, its first line is their call signs in bold, spelled as `/console list` shows them, on a line of their own and joined by a middle dot: `**MISSION-CONTROL**`, or `**<CALL-SIGN> · <CALL-SIGN>**` for several. The Front Room badges the message with each one in its Controller's colour, the colour it also wears on Consoles, Poll and Loops; the terminal shows the line as a bold header. A message in which Flight speaks for itself carries no marker. A name the fleet does not know, or a bold first word, stays text and badges nothing. The console tool's description carries the same rule.
-- **Never answer a question.** An answer is typed by the founder or sent from the app; a prompt the app relays is the founder's decision, run as given (below). Ask the founder in chat when a question needs explaining, and leave the answer to them.
+- **Mark a message about Controllers.** When a message to the founder is about one or more Controllers, its first line is their call signs in bold, spelled as `/console list` shows them, on a line of their own and joined by a middle dot: `**MISSION-CONTROL**`, or `**<CALL-SIGN> · <CALL-SIGN>**` for several. The Front Room badges the message with each one in its Controller's colour, the colour it also wears on Consoles and Loops; the terminal shows the line as a bold header. A message in which Flight speaks for itself carries no marker. A name the fleet does not know, or a bold first word, stays text and badges nothing. The console tool's description carries the same rule.
+- **Never answer a question.** An answer is the founder's, picked in the question Flight asks; Flight never picks one or sends one itself. Ask the founder in chat when a question needs explaining, and leave the answer to them.
 
 ## What a Controller's report opens
 
@@ -86,17 +87,19 @@ block, a `notes:` line and a `for you to do:` block:
     for you to do:
     - Close PR #31, superseded by #37 https://github.com/OWNER/REPO/pull/31
 
-- Each `decisions:` line opens one question with its options (two to six; a
-  line with fewer is asked as Go or No-go). An indented `1)` line under a
+- Each `decisions:` line opens one question with its options (two to four,
+  the most AskUserQuestion shows; past four the rest are dropped, and a line
+  with fewer than two is asked as Go or No-go). A question that starts
+  `urgent: ` is asked before older ones. An indented `1)` line under a
   decision is one more of its options. A report that lists decisions, or says
   `decisions: none`, is that console's whole list: a question listed again
   (the same words, ignoring case and spacing) keeps its id and takes the
-  options as now written, and an open one left out is replaced. An answer the
-  founder has sent from the app is never replaced. A `decisions:` header
+  options as now written, and an open one left out is replaced. A question
+  Flight is asking at that moment is never replaced. A `decisions:` header
   whose items do not parse changes nothing, so a malformed block never
   withdraws the open questions.
 - Each `for you to do:` line opens a to-do, checked off with
-  `/console done <id>` or the app's Done.
+  `/console done <id>` or the app's Done, which tells the Controller.
 - `notes:` opens nothing, nor do `nothing`, `none` or `nothing new`.
 - A report from a Controller staffed before this format, with a
   `blocked on you:` line and no `decisions:`, `for you to do:` or `notes:`
@@ -104,69 +107,62 @@ block, a `notes:` line and a `for you to do:` block:
   console's earlier such item. In the new format the blocked line only points
   at the blocks below and opens nothing itself.
 
-## Decisions from the app
+## How a Controller's question reaches the founder
+
+- **Queued, then put to Flight.** Each open question waits in the fleet's
+  queue. When Flight is idle (at once, or when its current turn ends), the
+  mod submits one prompt that lists up to four of them, urgent first, then
+  oldest, each with its id and options, and marks them put. Flight asks them
+  with one AskUserQuestion call; while the Front Room runs, that question is a
+  card in its Flight tab and on the phone, and `/console answer` answers it at
+  the Mac; without the app it is the terminal dialog. A question put to
+  Flight and not asked within 10 minutes is put again.
+- **The answer goes straight to its Controller.** The mod matches each answer
+  to its question by the header (the id), else by the question's text, and
+  sends it to the Controller that raised it while that Controller is staffed:
+  the option's label and what it does, or the founder's own words, with the
+  question and the time of the report it answers. The item is recorded as
+  answered whatever the delivery, and a line after the tool's result tells
+  Flight what became of each answer. A Controller that has stood down gets
+  nothing; Flight is told to call the next one if it still matters.
+- **Questions while Flight works.** The app's Flight tab lists the questions
+  Flight has not asked yet ("Flight asks them here when its turn ends"), and
+  `/console poll` lists every open one.
+- **To-dos.** Each is a card in the app's Flight tab with its links live, and
+  Done checks it off and tells the Controller that left it (`/console done
+  <id>` at the Mac). It survives an app reload: the fleet sends it with every
+  state push.
+- **Stored before this change.** At session start the fleet reads its stored
+  items once: an answer that never reached its Controller, or waited for the
+  next one, is open again and asked again, and nothing open is dropped; the
+  audit log reads `poll migrate open <before> -> <after>; reopened <ids>`.
+
+## Ops from the app
 
 The Front Room never messages a Controller or starts one from its own loop,
 which auto mode refuses. A tap, or a `/console` command typed in the app, that
-would (`staff`, `call`, `decide`, `go`, `nogo` or `no-go`, `retry`,
-`dismiss`, `stand-down`) reaches Flight as a prompt in the founder's name:
+would (`staff`, `call`, `dismiss`, `stand-down`, and `done`, which tells the Controller) reaches Flight as a prompt in
+the founder's name:
 
-    From the Mission Control App, the founder sent: decide FI3 2 after the release
-    Run it now with the console tool, args exactly: decide FI3 2 after the release --code <code>
+    From the Mission Control App, the founder sent: call FIELDKIT ship it after the release
+    Run it now with the console tool, args exactly: call FIELDKIT ship it after the release --code <code>
 
 - **Run it as given.** Call the console tool with exactly those args, the code
   included. The code is 32 hex characters, minted for those args, good for one
-  try within 10 minutes, and kept in memory, so a plugin reload drops it. With
-  it the call runs as the founder's own, which is how `decide`, `go`, `nogo`
-  and `retry` pass Flight's tool. A code that is unknown, used, expired or minted for other
-  args is refused ("That app code is unknown, used or expired (a later answer
-  from the app replaces an earlier one); send it again from the app if it
-  still matters.") and nothing runs; the founder sends it again from the app.
-- **While it waits.** The engine documents that a submitted prompt runs as a
-  turn of its own once the session is idle, so while Flight is mid-turn the
-  prompt waits for that turn to end. Each question is a card in the app's
-  Flight tab; once an answer is sent the card says so and that it runs once
-  Flight is free, and `/console poll` marks the item "sent from the app,
-  waiting for Flight". Picking another option and sending again before Flight
-  has run the first **replaces** it: the earlier code stops working, the new
-  prompt says "This replaces the earlier answer on FI3; that one's code no
-  longer works.", and the app's toast reads "Changed answer sent to Flight".
-  Flight runs the newest prompt; an older one it still meets is refused by its
-  code and runs nothing. A Retry card takes no second tap while it waits ("FI3
-  is already with Flight"). The wait ends when the answer runs, or 10 minutes
-  after the tap, the code's lifetime. Staffing, calls, dismissals and
-  stand-downs are not held.
-- **Straight from the app**, as the founder and with no prompt: `done`,
+  try within 10 minutes, and kept in memory, so a plugin reload drops it. A
+  code that is unknown, used, expired or minted for other args is refused and
+  nothing runs; the founder sends it again from the app.
+- **Straight from the app**, as the founder and with no prompt:
   `dismiss-gate`, `retune` and `app stop`, and an answer to a question Flight
   asked.
-- **Undelivered.** A decision its Controller did not receive stays on the Poll
-  with the reason in one plain sentence and the engine's own words under
-  "Technical details". While the Controller that raised it is still staffed,
-  Retry sends it the same answer (`/console retry <id>`); a later
-  Controller under that call sign never gets it. Dismiss
-  (`/console dismiss-gate <id>`) clears it with nothing sent.
-- **Held.** An answer for a Controller that has stood down is held, not
-  sent: the next Controller staffed under that call sign receives it with its
-  staffing, or at once if one is staffed now. Dismiss clears a held answer
-  with nothing sent. The audit log reads `held <id> for <SIGN>`, then
-  `held <id> delivered to <SIGN>`, or `held <id> NOT delivered to <SIGN>:
-  <reason>` when the hand-over is refused and the decision turns undelivered.
-
-The app's Poll is a read-only view and asks nothing itself. It lists, in
-order: undelivered answers (one whose Retry is waiting says so on its card),
-the questions open in Flight (each links to its card there), the to-dos with
-Done, held answers, then the last six decided and the last three replaced. At
-the terminal, `/console poll` lists the open items with each question's
-numbered options, the last three replaced, then the undelivered and held
-answers.
 
 ## Alerts and watches
 
 A Controller's report that opens a **new** question sends one fixed line to
 the founder (desktop, or the phone while Remote Control is connected): "<SIGN>
-asks you a question: answer in the app's Flight tab, or /console poll." (or
-"N questions"). A report that opens only to-dos says "<SIGN> left you a to-do"
-instead. A question listed again opens nothing and alerts nothing. A PR a
+asks you a question: Flight asks it in the app and at the Mac." (or "N
+questions", with "(urgent)" when one is). A report that opens to-dos says
+"<SIGN> left you a to-do: see the app's Flight tab, or /console poll." A question listed again opens nothing and alerts nothing. A PR a
 Controller names in its own `state:` or `shipped:` line is watched every ten
 minutes; once its checks finish, a change in state, reviews, comments or check
 results wakes that Controller to act and report. Merged or closed PRs and
