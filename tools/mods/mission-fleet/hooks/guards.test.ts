@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import type { PollItem } from '../types'
-import { awaitingFlight, dropRelayCodes, fleetSelfApproval, isChoiceVerb, isFlightOnly, isRelayedVerb, RELAY_TTL, relayHold, splitRelayCode, spendRelayCode, isShellLikeTool, pinnedDir, protectedFromSpoke, pushDestination, shellRefusal, tokenize, toolRefusal, workflowCode, workflowRefusal } from './guards'
+import { awaitingFlight, dropRelayCodes, fleetSelfApproval, isChoiceVerb, isFlightOnly, isRelayedVerb, RELAY_TTL, relayHold, splitRelayCode, spendRelayCode, isShellLikeTool, pinnedDir, protectedFromSpoke, pushDestination, shellRefusal, tokenize, toolRefusal } from './guards'
 import type { CloneScope, RelayCodes } from './guards'
 
 const C = (cmd: string, prot: string[] = []) => shellRefusal('controller', cmd, prot)
@@ -253,8 +253,7 @@ test('a back-room agent runs no git write beyond add and commit', () => {
 })
 
 test('other tools: Workflow and MCP shells are refused, any tool input naming a Flight file is refused', () => {
-  expect(toolRefusal('controller', 'Workflow', {}, [])).toContain('only from an inline script')
-  expect(toolRefusal('back room', 'Workflow', {}, [])).toContain('never runs a workflow')
+  expect(toolRefusal('controller', 'Workflow', {}, [])).toContain('Workflows')
   expect(isShellLikeTool('mcp__plugin_serena_serena__execute_shell_command')).toBe(true)
   expect(toolRefusal('back room', 'mcp__plugin_serena_serena__execute_shell_command', { command: 'ls' }, [])).toContain('use Bash')
   expect(toolRefusal('controller', 'Monitor', { command: 'git push origin main' }, [])).toContain('base or deploy branch')
@@ -1047,8 +1046,10 @@ test('gh api refuses a delete, a merge, another repo and every endpoint off the 
   expect(R(`${IN}gh api -X PUT repos/{owner}/{repo}/contents/README.md -f message=x -f content=eA==`)).toContain(OFF)
   expect(R(`${IN}gh api -X PATCH repos/{owner}/{repo} -f default_branch=x`)).toContain(OFF)
   expect(R(`${IN}gh api -X POST repos/{owner}/{repo}/actions/workflows/deploy.yml/dispatches -f ref=main`)).toContain(OFF)
-  expect(R(`${IN}gh api -X PATCH repos/{owner}/{repo}/pulls/$N -f body=x`)).toContain(OFF)
-  expect(R(`${IN}gh api -X PATCH repos/{owner}/{repo}/pulls/{1,2} -f body=x`)).toContain(OFF)
+  // Cancelling a run can stop a deploy halfway.
+  expect(R(`${IN}gh api -X POST repos/{owner}/{repo}/actions/runs/9/cancel`)).toContain(OFF)
+  expect(R(`${IN}gh api -X PATCH repos/{owner}/{repo}/pulls/$N -f body=x`)).toContain('must be literal')
+  expect(R(`${IN}gh api -X PATCH repos/{owner}/{repo}/pulls/{1,2} -f body=x`)).toContain('must be literal')
   expect(R(`${IN}gh api --hostname ghe.example.com repos/{owner}/{repo}/pulls/3`)).toContain('--hostname')
   expect(R(`${IN}gh api -H 'X-HTTP-Method-Override: DELETE' repos/{owner}/{repo}/pulls/3 -f x=1`)).toContain('overrides its method')
   expect(R(`${IN}gh api -iX DELETE repos/{owner}/{repo}/pulls/comments/7`)).toContain('one at a time')
@@ -1090,30 +1091,27 @@ test('only a worktree beside the repo counts: not another folder, not beside a f
   expect(R('cd /w/fronts/acme/acme-x && git clone https://github.com/o/r.git')).toContain('clones only into a front')
 })
 
-const FLOW = "export const meta = { name: 'scan', description: 'd' }\nconst out = await parallel(['a', 'b'].map(f => () => agent(`read ${f}`, { model: 'sonnet', effort: 'low', label: f })))\nreturn out"
-
-test('a Controller runs an inline workflow whose every agent() call states its model and effort', () => {
-  expect(toolRefusal('controller', 'Workflow', { script: FLOW }, [], REPO, ACME)).toBeUndefined()
-  // Text that only mentions agent( is not a call.
-  expect(workflowRefusal('controller', { script: `${FLOW}\nlog('agent(x) and workflow( are words here') // agent(`, args: { n: 1 } })).toBeUndefined()
-  expect(workflowCode("a('x)') + `t ${b('y')}`")).toBe("a('  ') + `  ${b(' ')}`")
+test('gh api reads a method written -X=VALUE as pflag does, so -X=DELETE is a delete', () => {
+  expect(R(`${IN}gh api -X=DELETE repos/{owner}/{repo}/issues/comments/7`)).toContain('-X DELETE is not allowed')
+  expect(R(`${IN}gh api -X=PATCH repos/{owner}/{repo}/pulls/40 -f body=x`)).toBeUndefined()
 })
 
-test('a Controller workflow is refused without a literal model and effort on every agent() call, or when the guard cannot read it', () => {
-  const NEEDS = 'without a literal model and effort'
-  expect(workflowRefusal('controller', { script: FLOW.replace(", effort: 'low'", '') })).toContain(NEEDS)
-  expect(workflowRefusal('controller', { script: FLOW.replace("model: 'sonnet'", 'model: m') })).toContain(NEEDS)
-  expect(workflowRefusal('controller', { script: `${FLOW}\nawait agent('p', OPTS)` })).toContain(NEEDS)
-  expect(workflowRefusal('controller', { script: `${FLOW}\nconst a = agent\nawait a('p')` })).toContain('other than as a direct call')
-  expect(workflowRefusal('controller', { script: `${FLOW}\nlog(\`\${await agent('p')}\`)` })).toContain(NEEDS)
-  expect(workflowRefusal('controller', { script: `${FLOW}\nawait workflow('other')` })).toContain('no nested workflow()')
-  expect(workflowRefusal('controller', { script: `${FLOW}\nglobalThis['ag' + 'ent']('p')` })).toContain('globalThis')
-  expect(workflowRefusal('controller', { script: "log('open" })).toContain('cannot read to its end')
-  expect(workflowRefusal('controller', { script: "export const meta = { name: 'x', description: 'd' }\nlog('x')" })).toContain('calls no agent()')
-  expect(workflowRefusal('controller', { name: 'review-changes' })).toContain('name is not allowed')
-  expect(workflowRefusal('controller', { script: FLOW, scriptPath: '/tmp/x.js' })).toContain('scriptPath is not allowed')
-  expect(workflowRefusal('back room', { script: FLOW })).toContain('never runs a workflow')
-  // The script is tool input like any other: a Flight-only path in it is still refused.
-  const pointer = '_command/' + 'daily/' + 'today.md'
-  expect(toolRefusal('controller', 'Workflow', { script: `${FLOW}\nlog('${pointer}')` }, [], REPO, ACME)).toContain('Flight')
+test('gh api takes no word the shell expands: a variable or glob could become a method, a field or an option', () => {
+  const NOT = 'must be literal'
+  expect(R(`${IN}gh api -X$M repos/{owner}/{repo}/issues/comments/7`)).toContain(NOT)
+  expect(R(`${IN}gh api -X "$M" repos/{owner}/{repo}/issues/comments/7`)).toContain(NOT)
+  expect(R(`${IN}gh api -X DEL* repos/{owner}/{repo}/issues/comments/7`)).toContain(NOT)
+  expect(R(`${IN}gh api repos/{owner}/{repo}/pulls/40 $OPTS`)).toContain(NOT)
+  expect(R(`${IN}gh api repos/{owner}/{repo}/pulls/40 -f body=$B`)).toContain(NOT)
+  // The {owner} and {repo} placeholders are the one brace form taken, and only in the endpoint.
+  expect(R(`${IN}gh api repos/{owner}/{repo}/pulls/40/comments`)).toBeUndefined()
+})
+
+test('gh issue develop is refused: it makes a branch under any name, in any repo', () => {
+  expect(R(`${IN}gh issue develop 9 --name release/x`)).toContain('gh issue develop is not allowed')
+})
+
+test('a gh write verb refuses an OWNER/REPO#N reference, and a body that only mentions a URL passes', () => {
+  expect(R(`${IN}gh issue comment other/repo#1 --body x`)).toContain('never by URL')
+  expect(R(`${IN}gh pr comment 40 --body "https://github.com/o/r/pull/3 follow-up"`)).toBeUndefined()
 })

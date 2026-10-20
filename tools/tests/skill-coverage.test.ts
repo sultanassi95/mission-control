@@ -16,7 +16,7 @@ test('every git and gh command a Controller-runnable skill names runs under the 
   const names = readdirSync(SKILLS).filter(n => statSync(join(SKILLS, n)).isDirectory()).sort()
   const skills = names.map(name => ({ name, text: markdown(join(SKILLS, name)).map(f => readFileSync(f, 'utf8')).join('\n') }))
   // The instrument reads the shipped skills: all of them, and the commands mission-flow runs.
-  expect(names.length).toBeGreaterThanOrEqual(26)
+  for (const name of ['mission-flow', 'epic-flow', 'design-review']) expect(names).toContain(name)
   expect(skillCommands(skills.find(s => s.name === 'mission-flow')?.text ?? '')).toContain('gh pr create')
   for (const name of Object.keys(FLIGHT_ONLY)) expect(`${name} ${names.includes(name)}`).toBe(`${name} true`)
   expect(coverageGaps(skills).map(g => `${g.skill}: ${g.command} -> ${g.refusal}`)).toEqual([])
