@@ -3,6 +3,8 @@
 // is added, and the only attribute built from source text is a link href, which must be http(s).
 ;(() => {
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
+  // A table cell longer than this, in source characters, wraps at its spaces; a shorter one keeps to one line.
+  const LONG_CELL = 24
 
   // Inline: code spans first (their content is literal), then links, bold, italic.
   function inline(raw) {
@@ -46,7 +48,9 @@
         i += 2
         const rows = []
         while (i < lines.length && isRow(lines[i])) rows.push(cells(lines[i++]))
-        out.push(`<div class="md-table"><table><thead><tr>${head.map(c => `<th>${inline(c)}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${r.map(c => `<td>${inline(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`)
+        // A short cell keeps to one line, so a narrow screen scrolls the table rather than break its words; a long one wraps at its spaces.
+        const td = c => `<td${c.length > LONG_CELL ? ' class="long"' : ''}>${inline(c)}</td>`
+        out.push(`<div class="md-table" tabindex="0" role="region" aria-label="Table, scrolls sideways when it is wider than the screen"><table><thead><tr>${head.map(c => `<th>${inline(c)}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${r.map(td).join('')}</tr>`).join('')}</tbody></table></div>`)
         continue
       }
       // heading
