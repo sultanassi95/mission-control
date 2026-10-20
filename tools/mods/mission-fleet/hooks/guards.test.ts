@@ -1131,3 +1131,24 @@ test('a gh write verb takes only a number or a branch as its item: gh reads a UR
   expect(R(`${IN}gh issue comment 9 --body 'https://github.com/o/r/issues/9#x'`)).toBeUndefined()
   expect(R(`${IN}gh pr comment 40 --delete-last --yes`)).toContain('cannot be restored')
 })
+
+test('each gh write verb reads only its own valued options, so a boolean flag cannot pass a URL off as its value', () => {
+  const URL = 'never by URL'
+  // gh issue comment and gh pr comment take no -c, -a or -r value: what follows is the item.
+  expect(R(`${IN}gh issue comment -c https://github.com/o/r/issues/3 -b x`)).toContain(URL)
+  expect(R(`${IN}gh pr comment -a https://github.com/o/r/pull/3 -b x`)).toContain(URL)
+  expect(R(`${IN}gh pr ready -r https://github.com/o/r/pull/3`)).toContain(URL)
+  expect(R(`${IN}gh pr edit -c https://github.com/o/r/pull/3 -b x`)).toContain(URL)
+  // gh issue close -c is its comment: text that may hold a URL.
+  expect(R(`${IN}gh issue close 9 -c 'https://github.com/o/r/issues/9 covers it'`)).toBeUndefined()
+  expect(R(`${IN}gh issue close 9 -c https://github.com/o/r/issues/9`)).toBeUndefined()
+})
+
+test('a URL or OWNER/REPO#N anywhere in a gh write command fails closed unless it is body, title or comment text', () => {
+  const URL = 'never by URL'
+  expect(R(`${IN}gh pr create --head https://github.com/o/r/pull/3 --title t --body b`)).toContain(URL)
+  expect(R(`${IN}gh pr edit 40 --add-label o/r#3`)).toContain(URL)
+  expect(R(`${IN}gh pr edit 40 --base=https://github.com/o/r/pull/3`)).toContain(URL)
+  expect(R(`${IN}gh pr edit 40 --title 'see https://github.com/o/r/pull/3' --body 'and o/r#3'`)).toBeUndefined()
+  expect(R(`${IN}gh pr edit 40 --body=https://github.com/o/r/pull/3`)).toBeUndefined()
+})

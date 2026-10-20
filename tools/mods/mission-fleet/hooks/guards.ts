@@ -228,10 +228,25 @@ const GH_ALLOWED: Record<string, Set<string> | 'any'> = {
   search: 'any',
 }
 const GH_READ_VERBS = new Set(['view', 'list', 'checks', 'diff', 'status', 'watch'])
-// gh pr, issue and run options that take the next word as their value: what follows one is not the item.
-const GH_VALUED = new Set(['-b', '--body', '-F', '--body-file', '-t', '--title', '-B', '--base', '-H', '--head', '-a', '--assignee', '-l', '--label', '-m', '--milestone',
-  '-p', '--project', '-r', '--reviewer', '--reason', '-c', '--comment', '-T', '--template', '-j', '--job', '--recover',
-  '--add-assignee', '--remove-assignee', '--add-label', '--remove-label', '--add-project', '--remove-project', '--add-reviewer', '--remove-reviewer'])
+// Each write verb's options that take the next word as their value, from its `gh <group> <verb> --help`
+// (gh 2.97): what follows one is not the item. A flag off its own verb's list is a boolean, so a URL after
+// it is read as the item. TEXT values (body, title, a close comment) may hold a URL; no other word may.
+const BODY = ['-b', '--body', '-F', '--body-file']
+const EDITS = ['--add-assignee', '--remove-assignee', '--add-label', '--remove-label', '--add-project', '--remove-project']
+const GH_VALUED: Record<string, Set<string>> = {
+  'pr create': new Set([...BODY, '-t', '--title', '-a', '--assignee', '-B', '--base', '-H', '--head', '-l', '--label', '-m', '--milestone', '-p', '--project', '-r', '--reviewer', '-T', '--template', '--recover']),
+  'pr comment': new Set(BODY),
+  'pr edit': new Set([...BODY, '-t', '--title', '-B', '--base', '-m', '--milestone', ...EDITS, '--add-reviewer', '--remove-reviewer']),
+  'issue create': new Set([...BODY, '-t', '--title', '-a', '--assignee', '-l', '--label', '-m', '--milestone', '-p', '--project', '-T', '--template', '--recover']),
+  'issue comment': new Set(BODY),
+  'issue edit': new Set([...BODY, '-t', '--title', '-m', '--milestone', ...EDITS]),
+  'issue close': new Set(['-c', '--comment', '-r', '--reason']),
+  'issue reopen': new Set(['-c', '--comment']),
+  'issue lock': new Set(['-r', '--reason']),
+  'run rerun': new Set(['-j', '--job']),
+}
+const GH_TEXT = new Set([...BODY, '-t', '--title', '-c', '--comment'])
+const LINKS_ELSEWHERE = /:\/\/|[^/\s]+\/[^/\s#]+#[0-9]+/
 // The item a write verb acts on, in the pinned repo: a number or a branch name. gh reads a URL with any tail
 // (/files, #comment, ?x=1) or OWNER/REPO#N as another repo's item, so nothing else passes.
 const GH_ITEM = /^([0-9]+|[A-Za-z0-9][A-Za-z0-9._/-]*)$/
@@ -772,14 +787,23 @@ function ghRefusal(rest: Word[]): string | undefined {
   }
   if (verb && !GH_READ_VERBS.has(verb.text)) {
     if (rest.some(w => w.text.startsWith('--delete-last'))) return `gh ${group.text} ${verb.text} --delete-last is not allowed here: a deleted comment cannot be restored.`
+    const NEVER = `gh ${group.text} ${verb.text} names its PR or issue by number or branch here, never by URL: a URL can name another repo.`
+    const valued = GH_VALUED[`${group.text} ${verb.text}`] ?? new Set<string>()
     const at = rest.indexOf(verb)
     for (let i = at + 1; i < rest.length; i++) {
       const w = rest[i] as Word
       if (w.text.startsWith('-')) {
-        if (GH_VALUED.has(w.text)) i++
+        const eq = w.text.indexOf('=')
+        const opt = eq > 0 ? w.text.slice(0, eq) : w.text
+        // Fail closed: outside body, title and comment text, nothing may link to another repo.
+        if (eq > 0 && !GH_TEXT.has(opt) && LINKS_ELSEWHERE.test(w.text.slice(eq + 1))) return NEVER
+        if (eq < 0 && valued.has(opt)) {
+          const value = rest[++i]
+          if (value && !GH_TEXT.has(opt) && LINKS_ELSEWHERE.test(value.text)) return NEVER
+        }
         continue
       }
-      if (w.dynamic || w.glob || !GH_ITEM.test(w.text)) return `gh ${group.text} ${verb.text} names its PR or issue by number or branch here, never by URL: a URL can name another repo.`
+      if (w.dynamic || w.glob || !GH_ITEM.test(w.text)) return NEVER
     }
   }
   return undefined
