@@ -1062,8 +1062,9 @@ test('the guard admits a folder beside a Controller\'s repo only when its .git f
 const WF_SCRIPT = "export const meta = { name: 'scan', description: 'd' }\nawait parallel(['a', 'b'].map(f => () => agent(f, { model: 'sonnet', effort: 'low' })))"
 const workflowBy = ($: Engine, script: string, toolUseId: string, agentId = 'f1') =>
   $.tool.check({ tool: 'Workflow', input: { script }, agentId, tool_use_id: toolUseId } as Parameters<Engine['tool']['check']>[0])
-const workflowAgent = ($: Engine, toolUseId: string, runId: string, agentIndex: number, parentAgentId?: string, model: string | undefined = 'sonnet') =>
-  $.agent.spawn({ prompt: 'read', model, tool_use_id: toolUseId, workflow: { runId, agentIndex }, parentAgentId } as Parameters<Engine['agent']['spawn']>[0])
+// model null leaves the field out, as a spawn the engine raised without one would (undefined would take the default).
+const workflowAgent = ($: Engine, toolUseId: string, runId: string, agentIndex: number, parentAgentId?: string, model: string | null = 'sonnet') =>
+  $.agent.spawn({ prompt: 'read', ...(model === null ? {} : { model }), tool_use_id: toolUseId, workflow: { runId, agentIndex }, parentAgentId } as Parameters<Engine['agent']['spawn']>[0])
 
 test('a Controller\'s workflow is refused until the founder turns workflows on, and the switch is the founder\'s', async ($, on) => {
   portfolio(on)
@@ -1102,7 +1103,8 @@ test('an admitted workflow starts only the agents it was admitted for, each guar
   expect(audit.join('\n')).toContain('\tworkflow\tFIELDKIT\tadmitted: up to 2 agents of 4 room')
   // Its two agents start; a third, by the engine's place or the plugin's own count, does not.
   // A spawn with no model is not what the parser read, and it starts nothing (nor counts).
-  expect((await workflowAgent($, 'tu1', 'wf_1', 1, 'f1', undefined)).deny).toContain('no model')
+  expect((await workflowAgent($, 'tu1', 'wf_1', 1, 'f1', null)).deny).toContain('no model')
+  expect((await workflowAgent($, 'tu1', 'wf_1', 1, 'f1', '')).deny).toContain('no model')
   expect((await workflowAgent($, 'tu1', 'wf_1', 1, 'f1')).agentId).toBe('w1')
   expect((await workflowAgent($, 'tu1', 'wf_1', 2)).agentId).toBe('w2')
   const third = await workflowAgent($, 'tu1', 'wf_1', 3)
