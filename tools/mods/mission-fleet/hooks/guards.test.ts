@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { fleetSelfApproval, isFlightOnly, isRelayedVerb, RELAY_TTL, splitRelayCode, spendRelayCode, isShellLikeTool, pinnedDir, protectedFromSpoke, pushDestination, shellRefusal, tokenize, toolRefusal } from './guards'
+import { fleetSelfApproval, isFlightOnly, isRelayedVerb, RELAY_TTL, splitRelayCode, spendRelayCode, isShellLikeTool, pinnedDir, protectedFromSpoke, pushDestination, registersWorktree, shellRefusal, tokenize, toolRefusal } from './guards'
 import type { CloneScope, RelayCodes } from './guards'
 
 const C = (cmd: string, prot: string[] = []) => shellRefusal('controller', cmd, prot)
@@ -949,7 +949,9 @@ test('redirects do not change ordinary commands, and a Flight-only file is seen 
 // The acme Controller's repo, one level under its front's folder, as /console staff sets it for a one-repo front.
 
 const REPO = '/w/fronts/acme/acme'
-const R = (cmd: string, role: 'controller' | 'back room' = 'controller', clone: CloneScope | undefined = ACME) => shellRefusal(role, cmd, [], REPO, clone)
+// The worktrees of the acme repo the fleet found registered beside it (MC-167).
+const WT = ['/w/fronts/acme/acme-beta-318', '/w/fronts/acme/acme-x']
+const R = (cmd: string, role: 'controller' | 'back room' = 'controller', clone: CloneScope | undefined = ACME) => shellRefusal(role, cmd, [], REPO, clone, undefined, WT)
 const IN = `cd ${REPO} && `
 
 test('a Controller edits its own PR: body, title, base and labels', () => {
@@ -1101,7 +1103,7 @@ test('a URL or OWNER/REPO#N anywhere in a gh write command fails closed unless i
 // the command without that cd, so a pinned call reads as unpinned. The fleet records where each agent's
 // shell is from the engine's CwdChanged event; the guard pins a call with no cd before it there.
 
-const S = (cmd: string, start?: string, role: 'controller' | 'back room' = 'controller') => shellRefusal(role, cmd, [], REPO, ACME, start)
+const S = (cmd: string, start?: string, role: 'controller' | 'back room' = 'controller') => shellRefusal(role, cmd, [], REPO, ACME, start, WT)
 
 test('a call the engine stripped of its cd to the shell\'s own directory is pinned there', () => {
   expect(S('gh pr list --limit 1', REPO)).toBeUndefined()
@@ -1146,4 +1148,34 @@ test('anything before the call that is not a known program could move the shell,
   for (const before of ['npm test &&', 'pnpm -s build &&', 'echo ok;', 'ls -la &&', 'git fetch origin &&', 'true &&']) {
     expect(`${before} -> ${S(`${before} git status`, REPO) ?? 'allowed'}`).toBe(`${before} -> allowed`)
   }
+})
+
+// ---- Worktrees beside the repo, registered (MC-167) ----
+
+test('a folder beside the repo counts only when it is one of the repo\'s registered worktrees', () => {
+  const W = (cmd: string, worktrees?: string[]) => shellRefusal('controller', cmd, [], REPO, ACME, undefined, worktrees)
+  // A separate repository named <repo>-<anything> beside the repo is no worktree of it.
+  expect(W('cd /w/fronts/acme/acme-api && git push -u origin feat/x', WT)).toContain('/w/fronts/acme/acme-api is outside your console\'s directory')
+  expect(W('cd /w/fronts/acme/acme-api && gh pr edit 3 --body x', WT)).toContain('outside your console')
+  // With no worktree list (the fleet could not read the front's folder), nothing beside the repo counts.
+  expect(W('cd /w/fronts/acme/acme-beta-318 && git status')).toContain('outside your console')
+  expect(W('cd /w/fronts/acme/acme-beta-318 && git status', [])).toContain('outside your console')
+  // A registered worktree, and folders inside it, count.
+  expect(W('cd /w/fronts/acme/acme-beta-318/src && git status', WT)).toBeUndefined()
+  // A list entry that is not beside the repo admits nothing.
+  expect(W('cd /w/fronts/globex && git status', ['/w/fronts/globex'])).toContain('outside your console')
+})
+
+test('a .git file registers a worktree of the repo only by a gitdir line under the repo\'s own worktrees folder', () => {
+  expect(registersWorktree('gitdir: /w/fronts/acme/acme/.git/worktrees/acme-beta-318\n', REPO)).toBe(true)
+  expect(registersWorktree('gitdir: /w/fronts/acme/other/.git/worktrees/acme-x', REPO)).toBe(false)
+  expect(registersWorktree('gitdir: /w/fronts/acme/acme/.git/modules/x', REPO)).toBe(false)
+  expect(registersWorktree('gitdir: /w/fronts/acme/acme/.git/worktrees/a/../../../../globex/.git', REPO)).toBe(false)
+  expect(registersWorktree('gitdir: relative/.git/worktrees/x', REPO)).toBe(false)
+  // git writes a relative line with worktree.useRelativePaths: read from the folder the .git file is in.
+  expect(registersWorktree('gitdir: ../acme/.git/worktrees/acme-x', REPO, '/w/fronts/acme/acme-x')).toBe(true)
+  expect(registersWorktree('gitdir: ../other/.git/worktrees/acme-x', REPO, '/w/fronts/acme/acme-x')).toBe(false)
+  expect(registersWorktree('gitdir: ../acme/.git/worktrees/x/../../../../globex/.git', REPO, '/w/fronts/acme/acme-x')).toBe(false)
+  expect(registersWorktree('', REPO)).toBe(false)
+  expect(registersWorktree('[core]\n\tbare = false', REPO)).toBe(false)
 })

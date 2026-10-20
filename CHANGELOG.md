@@ -6,7 +6,14 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
-- 2026-10-20 (latest): a Controller's `cd <its shell's own directory> && gh ...`
+- 2026-10-20 (latest): a folder beside a Controller's repo counts as its worktree
+  only when it is one (MC-167). Before, any `<repo>-<slug>` folder in the front's
+  folder passed by its name, a separate repository named that way included; now
+  the fleet reads each such folder's `.git` file and admits it only when its
+  `gitdir:` line names a folder under `<repo>/.git/worktrees/`. The folders are
+  read only for a call that names one or starts in one.
+
+- 2026-10-20: a Controller's `cd <its shell's own directory> && gh ...`
   is pinned where the engine says its shell is (MC-168, MC-155). The engine drops a leading
   `cd` to the directory the shell is already in before the guard reads the
   command, so the guard saw a bare `gh` with no pin. The fleet now records where

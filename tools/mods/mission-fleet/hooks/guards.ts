@@ -88,13 +88,33 @@ function isFrontFolder(dir: string, clone: CloneScope | undefined): boolean {
 
 /**
  * True when dir is in a worktree beside the console's repo, `<front folder>/<repo>-<slug>[/...]`, where
- * the delivery flows place one (framework/task-board.md). Only for a console whose directory is a repo
- * one level under its own front's folder: beside a front's folder lies another front.
+ * the delivery flows place one (framework/task-board.md), and that folder is one of the repo's
+ * registered worktrees (`worktrees`, which the fleet reads from each folder's .git file): a separate
+ * repository named the same way is not. Only for a console whose directory is a repo one level under
+ * its own front's folder: beside a front's folder lies another front.
  */
-function isSiblingWorktree(dir: string, scope: string, clone: CloneScope | undefined): boolean {
+function isSiblingWorktree(dir: string, scope: string, clone: CloneScope | undefined, worktrees: readonly string[] = []): boolean {
   if (!clone || foldPath(`${scope}/..`) !== foldPath(clone.home)) return false
   const rest = dir.startsWith(`${scope}-`) ? dir.slice(scope.length + 1) : ''
-  return /^[A-Za-z0-9._-]+(\/|$)/.test(rest) && !NO_NAME.test(rest.split('/')[0] ?? '')
+  const name = rest.split('/')[0] ?? ''
+  if (!/^[A-Za-z0-9._-]+(\/|$)/.test(rest) || NO_NAME.test(name)) return false
+  return worktrees.some(w => foldPath(w) === `${scope}-${name}`)
+}
+
+/**
+ * True when a folder's `.git` file (its text) makes it a worktree of the repo at `repo`: a single
+ * `gitdir:` line naming a folder under `<repo>/.git/worktrees/`, absolute, or relative to `folder` (the
+ * folder the file is in), as git writes it with worktree.useRelativePaths. A `.git` folder (a
+ * repository of its own) has no such text.
+ */
+export function registersWorktree(gitFile: string, repo: string, folder?: string): boolean {
+  const m = /^gitdir: ([^\n]+?)\s*$/.exec(gitFile.trim())
+  const line = m?.[1] ?? ''
+  if (!m || dotsAfterName(line)) return false
+  if (!line.startsWith('/') && !folder?.startsWith('/')) return false
+  const dir = foldPath(line.startsWith('/') ? line : `${folder}/${line}`)
+  const under = `${foldPath(repo)}/.git/worktrees/`
+  return dir.startsWith(under) && /^[^/]+$/.test(dir.slice(under.length))
 }
 
 /**
@@ -916,7 +936,7 @@ function isClone(rest: Word[]): boolean {
  * The refusal for a shell command run by a fleet role, if any. `start` is the directory the engine says
  * the shell starts in, which pins a git or gh call with no cd before it (the engine drops a leading cd to it).
  */
-export function shellRefusal(role: Role, command: string, protectedBranches: string[], scopeDir?: string, clone?: CloneScope, start?: string): string | undefined {
+export function shellRefusal(role: Role, command: string, protectedBranches: string[], scopeDir?: string, clone?: CloneScope, start?: string, worktrees?: readonly string[]): string | undefined {
   if (APP_HOME.test(command)) return APP_HOME_REFUSAL
   if (/_command\/fleet\b/.test(normalisePath(command)) || /\.claude[^/\s]*\/projects\b/.test(command)) return 'The fleet folder and Claude session transcripts are Flight\'s: fleet agents do not read them.'
   const parsed = tokenize(command)
@@ -999,7 +1019,7 @@ export function shellRefusal(role: Role, command: string, protectedBranches: str
       if (!dir) return `Pin the repo on every ${name} call: \`cd ${scope} && ${name} ...\`${name === 'git' ? ` or \`git -C ${scope} ...\`` : ''}. Your shell may start in another repo.`
       // A Controller's clone may also run from a front's folder, where it lands one level down; nothing else runs there.
       const cloning = role === 'controller' && clone !== undefined && name === 'git' && isClone(rest)
-      const sibling = role === 'controller' && isSiblingWorktree(dir, scope, clone)
+      const sibling = role === 'controller' && isSiblingWorktree(dir, scope, clone, worktrees)
       if (dir !== scope && !dir.startsWith(`${scope}/`) && !sibling && !(cloning && isFrontFolder(dir, clone))) return `${dir} is outside your console's directory (${scope}).`
       pin = dir
       // A clone's pin decides where it writes, and the guard reads it as text while the disk follows links (a
@@ -1029,12 +1049,12 @@ export function isShellLikeTool(tool: string): boolean {
 }
 
 /** The refusal for any tool call by a fleet role, if any. */
-export function toolRefusal(role: Role, tool: string, input: unknown, protectedBranches: string[], scopeDir?: string, clone?: CloneScope, start?: string): string | undefined {
+export function toolRefusal(role: Role, tool: string, input: unknown, protectedBranches: string[], scopeDir?: string, clone?: CloneScope, start?: string, worktrees?: readonly string[]): string | undefined {
   if (tool === 'Workflow') return 'Workflows are Flight\'s to run; a Controller dispatches its back room with the Agent tool.'
   if (isShellLikeTool(tool)) return `${tool} runs shell commands the fleet guard cannot read; use Bash.`
   const args = (input ?? {}) as Record<string, unknown>
   if (typeof args.command === 'string') {
-    const why = shellRefusal(role, args.command, protectedBranches, scopeDir, clone, start)
+    const why = shellRefusal(role, args.command, protectedBranches, scopeDir, clone, start, worktrees)
     if (why) return why
   }
   const flat = JSON.stringify(input ?? {})

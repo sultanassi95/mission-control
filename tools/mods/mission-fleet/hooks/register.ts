@@ -7,7 +7,7 @@ import { commonDir, CONTROLLER_PROMPT, CONTROLLER_TYPE, DEFAULT_BUDGET, EFFORTS,
 
 const APP_PORT = 4777
 const MODEL_LIST = Object.keys(MODEL_IDS).join(', ')
-import { fleetSelfApproval, isRelayedVerb, protectedFromSpoke, RELAY_TTL, splitRelayCode, spendRelayCode, toolRefusal } from './guards'
+import { fleetSelfApproval, isRelayedVerb, protectedFromSpoke, registersWorktree, RELAY_TTL, splitRelayCode, spendRelayCode, toolRefusal } from './guards'
 import type { RelayCodes } from './guards'
 import { advisoryText, answerWord, askPrompt, asSlots, decisionText, dependentsOf, isAsked, isNothing, liveSeat, matchAnswers, migratePoll, nextAsks, optionsOf, parseReport, parseStatus, placeSlots, plainReason, pollId, prSignature, prsIn } from './loops'
 import type { StoredPollItem } from './loops'
@@ -261,10 +261,14 @@ export const register: Register = on => {
     // staffed while a clone landed only in its own front has no fronts on record, so it keeps that.
     const clone = c.cloneHome ? { home: c.cloneHome, fronts: c.cloneFronts ?? [c.front] } : undefined
     const start = shellDirs.get(e.agentId)
-    const why = toolRefusal(role.kind, e.tool, e.input, c.protectedBranches, c.cwd, clone, start)
+    // Folders beside the repo are read only when the call names one (by the repo's name and a dash, in
+    // any spelling a cd or -C folds) or starts in one.
+    const beside = `${c.cwd.replace(/\/+$/, '').split('/').pop() ?? ''}-`
+    const worktrees = beside.length > 1 && (JSON.stringify(e.input ?? {}).includes(beside) || (start ?? '').includes(beside)) ? await worktreesBeside($, c) : []
+    const why = toolRefusal(role.kind, e.tool, e.input, c.protectedBranches, c.cwd, clone, start, worktrees)
     if (!why) {
       // Audited when only the recorded shell directory pinned the call, so a live run shows where it came from.
-      if (start && toolRefusal(role.kind, e.tool, e.input, c.protectedBranches, c.cwd, clone)) await log($, 'guard', role.console.callSign, `${role.kind} ${e.tool} pinned by the shell directory ${start}`)
+      if (start && toolRefusal(role.kind, e.tool, e.input, c.protectedBranches, c.cwd, clone, undefined, worktrees)) await log($, 'guard', role.console.callSign, `${role.kind} ${e.tool} pinned by the shell directory ${start}`)
       return next(e)
     }
     await log($, 'guard', role.console.callSign, `${role.kind} ${e.tool} denied: ${why}`)
@@ -569,6 +573,27 @@ async function runConsole($: EngineInterface, args: string, fromPerson: boolean)
 }
 
 type Role = { kind: GuardRole; console: Console }
+
+/**
+ * The console repo's worktrees beside it in its front's folder, `<front>/<repo>-<slug>`: each such
+ * folder whose `.git` file registers it under `<repo>/.git/worktrees/` (registersWorktree). Read from
+ * the disk, never from a name, so a separate repository named the same way is not one. None for a
+ * console whose directory is not a repo one level under its front's folder, or one with no folder on
+ * record; a folder that cannot be read is left out.
+ */
+async function worktreesBeside($: EngineInterface, c: Console): Promise<string[]> {
+  const repo = c.cwd.replace(/\/+$/, '')
+  const home = c.cloneHome?.replace(/\/+$/, '')
+  if (!home || repo.slice(0, repo.lastIndexOf('/')) !== home) return []
+  const prefix = `${repo.slice(repo.lastIndexOf('/') + 1)}-`
+  const out: string[] = []
+  for (const entry of await $.fs.list(home).catch(() => [])) {
+    if (entry.kind !== 'dir' || !entry.name.startsWith(prefix)) continue
+    const text = await $.fs.read(`${home}/${entry.name}/.git`).catch(() => '')
+    if (registersWorktree(text, repo, `${home}/${entry.name}`)) out.push(`${home}/${entry.name}`)
+  }
+  return out
+}
 
 const ACTIVE_STATUS = new Set(['pending', 'running', 'waiting'])
 
