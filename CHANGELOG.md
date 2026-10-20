@@ -6,7 +6,25 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
-- 2026-10-20 (latest): a Controller runs what the skills run in its own repo
+- 2026-10-20 (latest): a Controller's question is one of Flight's own, and the
+  Poll is gone (MC-163). The fleet queues each open question and, while Flight
+  is idle, puts up to four to it in one prompt (urgent first, then oldest);
+  Flight asks them with AskUserQuestion, each header the item's id, in the app
+  and at the Mac, and the fleet delivers each pick to the Controller that asked
+  it, telling Flight what became of it after the tool's result. A Controller
+  writes two to four options, and may start a question with `urgent: `. To-dos
+  are cards in the app's Flight tab; Done tells the Controller. Removed: the
+  Poll tab, the Decision card, `/console decide`, `go`, `nogo`, `no-go` and
+  `retry`, the app's relay of answers, and the undelivered and held states (an
+  answer that cannot reach its Controller is recorded and Flight is told how to
+  relay it). The Flight tab's badge counts open questions and to-dos. At
+  session start the stored items are read once: an undelivered or held answer
+  is open again and asked again, nothing open is dropped, and the audit log
+  reads `poll migrate open <before> -> <after>`. Controllers staffed before
+  this change keep their old prompt until restaffed; their questions are asked
+  the same way, a fifth or sixth option dropped.
+
+- 2026-10-20: a Controller runs what the skills run in its own repo
   (MC-162, covering MC-160). The fleet guard now allows `gh pr edit`, `gh pr
   ready`, `gh run rerun`, `gh issue` writes but `delete`, `transfer` and
   `develop`, and `gh api` writes to the pinned repo's PR, issue, comment and

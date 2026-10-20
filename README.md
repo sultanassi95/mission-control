@@ -26,11 +26,9 @@ argue its way around, and a control room you can run from your phone.
 <p align="center">
   <img src="docs/assets/app-phone-flight.png" alt="Flight: the morning summary across three fronts" width="240">
   &nbsp;
-  <img src="docs/assets/app-phone-poll.png" alt="The Poll: the questions and to-dos waiting on you" width="240">
-  &nbsp;
   <img src="docs/assets/app-phone-consoles.png" alt="Consoles: one Controller per front, with its state" width="240">
 </p>
-<p align="center"><sub>The Mission Control App on a phone: Flight's morning summary, the decisions waiting on you, and the Controller running each front.</sub></p>
+<p align="center"><sub>The Mission Control App on a phone: Flight's morning summary and the Controller running each front.</sub></p>
 
 ## What it does for you
 
@@ -44,16 +42,17 @@ PR watches wake a Controller when its checks or reviews change, so nobody polls 
 
 ### <img src="docs/assets/icon-poll.svg" width="28" align="top"> Every decision that needs you, in one place
 
-When a Controller needs you to decide something, it asks in Flight as a question with its
-options spelled out, each with what it does, beside the report it came from. Pick one, add a
-note if you like. Things only you can do land on the **Poll** as to-dos with their links.
+When a Controller needs you to decide something, Flight asks you as its own question, with
+the Controller's options spelled out, each with what it does; urgent ones first. Pick one, or
+answer in your own words, and the pick goes straight to that Controller. Things only you can do
+land in Flight as to-dos with their links, and Done tells the Controller.
 Changes that ripple into other fronts are routed to the Controllers they affect. Nothing
 waits silently.
 
 ### <img src="docs/assets/icon-phone.svg" width="28" align="top"> Run it from your phone, from anywhere
 
-`/console app` starts the **Mission Control App**: Flight's conversation, your Controllers,
-the Poll and the message traffic, as a home-screen app. Over Tailscale it reaches your phone
+`/console app` starts the **Mission Control App**: Flight's conversation with its questions and
+your to-dos, your Controllers and the message traffic, as a home-screen app. Over Tailscale it reaches your phone
 in any city, signed in by your own Tailscale account and never exposed to the public internet.
 Send Flight a message or a photo, answer the questions it asks, get an alert when a decision
 lands. One front door covers every Claude account you use (work, personal, a partner's) with
@@ -103,8 +102,7 @@ flowchart TB
   FLIGHT -->|"/console staff"| C1["Controller<br/>storefront"]
   FLIGHT --> C2["Controller<br/>billing-api"]
   FLIGHT --> C3["Controller<br/>mobile-app"]
-  C1 & C2 & C3 -->|status, questions, to-dos| POLL[("The Poll")]
-  POLL --> YOU
+  C1 & C2 & C3 -->|status, questions, to-dos| FLIGHT
   C2 --> BR["back room<br/>helper agents within budget"]
   subgraph PORTFOLIO["Your portfolio, plain Markdown in git"]
     HUB["hubs, spokes, boards,<br/>today's pointer, the rules"]
