@@ -47,28 +47,24 @@ export type PollItem = {
    * question: a decision the Controller asked, with its own options. gate: a report's blocked line
    * with no decisions block (a Controller staffed before questions), asked as Go or No-go.
    * advisory: a contract change naming dependent fronts, asked as Tell them or Don't tell.
-   * todo: an action only the founder can take; never asked, checked off with Done.
+   * todo: an action only the founder can take; never asked, checked off with Done, which is told to the Controller.
+   * Every asked kind reaches the founder as one of Flight's own questions (AskUserQuestion).
    */
   kind: 'gate' | 'advisory' | 'question' | 'todo'
   title: string
   detail: string
-  /** answered: a question's option was chosen (choice names it). done: a to-do was checked off. */
+  /** answered: a question's option was chosen (choice names it; 0 for the founder's own words, in note). done: a to-do was checked off. */
   state: 'open' | 'go' | 'no-go' | 'answered' | 'done' | 'superseded' | 'dismissed'
   /** A question's options as the Controller wrote them. */
   options?: DecisionOption[]
   /** The option the founder chose, counted from 1. */
   choice?: number
-  /** The agent that raised it: a decision goes to this agent only. */
+  /** The agent that raised it: an answer goes to this agent only. */
   agentId: string
-  /** Set when a decision could not be delivered. */
-  undelivered?: string
-  /**
-   * Set when a go or no-go was decided after the Controller that raised it stood down: the time it was
-   * held for the next Controller staffed under the same call sign. Cleared once that Controller has it.
-   */
-  held?: string
-  /** When the app sent an answer on it to Flight; a later answer replaces it until Flight runs it or the code expires. */
-  sentAt?: string
+  /** When the fleet last put it to Flight to ask; put again after ASK_AGAIN while still open. */
+  askedAt?: string
+  /** The Controller wrote it `urgent:`: asked before older questions. */
+  urgent?: true
   decidedAt?: string
   note?: string
   /** For an advisory: the fronts whose map names the changed scope. */

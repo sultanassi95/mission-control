@@ -59,11 +59,8 @@ export function dependentsOf(scope: string, maps: { front: string; text: string 
 /** A console as the seat checks read it. */
 export type Seat = { callSign: string; agentId: string; status: string }
 
-/** Where the Controller that raised an item stands: still staffed, replaced by a later console under its call sign, or gone. */
-export type SeatState = 'live' | 'replaced' | 'gone'
-
 /**
- * The console whose Controller may hear an item's decision now: the agent that raised it, while its
+ * The console whose Controller may hear an item's answer now: the agent that raised it, while its
  * console is staffed, and never a later console under the same call sign. An item opened before
  * agent ids were recorded falls back to the console staffed under its call sign.
  */
@@ -73,48 +70,25 @@ export function liveSeat<S extends Seat>(item: Pick<PollItem, 'agentId' | 'from'
     : seats.find(s => s.callSign === item.from && s.status === 'staffed')
 }
 
-export function seatState(item: Pick<PollItem, 'agentId' | 'from'>, seats: readonly Seat[]): SeatState {
-  if (liveSeat(item, seats)) return 'live'
-  return seats.some(s => s.callSign === item.from && s.status === 'staffed') ? 'replaced' : 'gone'
-}
-
-/** A decision the founder made that is sent to a Controller: a go, a no-go, or an answered question. */
+/** A decision the founder made that is sent to a Controller: a go, a no-go or an answered question. */
 export function isDecided(state: PollItem['state']): boolean {
   return state === 'go' || state === 'no-go' || state === 'answered'
 }
 
-/**
- * An answer (an option, GO or NO-GO) that never reached its Controller: it stays on the Poll until a retry delivers it or
- * the founder dismisses it. The same test as the app's `undelivered` in tools/app/public/app.js.
- */
-export function isUndelivered(item: Pick<PollItem, 'state' | 'undelivered'>): boolean {
-  return Boolean(item.undelivered) && isDecided(item.state)
+/** An open item a Controller asks the founder: a question, a legacy blocked line or a contract change; a to-do is never asked. */
+export function isAsked(item: Pick<PollItem, 'kind' | 'state'>): boolean {
+  return item.state === 'open' && item.kind !== 'todo'
 }
 
-/** An answer decided after the Controller that raised it stood down, kept for the next Controller under its call sign. */
-export function isHeld(item: Pick<PollItem, 'state' | 'held'>): boolean {
-  return Boolean(item.held) && isDecided(item.state)
-}
-
-/**
- * What the next Controller under a call sign is told when it is staffed: each decision the founder
- * made while no Controller held that call sign, with the report it answers, and each advisory held
- * for its front. One message, so nothing arrives in part; empty when nothing waits.
- */
-export function heldText(callSign: string, verdicts: readonly PollItem[], advisories: readonly PendingAdvisory[]): string {
-  if (verdicts.length === 0 && advisories.length === 0) return ''
-  const lines = [`Held for the next ${callSign} Controller, which is you. Say in your next status check what you will do with each.`]
-  for (const v of verdicts) {
-    const said = v.state === 'answered' ? decisionText(v, v.choice ?? 0, v.note ?? '').split('\n')[0] ?? '' : `${v.state === 'no-go' ? 'NO-GO' : 'GO'} on ${v.id}${v.note ? `: ${v.note}` : '.'}`
-    lines.push('', said, `It answers a report an earlier ${callSign} Controller sent at ${v.at.slice(0, 16)}, decided after that Controller stood down:`, v.detail)
-  }
-  if (advisories.length) lines.push('', 'Advisories Flight held for your front:', ...advisories.map(a => `- ${a.at.slice(0, 16)} ${a.text}`))
-  return lines.join('\n')
+/** What the next Controller under a call sign is told when it is staffed: the advisories held for its front. Empty when none wait. */
+export function advisoryText(callSign: string, advisories: readonly PendingAdvisory[]): string {
+  if (advisories.length === 0) return ''
+  return [`Held for the next ${callSign} Controller, which is you. Say in your next status check what you will do with each.`, '', 'Advisories Flight held for your front:', ...advisories.map(a => `- ${a.at.slice(0, 16)} ${a.text}`)].join('\n')
 }
 
 /**
- * One plain sentence for the founder in place of an engine refusal, which is often written for the
- * model ("Issue the action again once..."). The raw text stays on the item and in the audit log.
+ * One plain sentence in place of an engine refusal, which is often written for the model ("Issue the
+ * action again once..."). The raw text stays in the audit log.
  */
 export function plainReason(raw: string): string {
   if (/auto mode|classifier/i.test(raw)) return 'Auto mode blocked the message.'
@@ -124,36 +98,79 @@ export function plainReason(raw: string): string {
   return 'The message could not be delivered.'
 }
 
-/** What the founder can do at the terminal about an undelivered decision, by where its Controller stands. */
-export function undeliveredAdvice(item: Pick<PollItem, 'id' | 'from' | 'state'>, seat: SeatState): string {
-  if (seat === 'live') return `/console retry ${item.id} sends the same ${item.state === 'answered' ? 'answer' : item.state === 'no-go' ? 'NO-GO' : 'GO'} to ${item.from}.`
-  if (seat === 'replaced') return `The ${item.from} Controller that raised it has been replaced: tell the new one with /console call ${item.from}.`
-  return `${item.from} is no longer staffed: staff the console again from Flight, then tell it the decision with /console call ${item.from}.`
+/** A poll item as it was stored before MC-163: an answer could be left undelivered, held or on its way from the app. */
+export type StoredPollItem = PollItem & { undelivered?: string; held?: string; sentAt?: string }
+
+/**
+ * The stored poll as the questions Flight asks read it. An answer that never reached its Controller
+ * (undelivered) or waited for the next one (held) is open again, so Flight asks it again; the app's
+ * send marks are dropped. Everything else is kept as it was, so nothing open is lost.
+ */
+export function migratePoll(items: readonly StoredPollItem[]): { items: PollItem[]; reopened: string[] } {
+  const reopened: string[] = []
+  const out = items.map(p => {
+    if (p.undelivered === undefined && p.held === undefined && p.sentAt === undefined) return p
+    const { undelivered, held, sentAt, ...rest } = p
+    if (isDecided(p.state) && (undelivered || held)) {
+      reopened.push(p.id)
+      const { choice, decidedAt, ...open } = rest
+      return { ...open, state: 'open' as const }
+    }
+    return rest
+  })
+  return { items: out, reopened }
 }
 
-/** What the app draws a poll item from, beside the item itself; every word of it is the fleet's. */
-export type CardFacts = {
-  /** An undelivered decision: its plain reason, and where the Controller that raised it stands. */
-  why?: string
-  seat?: SeatState
-  /** An open item the founder is asked: the options it is asked with (optionsOf). */
-  asks?: DecisionOption[]
-  /** A decided item: the answer in a word or two (answerWord). */
-  answer?: string
+/** How many questions one AskUserQuestion call takes (the engine's limit), and the most options each. */
+export const ASK_BATCH = 4
+export const MAX_OPTIONS = 4
+/** A question Flight was asked to ask and has not asked is put to it again after this long. */
+export const ASK_AGAIN = 10 * 60_000
+
+/** The next questions to put to Flight: open, not put to it within ASK_AGAIN, urgent first, then oldest; at most ASK_BATCH. */
+export function nextAsks(items: readonly PollItem[], now: number): PollItem[] {
+  const due = items.filter(p => isAsked(p) && (!p.askedAt || now - Date.parse(p.askedAt) > ASK_AGAIN))
+  return [...due].sort((a, b) => Number(Boolean(b.urgent)) - Number(Boolean(a.urgent)) || a.at.localeCompare(b.at)).slice(0, ASK_BATCH)
 }
 
 /**
- * A poll item as the app draws it, so the page holds no rule of its own about options or answers: an
- * open question carries its options, a decided one its answer, an undelivered one its plain reason
- * and where its Controller stands.
+ * What Flight is told to ask: one AskUserQuestion call, each question's header its id, its text and
+ * options exactly as the Controller wrote them. The fleet delivers each answer itself.
  */
-export function cardFacts(item: PollItem, seats: readonly Seat[]): PollItem & CardFacts {
-  const out: PollItem & CardFacts = { ...item }
-  if (item.state === 'open' && item.kind !== 'todo') out.asks = optionsOf(item)
-  if (isDecided(item.state)) out.answer = answerWord(item)
-  if (isUndelivered(item)) {
-    out.why = plainReason(item.undelivered ?? '')
-    out.seat = seatState(item, seats)
+export function askPrompt(batch: readonly PollItem[]): string {
+  const n = batch.length
+  const lines = [
+    `[mission-fleet] ${n === 1 ? 'A Controller asks the founder a question' : `Controllers ask the founder ${n} questions`}. Before anything else, ask ${n === 1 ? 'it' : 'them'} with one AskUserQuestion call, in this order: for each, header exactly its id, question exactly the text given, and its options as given (label, with "what it does" as the description), multiSelect false.`,
+    'The fleet delivers each answer to the Controller that asked it. Do not send the answers yourself, and do not ask them again in your own words.',
+  ]
+  for (const p of batch) {
+    lines.push('', `id ${p.id} (${p.from}${p.urgent ? ', urgent' : ''}): ${p.title}`)
+    optionsOf(p).forEach((o, k) => lines.push(`  ${k + 1}) ${o.label}${o.does ? `: ${o.does}` : ''}`))
+  }
+  return lines.join('\n')
+}
+
+/** A question as AskUserQuestion carries it. */
+export type AskedQuestion = { question?: string; header?: string }
+
+/**
+ * The founder's answers matched to the poll items they answer: by header (the item's id), else by the
+ * question's text. Each answer is an option's label (choice counts from 1), its number, or the
+ * founder's own words (choice 0, the words as the note).
+ */
+export function matchAnswers(items: readonly PollItem[], questions: readonly AskedQuestion[], answers: Record<string, string>): { item: PollItem; choice: number; note: string }[] {
+  const out: { item: PollItem; choice: number; note: string }[] = []
+  const key = (t: string) => t.toLowerCase().replace(/\s+/g, ' ').trim()
+  for (const q of questions) {
+    const answer = (answers[q.question ?? ''] ?? '').trim()
+    if (!answer) continue
+    const item = items.find(p => isAsked(p) && p.id.toLowerCase() === key(q.header ?? '')) ?? items.find(p => isAsked(p) && key(p.title) === key(q.question ?? ''))
+    if (!item || out.some(o => o.item.id === item.id)) continue
+    const labels = optionsOf(item).map(o => key(o.label))
+    const byLabel = labels.indexOf(key(answer)) + 1
+    const byNumber = /^\d{1,2}$/.test(answer) && Number(answer) >= 1 && Number(answer) <= labels.length ? Number(answer) : 0
+    const choice = byLabel || byNumber
+    out.push({ item, choice, note: choice ? '' : answer })
   }
   return out
 }
@@ -216,28 +233,10 @@ export function placeSlots(map: Slots, seats: readonly Staffed[]): Slots {
   return changed ? out : map
 }
 
-/** How many closed items the app keeps as recent history. */
-export const APP_HISTORY = 30
-
-/**
- * The poll items the app draws: the last APP_HISTORY closed items as history, then every undelivered
- * decision however old (each waits on the founder until a retry or a dismiss), then every held
- * decision however old (each waits for a staffing or a dismiss), then every open item.
- */
-export function appPoll(items: readonly PollItem[]): PollItem[] {
-  const held = (p: PollItem) => isHeld(p) && !isUndelivered(p)
-  return [
-    ...items.filter(p => p.state !== 'open' && !isUndelivered(p) && !held(p)).slice(-APP_HISTORY),
-    ...items.filter(isUndelivered),
-    ...items.filter(held),
-    ...items.filter(p => p.state === 'open'),
-  ]
-}
-
 // ---- Decisions asked in Flight's chat (MC-125) ----
 
 /** A decision as a Controller's report asks it: the question, and the options with what each does. */
-export type Decision = { question: string; options: DecisionOption[] }
+export type Decision = { question: string; options: DecisionOption[]; urgent?: true }
 
 /** A Controller's report: the status check, its decisions, its note and its to-dos for the founder. */
 export type Report = StatusCheck & {
@@ -273,9 +272,9 @@ const NOTES = /^\s*notes?\s*:\s*(.*)$/i
 const clip = (text: string, n: number) => (text.length > n ? `${text.slice(0, n - 1)}\u2026` : text)
 
 /**
- * One decision line, `<question> | 1) <option>: <what it does> | 2) ...`. The numbers are optional;
- * an option's label ends at its first ": ". Fewer than two options is no choice, so it keeps none and
- * is asked as Go or No-go.
+ * One decision line, `[urgent: ]<question> | 1) <option>: <what it does> | 2) ...`. The numbers are
+ * optional; an option's label ends at its first ": ". Fewer than two options is no choice, so it keeps
+ * none and is asked as Go or No-go; past MAX_OPTIONS the rest are dropped (AskUserQuestion takes four).
  */
 export function parseDecision(text: string): Decision {
   const [head = '', ...rest] = text.split(/\s+\|\s+/)
@@ -288,8 +287,10 @@ export function parseDecision(text: string): Decision {
       return does ? { label, does } : { label }
     })
     .filter(o => o.label)
-    .slice(0, 6)
-  return { question: clip(head.trim(), QUESTION_MAX), options: options.length >= 2 ? options : [] }
+    .slice(0, MAX_OPTIONS)
+  const urgent = /^urgent\s*:\s*/i.exec(head.trim())
+  const question = clip(head.trim().slice(urgent?.[0].length ?? 0), QUESTION_MAX)
+  return { question, options: options.length >= 2 ? options : [], ...(urgent ? { urgent: true as const } : {}) }
 }
 
 /**
@@ -366,7 +367,7 @@ export function optionsOf(item: Partial<Pick<PollItem, 'kind' | 'options' | 'tar
 export function answerWord(item: Pick<PollItem, 'state'> & Partial<PollItem>): string {
   if (item.state === 'answered') {
     const n = item.choice ?? 0
-    return `${n}) ${optionsOf(item)[n - 1]?.label ?? '?'}`
+    return n === 0 ? 'in their own words' : `${n}) ${optionsOf(item)[n - 1]?.label ?? '?'}`
   }
   return item.state === 'no-go' ? 'NO-GO' : 'GO'
 }
@@ -377,6 +378,9 @@ export function answerWord(item: Pick<PollItem, 'state'> & Partial<PollItem>): s
  * blocked line or an advisory: GO or NO-GO (option 1 or 2) with the note and the report it answers.
  */
 export function decisionText(item: PollItem, choice: number, note: string): string {
+  if (choice === 0) {
+    return [`The founder answered ${item.id} in their own words: ${note}`, `Your question: ${item.title}`, `It answers your report of ${item.at.slice(0, 16)}.`].join('\n')
+  }
   if (item.kind === 'question') {
     const o = optionsOf(item)[choice - 1]
     return [

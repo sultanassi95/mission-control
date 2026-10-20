@@ -1,7 +1,8 @@
 import { expect, test } from 'claude-code/testing'
 
 import type { PollItem } from '../types'
-import { answerWord, APP_HISTORY, appPoll, asSlots, cardFacts, decisionText, dependentsOf, GO_NOGO, heldText, isHeld, isNothing, isUndelivered, liveSeat, MAX_DECISIONS, MAX_TODOS, optionsOf, parseDecision, parseReport, parseStatus, placeSlots, plainReason, pollId, prSignature, prsIn, seatState, SLOT_COUNT } from './loops'
+import { advisoryText, answerWord, ASK_AGAIN, ASK_BATCH, askPrompt, asSlots, decisionText, dependentsOf, GO_NOGO, isAsked, isNothing, liveSeat, matchAnswers, MAX_DECISIONS, MAX_OPTIONS, MAX_TODOS, migratePoll, nextAsks, optionsOf, parseDecision, parseReport, parseStatus, placeSlots, plainReason, pollId, prSignature, prsIn, SLOT_COUNT } from './loops'
+import type { StoredPollItem } from './loops'
 
 // The refusal MI1's GO met on 2026-10-16, in part: written for the model, not for the founder.
 const AUTO_MODE = 'The server-side auto mode classifier gave no verdict for SendMessage: the request that produced this action did not ask for one. Issue the action again once, as-is; if it is denied again, continue with other tasks and tell the user.'
@@ -51,19 +52,6 @@ test('a decision reaches only the staffed console of the agent that raised it', 
   // An item opened before agent ids were recorded goes to the console staffed under its call sign.
   expect(liveSeat(item({ agentId: '' }), SEATS)?.agentId).toBe('a1')
   expect(liveSeat(item({ agentId: '', from: 'ACME' }), SEATS)).toBeUndefined()
-  expect(seatState(item({ agentId: 'a1' }), SEATS)).toBe('live')
-  expect(seatState(item({ agentId: 'a0' }), SEATS)).toBe('replaced')
-  expect(seatState(item({ agentId: 'k1', from: 'ACME' }), SEATS)).toBe('gone')
-})
-
-test('only a go or no-go that was not delivered is undelivered', () => {
-  expect(isUndelivered(item({ state: 'go', undelivered: 'x' }))).toBe(true)
-  expect(isUndelivered(item({ state: 'no-go', undelivered: 'x' }))).toBe(true)
-  expect(isUndelivered(item({ state: 'go' }))).toBe(false)
-  // The same answer as the app's own test of the field, which reads an empty reason as none.
-  expect(isUndelivered(item({ state: 'go', undelivered: '' }))).toBe(false)
-  expect(isUndelivered(item({ state: 'dismissed', undelivered: 'x' }))).toBe(false)
-  expect(isUndelivered(item({ state: 'open', undelivered: 'x' }))).toBe(false)
 })
 
 test('a refusal reads as one plain sentence, never as the engine\'s instructions to the model', () => {
@@ -74,62 +62,12 @@ test('a refusal reads as one plain sentence, never as the engine\'s instructions
   expect(plainReason('socket closed')).toBe('The message could not be delivered.')
 })
 
-test('the app gets the plain reason and where the Controller stands for an undelivered decision only', () => {
-  const live = cardFacts(item({ undelivered: AUTO_MODE }), SEATS)
-  expect(live.why).toBe('Auto mode blocked the message.')
-  expect(live.seat).toBe('live')
-  expect(live.undelivered).toBe(AUTO_MODE)
-  expect(cardFacts(item({ agentId: 'a0', undelivered: AUTO_MODE }), SEATS).seat).toBe('replaced')
-  expect(cardFacts(item({ agentId: 'k1', from: 'ACME', undelivered: AUTO_MODE }), SEATS).seat).toBe('gone')
-  const open = cardFacts(item({ state: 'open' }), SEATS)
-  expect(open.why).toBeUndefined()
-  expect(open.seat).toBeUndefined()
-})
-
-test('the app keeps every undelivered decision and every open item, however much history follows them', () => {
-  const stuck = item({ id: 'MI1', undelivered: AUTO_MODE })
-  const closed = Array.from({ length: APP_HISTORY + 5 }, (_, k) => item({ id: `MI${k + 10}`, state: k % 2 ? 'dismissed' : 'go' }))
-  const open = item({ id: 'MI2', state: 'open' })
-  const ids = appPoll([stuck, open, ...closed]).map(p => p.id)
-  expect(ids).toEqual([...closed.slice(-APP_HISTORY).map(p => p.id), 'MI1', 'MI2'])
-})
-
-// ---- Held decisions (MC-122) ----
-
-const HELD_AT = '2026-10-16T01:00:00.000Z'
-
-test('a held decision is a go or no-go decided after its Controller stood down', () => {
-  expect(isHeld(item({ state: 'go', held: HELD_AT }))).toBe(true)
-  expect(isHeld(item({ state: 'no-go', held: HELD_AT }))).toBe(true)
-  expect(isHeld(item({ state: 'go' }))).toBe(false)
-  expect(isHeld(item({ state: 'go', held: '' }))).toBe(false)
-  // A dismissed one keeps its time as the record, and is no longer held.
-  expect(isHeld(item({ state: 'dismissed', held: HELD_AT }))).toBe(false)
-  expect(isHeld(item({ state: 'open', held: HELD_AT }))).toBe(false)
-})
-
-test('the app keeps every held decision, however much history follows it', () => {
-  const held = item({ id: 'MI3', held: HELD_AT })
-  const stuck = item({ id: 'MI1', undelivered: AUTO_MODE })
-  const closed = Array.from({ length: APP_HISTORY + 5 }, (_, k) => item({ id: `MI${k + 10}`, state: k % 2 ? 'dismissed' : 'go' }))
-  const open = item({ id: 'MI2', state: 'open' })
-  const ids = appPoll([held, stuck, open, ...closed]).map(p => p.id)
-  expect(ids).toEqual([...closed.slice(-APP_HISTORY).map(p => p.id), 'MI1', 'MI3', 'MI2'])
-})
-
-test('the next Controller is told each held decision with the report it answers, and each held advisory, in one message', () => {
-  const go = item({ id: 'MI2', state: 'go', note: 'ship it', held: HELD_AT, detail: 'state: built\nblocked on you: merge the fix' })
-  const nogo = item({ id: 'MI4', state: 'no-go', held: HELD_AT, title: 'drop the cache', detail: 'blocked on you: drop the cache' })
+test('the next Controller is told each advisory held for its front, in one message', () => {
   const advisory = { id: 'p1', front: 'mission-control', text: 'Advisory from Flight: ACME reports a contract change: /v1 ids.', at: '2026-10-16T00:40:00.000Z' }
-  const text = heldText('MISSION-CONTROL', [go, nogo], [advisory])
-  expect(text).toContain('MISSION-CONTROL')
-  expect(text).toContain('GO on MI2: ship it')
-  expect(text).toContain('blocked on you: merge the fix')
-  expect(text).toContain('NO-GO on MI4.')
-  expect(text).toContain('blocked on you: drop the cache')
+  const text = advisoryText('MISSION-CONTROL', [advisory])
+  expect(text).toContain('Held for the next MISSION-CONTROL Controller')
   expect(text).toContain('ACME reports a contract change: /v1 ids.')
-  expect(heldText('MISSION-CONTROL', [go], [])).not.toContain('Advisor')
-  expect(heldText('MISSION-CONTROL', [], [])).toBe('')
+  expect(advisoryText('MISSION-CONTROL', [])).toBe('')
 })
 
 // ---- Call-sign colours (MC-129) ----
@@ -268,12 +206,9 @@ test('a report holds at most MAX_DECISIONS decisions and MAX_TODOS to-dos, and l
 
 const QUESTION = item({ id: 'MI7', kind: 'question', state: 'open', title: 'Which branch should MC-136 build on?', options: [{ label: 'The epic branch', does: 'lands with MC-124\'s PR' }, { label: 'Its own branch off main', does: 'a separate PR after MC-124' }] })
 
-test('an answered question is a decision like a go: it can be undelivered or held', () => {
-  const answered: PollItem = { ...QUESTION, state: 'answered', choice: 2 }
-  expect(isUndelivered({ ...answered, undelivered: 'x' })).toBe(true)
-  expect(isHeld({ ...answered, held: HELD_AT })).toBe(true)
-  expect(isUndelivered({ ...QUESTION, state: 'done', undelivered: 'x' })).toBe(false)
+test('an answered question reads as the option chosen, or as the founder\'s own words', () => {
   expect(answerWord({ ...QUESTION, state: 'answered', choice: 2 })).toBe('2) Its own branch off main')
+  expect(answerWord({ ...QUESTION, state: 'answered', choice: 0, note: 'neither' })).toBe('in their own words')
   expect(answerWord(item({ state: 'no-go' }))).toBe('NO-GO')
 })
 
@@ -283,19 +218,90 @@ test('the Controller is told the option chosen and what it does, and only that q
   expect(text).toContain('Note: after the sweep')
   expect(text).toContain('Your question: Which branch should MC-136 build on?')
   expect(text).not.toContain('The epic branch')
+  // An answer in the founder's own words is passed on as written.
+  expect(decisionText(QUESTION, 0, 'wait for MC-124 to merge')).toContain('The founder answered MI7 in their own words: wait for MC-124 to merge')
   // A legacy gate keeps its GO or NO-GO and the report it answers.
   const gate = decisionText(item({ state: 'open' }), 2, '')
   expect(gate).toContain('NO-GO from the founder on MI1.')
   expect(gate).toContain('blocked on you: approve the plan')
-  // A held answer reaches the next Controller in the same words.
-  expect(heldText('MISSION-CONTROL', [{ ...QUESTION, state: 'answered', choice: 1, held: HELD_AT }], [])).toContain('The founder answered MI7: 1) The epic branch')
 })
 
-test('the app is given each open question\'s options and each decision\'s answer, so the page decides neither', () => {
-  expect(cardFacts(QUESTION, SEATS).asks).toEqual(QUESTION.options)
-  expect(cardFacts(item({ state: 'open' }), SEATS).asks).toEqual(GO_NOGO)
-  expect(cardFacts({ ...QUESTION, kind: 'todo', options: undefined }, SEATS).asks).toBeUndefined()
-  expect(cardFacts({ ...QUESTION, state: 'answered', choice: 1 }, SEATS).answer).toBe('1) The epic branch')
-  expect(cardFacts({ ...QUESTION, state: 'answered', choice: 1 }, SEATS).asks).toBeUndefined()
-  expect(cardFacts(item({ state: 'no-go' }), SEATS).answer).toBe('NO-GO')
+// ---- Flight asks the Controllers' questions itself (MC-163) ----
+
+test('a decision takes at most four options, the most AskUserQuestion shows, and may be marked urgent', () => {
+  const six = parseDecision('Which? | 1) a: x | 2) b: x | 3) c: x | 4) d: x | 5) e: x | 6) f: x')
+  expect(six.options.map(o => o.label)).toEqual(['a', 'b', 'c', 'd'])
+  expect(MAX_OPTIONS).toBe(4)
+  expect(parseDecision('urgent: Roll back the deploy? | 1) Yes: roll back | 2) No: keep it')).toEqual({ question: 'Roll back the deploy?', options: [{ label: 'Yes', does: 'roll back' }, { label: 'No', does: 'keep it' }], urgent: true })
+  expect(parseDecision('Roll back? | 1) Yes: now | 2) No: wait').urgent).toBeUndefined()
+})
+
+test('the stored poll is migrated with nothing open lost: an undelivered or held answer is open again, send marks dropped', () => {
+  const stored: StoredPollItem[] = [
+    item({ id: 'MI1', state: 'go', choice: 1, decidedAt: '2026-10-16T00:37:00.000Z' }),
+    { ...item({ id: 'MI2', state: 'go', choice: 1, decidedAt: '2026-10-16T00:37:00.000Z' }), undelivered: 'auto mode' },
+    { ...QUESTION, id: 'MI3', state: 'answered', choice: 2, held: '2026-10-16T01:00:00.000Z' },
+    { ...QUESTION, id: 'MI4', sentAt: '2026-10-16T01:00:00.000Z' },
+    item({ id: 'MI5', kind: 'todo', state: 'open', title: 'Close PR #31' }),
+    { ...item({ id: 'MI6', state: 'dismissed' }), undelivered: 'auto mode' },
+  ]
+  const { items, reopened } = migratePoll(stored)
+  expect(reopened).toEqual(['MI2', 'MI3'])
+  expect(items.map(p => `${p.id} ${p.state}`)).toEqual(['MI1 go', 'MI2 open', 'MI3 open', 'MI4 open', 'MI5 open', 'MI6 dismissed'])
+  expect(items).toHaveLength(stored.length)
+  expect(items.filter(p => p.state === 'open')).toHaveLength(stored.filter(p => p.state === 'open').length + 2)
+  for (const p of items as StoredPollItem[]) expect(`${p.id} ${'undelivered' in p} ${'held' in p} ${'sentAt' in p}`).toBe(`${p.id} false false false`)
+  expect(items[2]?.choice).toBeUndefined()
+  expect(items[0]).toBe(stored[0])
+  // Read twice, nothing changes the second time.
+  expect(migratePoll(items).items.every((p, k) => p === items[k])).toBe(true)
+})
+
+const asked = (id: string, at: string, over: Partial<PollItem> = {}): PollItem => ({ ...QUESTION, id, at, ...over })
+
+test('Flight is put at most four open questions at a time, urgent first, then oldest, and one it never asked again later', () => {
+  const now = Date.parse('2026-10-20T12:00:00.000Z')
+  const items = [
+    asked('MI1', '2026-10-20T10:00:00.000Z'),
+    asked('MI2', '2026-10-20T09:00:00.000Z'),
+    asked('MI3', '2026-10-20T11:00:00.000Z', { urgent: true }),
+    asked('MI4', '2026-10-20T08:00:00.000Z', { kind: 'todo' }),
+    asked('MI5', '2026-10-20T08:30:00.000Z', { kind: 'gate', options: undefined }),
+    asked('MI6', '2026-10-20T07:00:00.000Z', { state: 'answered', choice: 1 }),
+    asked('MI7', '2026-10-20T11:30:00.000Z'),
+    asked('MI8', '2026-10-20T07:30:00.000Z', { askedAt: new Date(now - 60_000).toISOString() }),
+    asked('MI9', '2026-10-20T07:40:00.000Z', { askedAt: new Date(now - ASK_AGAIN - 1).toISOString() }),
+  ]
+  expect(ASK_BATCH).toBe(4)
+  expect(nextAsks(items, now).map(p => p.id)).toEqual(['MI3', 'MI9', 'MI5', 'MI2'])
+  expect(nextAsks([], now)).toEqual([])
+  expect(isAsked(items[3]!)).toBe(false)
+})
+
+test('the prompt tells Flight to ask with one AskUserQuestion call, each header its id, and to leave delivery to the fleet', () => {
+  const text = askPrompt([{ ...QUESTION, urgent: true }, item({ id: 'MI2', state: 'open', title: 'merge the fix' })])
+  expect(text).toContain('Controllers ask the founder 2 questions')
+  expect(text).toContain('one AskUserQuestion call')
+  expect(text).toContain('header exactly its id')
+  expect(text).toContain('Do not send the answers yourself')
+  expect(text).toContain('id MI7 (MISSION-CONTROL, urgent): Which branch should MC-136 build on?')
+  expect(text).toContain('  2) Its own branch off main: a separate PR after MC-124')
+  expect(text).toContain('id MI2 (MISSION-CONTROL): merge the fix')
+  expect(text).toContain('  1) Go: go ahead as the report says')
+  expect(askPrompt([QUESTION])).toContain('A Controller asks the founder a question')
+})
+
+test('answers are matched to the questions they answer, by id in the header, else by the question\'s text', () => {
+  const items = [QUESTION, item({ id: 'MI2', state: 'open', title: 'merge the fix' }), asked('MI3', QUESTION.at, { title: 'A closed one', state: 'answered' })]
+  const qs = [
+    { header: 'MI7', question: 'Which branch should MC-136 build on?' },
+    { header: 'Merge', question: 'merge  the FIX' },
+    { header: 'MI3', question: 'A closed one' },
+    { header: 'Other', question: 'Something Flight asked itself' },
+  ]
+  const answers = { 'Which branch should MC-136 build on?': 'Its own branch off main', 'merge  the FIX': '2', 'A closed one': 'Go', 'Something Flight asked itself': 'yes' }
+  expect(matchAnswers(items, qs, answers).map(m => `${m.item.id} ${m.choice} ${m.note}`)).toEqual(['MI7 2 ', 'MI2 2 '])
+  // The founder's own words are choice 0, kept as the note; an empty answer matches nothing.
+  expect(matchAnswers(items, [qs[0]!], { [qs[0]!.question]: 'neither, wait for the merge' }).map(m => `${m.choice} ${m.note}`)).toEqual(['0 neither, wait for the merge'])
+  expect(matchAnswers(items, [qs[0]!], { [qs[0]!.question]: '  ' })).toEqual([])
 })
