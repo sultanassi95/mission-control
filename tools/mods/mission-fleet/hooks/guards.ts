@@ -852,8 +852,12 @@ function foldPath(p: string): string {
   return `/${out.join('/')}`
 }
 
-/** Commands that change the shell's directory: after one on a line, where the shell started pins nothing. */
-const SHELL_MOVES = new Set(['cd', 'pushd', 'popd', 'chdir'])
+/**
+ * Programs that run as a child of the shell and so cannot move its directory. Before a git or gh call
+ * on its line, only these keep the shell where it started: any other head (a builtin, a function, an
+ * alias, eval, a zsh modifier such as noglob or repeat) might move it, so the start pins nothing after it.
+ */
+const STAYS = new Set(['git', 'gh', 'echo', 'printf', 'true', 'false', 'test', '[', 'ls', 'cat', 'grep', 'rg', 'head', 'tail', 'wc', 'sort', 'uniq', 'cut', 'tr', 'jq', 'diff', 'stat', 'file', 'find', 'mkdir', 'touch', 'cp', 'mv', 'rm', 'sleep', 'date', 'npm', 'pnpm', 'yarn', 'npx', 'bun', 'tsc'])
 
 /** The `cd <dir> &&` run directly before a command: only that pins it (anything else may not have run, or ran in a subshell). */
 function cdChain(commands: Simple[], index: number): Word[] {
@@ -895,7 +899,10 @@ export function pinnedDir(commands: Simple[], index: number, start?: string): st
   // No cd before it: it runs where the shell starts, when the engine says where that is (an absolute
   // path) and nothing earlier on the line can have moved the shell.
   if (chain.length === 0) {
-    const moves = commands.slice(0, index).some(s => SHELL_MOVES.has(baseName(headOf(s).head?.text ?? '')))
+    const moves = commands.slice(0, index).some(s => {
+      const h = headOf(s).head
+      return h !== undefined && (h.dynamic || h.glob || h.text.includes('/') || !STAYS.has(baseName(h.text)))
+    })
     return start && start.startsWith('/') && !moves ? foldPath(start) : undefined
   }
   let dir: string | undefined

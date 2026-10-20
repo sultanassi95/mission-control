@@ -1100,8 +1100,8 @@ test('a URL or OWNER/REPO#N anywhere in a gh write command fails closed unless i
 
 // ---- The shell's own directory (MC-168, MC-155) ----
 // When a command opens with `cd <the directory the shell is already in> &&`, the engine hands the guard
-// the command without that cd, so a pinned call reads as unpinned. The engine's PreToolUse input names
-// that directory (cwd); the guard pins a call with no cd before it there.
+// the command without that cd, so a pinned call reads as unpinned. The fleet records where each agent's
+// shell is from the engine's CwdChanged event; the guard pins a call with no cd before it there.
 
 const S = (cmd: string, start?: string, role: 'controller' | 'back room' = 'controller') => shellRefusal(role, cmd, [], REPO, ACME, start, WT)
 
@@ -1132,6 +1132,22 @@ test('the shell\'s directory pins only where nothing on the line moved it, and s
 test('the shell\'s directory reaches the guard through toolRefusal', () => {
   expect(toolRefusal('controller', 'Bash', { command: 'gh pr list' }, [], REPO, ACME, REPO)).toBeUndefined()
   expect(toolRefusal('controller', 'Bash', { command: 'gh pr list' }, [], REPO, ACME)).toContain('Pin the repo')
+})
+
+test('anything before the call that is not a known program could move the shell, so the shell\'s directory pins nothing after it', () => {
+  // Each spelling moves the shell (or may) without a cd at the head of its command.
+  for (const before of [
+    'eval cd /w/fronts/globex;', 'eval "cd /w/fronts/globex" &&', 'noglob cd /w/fronts/globex &&', 'nocorrect cd /w/fronts/globex &&',
+    'repeat 1 cd /w/fronts/globex;', 'z globex &&', 'exec /bin/zsh -c x;', 'builtin cd /w/fronts/globex &&', 'command cd /w/fronts/globex &&',
+    '$GO /w/fronts/globex &&', 'f() { cd /w/fronts/globex; };', 'go_there &&',
+  ]) {
+    // Refused, by whichever rule reads it first: the start never pins a call after a move.
+    expect(`${before} -> ${S(`${before} git status`, REPO) ?? 'allowed'}`).not.toBe(`${before} -> allowed`)
+  }
+  // Known programs cannot move the shell they run from, so the start still pins after them.
+  for (const before of ['npm test &&', 'pnpm -s build &&', 'echo ok;', 'ls -la &&', 'git fetch origin &&', 'true &&']) {
+    expect(`${before} -> ${S(`${before} git status`, REPO) ?? 'allowed'}`).toBe(`${before} -> allowed`)
+  }
 })
 
 // ---- Worktrees beside the repo, registered (MC-167) ----

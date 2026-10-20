@@ -14,7 +14,7 @@ const TABLE = [
   '| Front | Ticket | Next |',
   '|---|---|---|',
   '| mission-control | MC-162 | claude plugin test on c0ff0b5 |',
-  '| jumlashops | BETA-318 | rotate the Supabase service key |',
+  '| shelf | SH-318 | rotate the Supabase service key |',
 ].join('\n')
 
 test('a table scrolls in its own box, which a keyboard can reach and a screen reader names', () => {
@@ -27,7 +27,7 @@ test('a short cell keeps to one line and a long one wraps: the long cells are ma
   const cells = [...html.matchAll(/<td( class="long")?>([^<]*)<\/td>/g)].map(m => `${m[1] ? 'long' : 'short'}: ${m[2]}`)
   assert.deepEqual(cells, [
     'short: mission-control', 'short: MC-162', 'long: claude plugin test on c0ff0b5',
-    'short: jumlashops', 'short: BETA-318', 'long: rotate the Supabase service key',
+    'short: shelf', 'short: SH-318', 'long: rotate the Supabase service key',
   ])
   // Headers are never long: a column's name stays on one line.
   assert.doesNotMatch(html, /<th class=/)

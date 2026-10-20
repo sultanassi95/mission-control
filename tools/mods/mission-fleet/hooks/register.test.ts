@@ -1000,6 +1000,7 @@ const moved = ($: Engine, agentId: string, to: string) =>
 
 test('a Controller\'s call the engine stripped of its cd to the shell\'s own directory is pinned where the shell is', async ($, on) => {
   portfolio(on)
+  const audit = auditLines(on)
   seed(on, { consoles: [FK] })
   on('agent.list', () => ({ value: [] }))
   on('tool.check', () => ({ decision: 'allow' as const }))
@@ -1011,6 +1012,7 @@ test('a Controller\'s call the engine stripped of its cd to the shell\'s own dir
   await moved($, 'f1', '/p/fronts/fieldkit')
   expect((await bashBy($, 'gh pr list --limit 1')).decision).toBe('allow')
   expect((await bashBy($, 'git status')).decision).toBe('allow')
+  expect(audit.join('\n')).toContain('\tguard\tFIELDKIT\tcontroller Bash pinned by the shell directory /p/fronts/fieldkit')
   // A cd on the line moves the shell again, so its start pins nothing.
   expect((await bashBy($, 'cd /tmp; git status')).reason).toContain('Pin the repo')
   // Another agent's move is not this one's.

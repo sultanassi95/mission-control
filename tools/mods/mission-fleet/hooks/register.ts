@@ -265,7 +265,11 @@ export const register: Register = on => {
     const beside = `${c.cwd.replace(/\/+$/, '')}-`
     const worktrees = JSON.stringify(e.input ?? {}).includes(beside) || (start ?? '').startsWith(beside) ? await worktreesBeside($, c) : []
     const why = toolRefusal(role.kind, e.tool, e.input, c.protectedBranches, c.cwd, clone, start, worktrees)
-    if (!why) return next(e)
+    if (!why) {
+      // Audited when only the recorded shell directory pinned the call, so a live run shows where it came from.
+      if (start && toolRefusal(role.kind, e.tool, e.input, c.protectedBranches, c.cwd, clone, undefined, worktrees)) await log($, 'guard', role.console.callSign, `${role.kind} ${e.tool} pinned by the shell directory ${start}`)
+      return next(e)
+    }
     await log($, 'guard', role.console.callSign, `${role.kind} ${e.tool} denied: ${why}`)
     return { decision: 'deny' as const, reason: why }
   }).catch(($, e, next) => (e.agentId ? { decision: 'deny' as const, reason: 'The fleet guard could not decide, so it refused.' } : next(e)))
