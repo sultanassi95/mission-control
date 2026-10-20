@@ -253,6 +253,12 @@ test('a back-room agent runs no git write beyond add and commit', () => {
 
 test('other tools: Workflow and MCP shells are refused, any tool input naming a Flight file is refused', () => {
   expect(toolRefusal('controller', 'Workflow', {}, [])).toContain('Workflows')
+  // With Controller workflows on, the room is given and the script is read; a back room never runs one.
+  const sized = { script: "export const meta = { name: 'x', description: 'd' }\nawait agent('p', { model: 'sonnet', effort: 'low' })" }
+  expect(toolRefusal('controller', 'Workflow', sized, [], undefined, undefined, undefined, undefined, 4)).toBeUndefined()
+  expect(toolRefusal('controller', 'Workflow', sized, [], undefined, undefined, undefined, undefined, 0)).toContain('room for 0')
+  expect(toolRefusal('controller', 'Workflow', sized, [])).toContain('until the founder turns Controller workflows on')
+  expect(toolRefusal('back room', 'Workflow', sized, [], undefined, undefined, undefined, undefined, 4)).toContain('A back-room agent never runs a workflow')
   expect(isShellLikeTool('mcp__plugin_serena_serena__execute_shell_command')).toBe(true)
   expect(toolRefusal('back room', 'mcp__plugin_serena_serena__execute_shell_command', { command: 'ls' }, [])).toContain('use Bash')
   expect(toolRefusal('controller', 'Monitor', { command: 'git push origin main' }, [])).toContain('base or deploy branch')

@@ -35,7 +35,7 @@ Model tiers here mean: the cheap tier, the mid tier, and the frontier tier of wh
 | Epic current-state audit (E1) | a read-only explorer agent | mid · medium | a data-path or infra surface in question: mid · high |
 | Epic architecture (E2) | an architect/plan agent + the session | frontier · high | - |
 | Controller (one front or project, staffed with `/console staff`) | a Controller on its console, which runs `/mission-flow` and `/epic-flow` for its scope | the cheapest that holds the bar: the work's own row above, haiku-tier for mechanical work, sized at staffing as `<n> Controllers x model x effort, back-room budget <b> each` | retune on evidence with `/console retune`; never staffed by a direct Agent call |
-| Controller back room (its own sub-agents, up to its budget, default 4) | the Agent tool, dispatched by the Controller | the work's own row above | the Controller asks Flight for more than its budget; a back room cannot push, and cannot use Workflow |
+| Controller back room (its own sub-agents, up to its budget, default 4) | the Agent tool, dispatched by the Controller | the work's own row above | the Controller asks Flight for more than its budget; a back room cannot push, and cannot use Workflow; a Controller uses Workflow only when the founder has turned Controller workflows on, within this budget |
 
 **Design is not implementation.** Layout, hierarchy and states are decided at the design-direction row, before an implementer is dispatched; an implementer that has to invent a layout was briefed without a comp, and the brief goes back, not forward (`design-standard.md`, principle 1).
 

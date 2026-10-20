@@ -7,6 +7,7 @@ import { commonDir, CONTROLLER_PROMPT, CONTROLLER_TYPE, DEFAULT_BUDGET, EFFORTS,
 
 const APP_PORT = 4777
 const MODEL_LIST = Object.keys(MODEL_IDS).join(', ')
+import { workflowCheck } from './workflow'
 import { fleetSelfApproval, isRelayedVerb, protectedFromSpoke, registersWorktree, RELAY_TTL, splitRelayCode, spendRelayCode, toolRefusal } from './guards'
 import type { RelayCodes } from './guards'
 import { advisoryText, answerWord, askPrompt, asSlots, decisionText, dependentsOf, isAsked, isNothing, liveSeat, matchAnswers, migratePoll, nextAsks, optionsOf, parseReport, parseStatus, placeSlots, plainReason, pollId, prSignature, prsIn } from './loops'
@@ -100,6 +101,7 @@ const USAGE = [
   '  /console poll                       (lists the Controllers\' open questions, which Flight asks you, and their to-dos)',
   '  /console done <id>                  (checks off a to-do a Controller left for you, and tells that Controller)',
   '  /console dismiss-gate <id>          (closes a question or to-do that no longer matters; nothing is sent)',
+  '  /console workflows [on|off]          (lets Controllers run sized, readable Workflow scripts within their budget; off by default)',
 ].join('\n')
 
 // How Flight marks a message to the founder that is about Controllers: the app reads the marker
@@ -255,7 +257,15 @@ export const register: Register = on => {
     }
     if (!e.agentId) return next(e)
     const role = await roleOf($, e.agentId)
-    if (!role) return next(e)
+    if (!role) {
+      // Fail closed while a Controller's workflow runs: an agent the engine does not list and the fleet
+      // cannot place (a workflow agent whose spawn the fleet did not see, say a retried one) writes nothing.
+      if (activeRuns() && UNPLACED_REFUSED.test(e.tool) && !(await $.agent.list()).some(a => a.id === e.agentId)) {
+        await log($, 'guard', 'unplaced', `${e.tool} denied for agent ${e.agentId} while a Controller workflow runs`)
+        return { decision: 'deny' as const, reason: 'An agent the fleet cannot place runs no shell command or file write while a Controller\'s workflow runs.' }
+      }
+      return next(e)
+    }
     const c = role.console
     // A console staffed before clones were allowed has no folder on record, so it clones nothing; one
     // staffed while a clone landed only in its own front has no fronts on record, so it keeps that.
@@ -265,7 +275,15 @@ export const register: Register = on => {
     // any spelling a cd or -C folds) or starts in one.
     const beside = `${c.cwd.replace(/\/+$/, '').split('/').pop() ?? ''}-`
     const worktrees = beside.length > 1 && (JSON.stringify(e.input ?? {}).includes(beside) || (start ?? '').includes(beside)) ? await worktreesBeside($, c) : []
-    const why = toolRefusal(role.kind, e.tool, e.input, c.protectedBranches, c.cwd, clone, start, worktrees)
+    const room = e.tool === 'Workflow' && role.kind === 'controller' && (await $.store.get(WORKFLOWS).catch(() => false)) === true ? workflowRoom(c, await $.agent.list()) : undefined
+    // A workflow whose call has no id could not be told apart from another's, so its agents could not be guarded.
+    const why = toolRefusal(role.kind, e.tool, e.input, c.protectedBranches, c.cwd, clone, start, worktrees, room) ??
+      (room !== undefined && !e.tool_use_id ? 'This Workflow call has no id the guard can follow its agents by, so it is refused.' : undefined)
+    // An admitted workflow is remembered by its tool call, so each agent it starts is known as this Controller's.
+    if (!why && room !== undefined) {
+      admit(e.tool_use_id as string, { callSign: c.callSign, agentId: c.agentId, cap: workflowCheck(e.input, room).agents, started: 0, at: Date.now() })
+      await log($, 'workflow', c.callSign, `admitted: up to ${workflowCheck(e.input, room).agents} agents of ${room} room`)
+    }
     if (!why) {
       // Audited when only the recorded shell directory pinned the call, so a live run shows where it came from.
       if (start && toolRefusal(role.kind, e.tool, e.input, c.protectedBranches, c.cwd, clone, undefined, worktrees)) await log($, 'guard', role.console.callSign, `${role.kind} ${e.tool} pinned by the shell directory ${start}`)
@@ -279,6 +297,28 @@ export const register: Register = on => {
   on('agent.spawn', async ($, e, next) => {
     if (e.subagentType === `mission-fleet:${CONTROLLER_TYPE}` && next.origin.plugin !== 'mission-fleet') {
       return { deny: 'Controllers are staffed only through /console staff.' }
+    }
+    if (e.workflow) {
+      const run = runOf(e.tool_use_id, e.workflow.runId)
+      if (run) {
+        // Capped twice: by the engine's place for the agent, and by the plugin's own count, which a script
+        // starting over (the engine restarts its place) does not reset.
+        if (e.workflow.agentIndex > run.cap || run.started >= run.cap) {
+          await log($, 'workflow', run.callSign, `spawn denied: agent ${e.workflow.agentIndex} (${run.started} started) of a run admitted for ${run.cap}`)
+          return { deny: `${run.callSign}'s workflow was admitted for ${run.cap} agents and has started ${run.started}.` }
+        }
+        run.started++
+        run.at = Date.now()
+        run.runId ??= e.workflow.runId || undefined
+        const started = await next(e)
+        // The engine does not list a workflow's agents, so the parent link recorded here is what makes each one this Controller's back room.
+        if (started.agentId) await update($, lineage, list => [...list.filter(l => l.agentId !== started.agentId), { agentId: started.agentId as string, parentId: run.agentId }].slice(-2000))
+        else if (started.deny === undefined) await log($, 'workflow', run.callSign, `agent ${e.workflow.agentIndex} started with no id to guard`)
+        return started
+      }
+      // A workflow raised in a fleet agent's loop that the guard never admitted runs nothing.
+      if (e.parentAgentId && (await roleOf($, e.parentAgentId))) return { deny: 'A fleet agent\'s workflow runs only as the guard admitted it.' }
+      return next(e)
     }
     if (!e.parentAgentId) return next(e)
     const role = await roleOf($, e.parentAgentId)
@@ -548,6 +588,18 @@ async function runConsole($: EngineInterface, args: string, fromPerson: boolean)
     return dismissGate($, rest[0] ?? '')
   }
 
+  if (verb === 'workflows') {
+    if (!fromPerson) return 'Controller workflows are the founder\'s to turn on or off: type /console workflows on|off yourself.'
+    if (rest[0] === 'on' || rest[0] === 'off') {
+      await $.store.set(WORKFLOWS, rest[0] === 'on')
+      await log($, 'workflows', 'fleet', rest[0])
+      return rest[0] === 'on'
+        ? 'Controller workflows are on: a Controller may run an inline Workflow script the guard can read, every agent() sized, within its back-room budget.'
+        : 'Controller workflows are off: only Flight runs workflows.'
+    }
+    return `Controller workflows are ${(await $.store.get(WORKFLOWS).catch(() => false)) === true ? 'on' : 'off'}. /console workflows on|off changes it.`
+  }
+
   if (verb === 'done') {
     if (!fromPerson) return 'A to-do is the founder\'s to check off: type /console done <id> yourself, or use the app.'
     return checkOff($, rest[0] ?? '')
@@ -573,6 +625,47 @@ async function runConsole($: EngineInterface, args: string, fromPerson: boolean)
 }
 
 type Role = { kind: GuardRole; console: Console }
+
+// The founder's standing switch for Controller workflows, kept in the plugin's store. Off unless set.
+const WORKFLOWS = 'controllerWorkflows'
+/**
+ * Each admitted Controller workflow, by the Workflow tool call that started it: whose it is, how many
+ * agents it may start, how many it has started, and when it last started one. A run is never forgotten
+ * while it may still spawn (only the oldest beyond 200 are dropped); the half hour since its last start
+ * decides only whether it still holds room and keeps unplaced agents refused.
+ */
+type Run = { callSign: string; agentId: string; cap: number; started: number; at: number; runId?: string }
+const runs = new Map<string, Run>()
+const RUN_TTL = 30 * 60_000
+const recent = (r: Run) => Date.now() - r.at <= RUN_TTL
+
+/** The admitted run a workflow agent belongs to: by its Workflow call, or by the run id its first agent showed. */
+function runOf(toolUseId: string, runId: string): Run | undefined {
+  const byCall = toolUseId ? runs.get(toolUseId) : undefined
+  if (byCall) return byCall
+  return runId ? [...runs.values()].find(r => r.runId === runId) : undefined
+}
+
+function admit(toolUseId: string, run: Run) {
+  runs.set(toolUseId, run)
+  while (runs.size > 200) runs.delete(runs.keys().next().value as string)
+}
+/** Tools an unplaced agent may not use while a Controller's workflow runs: the shell, file writes and MCP shells. */
+const UNPLACED_REFUSED = /^(Bash|Write|Edit|NotebookEdit|Monitor|mcp__.*(shell|exec|terminal|run_?command|run_?code|bash|write|edit|create).*)$/i
+
+/** True while any admitted Controller workflow is within its half hour. */
+function activeRuns(): boolean {
+  return [...runs.values()].some(recent)
+}
+
+/**
+ * How many more agents a Controller's workflow may start: its budget less its listed back room and the
+ * agents of its workflows admitted in the last half hour, which the engine does not list.
+ */
+function workflowRoom(c: Console, agents: Parameters<typeof liveBackRoom>[0]): number {
+  const running = [...runs.values()].filter(r => r.agentId === c.agentId && recent(r)).reduce((n, r) => n + r.cap - r.started, 0)
+  return Math.max(0, c.budget - liveBackRoom(agents, c) - running)
+}
 
 /**
  * The console repo's worktrees beside it in its front's folder, `<front>/<repo>-<slug>`: each such
