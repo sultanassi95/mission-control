@@ -1,4 +1,4 @@
-// Mission Control App (MC-100): Flight, Consoles, Poll and Loops on the live fleet state.
+// Mission Control App (MC-100): Flight, Consoles and Loops on the live fleet state.
 // The token arrives once as ?t= and lives in localStorage, scoped to this exact origin (port included).
 ;(() => {
   const params = new URLSearchParams(location.search)
@@ -168,7 +168,7 @@
     // A Controller's question is asked as one of Flight's own (the card below); one Flight has not asked yet says so.
     const onCard = new Set((f.ask?.questions ?? []).map(q => str(q.header).toLowerCase()))
     const queued = questions().filter(p => !onCard.has(str(p.id).toLowerCase()))
-    if (queued.length) parts.push(`<div class="notice" role="status">${queued.map(p => `<p>${call(p.from)} asks${p.urgent ? ' (urgent)' : ''}: ${esc(p.title)}</p>`).join('')}<p>Flight asks ${queued.length === 1 ? 'it' : 'them'} here when its turn ends.</p></div>`)
+    if (queued.length) parts.push(`<section class="notice" aria-label="Questions Flight has yet to ask"><ul>${queued.map(p => `<li>${call(p.from)} asks${p.urgent ? ' (urgent)' : ''}: ${esc(p.title)}${p.stoodDown ? ` <span class="hint">(its Controller has stood down, so Flight will not ask it; /console dismiss-gate ${esc(p.id)} at the Mac closes it)</span>` : ''}</li>`).join('')}</ul><p>Flight asks ${queued.length === 1 ? 'it' : 'them'} here when its turn ends.</p></section>`)
     if (f.ask) parts.push(askCard(f.ask))
     else if (f.asking) parts.push(`<div class="notice" role="status">Flight is waiting for your answer on the Mac: ${esc(f.asking)}</div>`)
     // What Flight is doing right now, so a long turn never looks like nothing is happening.
@@ -379,7 +379,7 @@
       if ($('tray-hint').textContent !== hint) $('tray-hint').textContent = hint
       paint($('quick'), 'quick', ['/console list', '/briefing', '/standup', '/debrief'].map(q => `<button type="button" data-a="quick" data-v="${esc(q)}">${esc(q)}</button>`).join(''))
       const n = onYou().length
-      paint($('tabs'), 'tabs', TABS.map(([k, l]) => `<button class="tab" type="button" role="tab" data-a="tab" data-v="${k}" aria-selected="${S.tab === k}">${ICONS[k]}${l}${k === 'flight' && n ? `<span class="badge" aria-label="${n} waiting">${n}</span>` : ''}</button>`).join(''))
+      paint($('tabs'), 'tabs', TABS.map(([k, l]) => `<button class="tab" type="button" role="tab" data-a="tab" data-v="${k}" aria-selected="${S.tab === k}">${ICONS[k]}${l}${k === 'flight' && n ? `<span class="badge" aria-hidden="true">${n}</span><span class="visually-hidden">, ${n} waiting</span>` : ''}</button>`).join(''))
       const wasOpen = last.sheet !== ''
       const repainted = paint($('sheet-root'), 'sheet', sheet())
       if (repainted && last.sheet !== '' && !wasOpen) {
@@ -852,7 +852,6 @@
     for (const f of S.files) f.stored = null
     S.sel = null
     S.tune = null
-    // Poll ids repeat across profiles, so a pick made in one is never sent in another.
     S.details = new Set()
     // A move the app makes keeps the profiles sheet open, so a tap on the switcher is never closed underneath;
     // a profile picked in the sheet closes it in the click handler.

@@ -273,8 +273,10 @@ test('Flight is put at most four open questions at a time, urgent first, then ol
     asked('MI9', '2026-10-20T07:40:00.000Z', { askedAt: new Date(now - ASK_AGAIN - 1).toISOString() }),
   ]
   expect(ASK_BATCH).toBe(4)
-  expect(nextAsks(items, now).map(p => p.id)).toEqual(['MI3', 'MI9', 'MI5', 'MI2'])
-  expect(nextAsks([], now)).toEqual([])
+  expect(nextAsks(items, now, SEATS).map(p => p.id)).toEqual(['MI3', 'MI9', 'MI5', 'MI2'])
+  expect(nextAsks([], now, SEATS)).toEqual([])
+  // A question from a Controller no longer staffed is not asked: its answer would reach nobody.
+  expect(nextAsks([asked('MI0', '2026-10-20T06:00:00.000Z', { agentId: 'a0' }), asked('AC1', '2026-10-20T06:00:00.000Z', { from: 'ACME', agentId: 'k1' }), ...items], now, SEATS).map(p => p.id)).toEqual(['MI3', 'MI9', 'MI5', 'MI2'])
   expect(isAsked(items[3]!)).toBe(false)
 })
 

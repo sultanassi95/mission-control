@@ -37,8 +37,8 @@ button { cursor: pointer; }
 .msg.assistant { align-self: flex-start; background: var(--surface); }
 .msg .who { font-size: var(--t-xs); line-height: var(--lh-xs); color: var(--ink-faint); font-weight: 600; margin-bottom: var(--s1); display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); }
 .msg.user .who { color: var(--accent-ink); }
-.notice p { margin: 0; }
-.notice p + p { margin-top: var(--s1); }
+.notice ul { margin: 0; padding: 0; list-style: none; }
+.notice li + li, .notice p { margin: var(--s1) 0 0; }
 .notice { align-self: stretch; background: var(--wait-tint); color: var(--wait); border-radius: var(--r-card); padding: var(--s3) var(--s4); font-size: var(--t-sm); line-height: var(--lh-sm); }
 .sys { align-self: center; text-align: center; font-size: var(--t-xs); line-height: var(--lh-xs); color: var(--ink-faint); max-width: 90%; }
 .typing { align-self: flex-start; display: flex; align-items: center; gap: var(--s2); padding: var(--s2) var(--s4); background: var(--surface); border-radius: var(--r-card); max-width: var(--bubble); }
@@ -108,7 +108,6 @@ button { cursor: pointer; }
 .gate details[open] > summary::before { content: "▾"; }
 .go.secondary { background: transparent; color: var(--done); border: 1px solid var(--done); }
 .go { border: 0; background: var(--done); color: var(--bg); border-radius: var(--r-field); min-height: calc(var(--target) + var(--s1)); font-weight: 700; letter-spacing: var(--ls-1); }
-.nogo { border: 1px solid var(--fail); background: transparent; color: var(--fail); border-radius: var(--r-field); min-height: calc(var(--target) + var(--s1)); font-weight: 700; letter-spacing: var(--ls-1); }
 
 /* Loops */
 .filters { display: flex; gap: var(--s2); overflow-x: auto; scrollbar-width: none; padding-bottom: var(--s1); }
@@ -147,7 +146,6 @@ button { cursor: pointer; }
 .btnrow.one { grid-template-columns: 1fr; }
 .primary { border: 0; background: var(--accent); color: var(--accent-ink); border-radius: var(--r-field); min-height: calc(var(--target) + var(--s1)); font-weight: 600; padding: 0 var(--s4); }
 .ghost { border: 1px solid var(--line); background: var(--surface); border-radius: var(--r-field); min-height: var(--target); padding: 0 var(--s3); font-weight: 600; }
-.warn { border: 1px solid var(--wait); background: var(--wait-tint); color: var(--wait); border-radius: var(--r-field); min-height: var(--target); padding: 0 var(--s3); font-weight: 600; }
 .danger { border: 1px solid var(--fail); background: var(--fail-tint); color: var(--fail); border-radius: var(--r-field); min-height: var(--target); padding: 0 var(--s3); font-weight: 600; }
 .toast { position: fixed; left: var(--s4); right: var(--s4); bottom: calc(var(--toast-lift) + env(safe-area-inset-bottom, 0px)); max-width: 640px; margin-inline: auto; z-index: 8; background: var(--ink); color: var(--bg); padding: var(--s3) var(--s4); border-radius: var(--r-card); font-size: var(--t-sm); line-height: var(--lh-sm); }
 .toast.error { background: var(--fail-tint); color: var(--fail); border: 1px solid var(--fail); }

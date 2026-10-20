@@ -141,7 +141,7 @@ block, a `notes:` line and a `for you to do:` block:
 
 The Front Room never messages a Controller or starts one from its own loop,
 which auto mode refuses. A tap, or a `/console` command typed in the app, that
-would (`staff`, `call`, `dismiss`, `stand-down`) reaches Flight as a prompt in
+would (`staff`, `call`, `dismiss`, `stand-down`, and `done`, which tells the Controller) reaches Flight as a prompt in
 the founder's name:
 
     From the Mission Control App, the founder sent: call FIELDKIT ship it after the release
@@ -152,7 +152,7 @@ the founder's name:
   try within 10 minutes, and kept in memory, so a plugin reload drops it. A
   code that is unknown, used, expired or minted for other args is refused and
   nothing runs; the founder sends it again from the app.
-- **Straight from the app**, as the founder and with no prompt: `done`,
+- **Straight from the app**, as the founder and with no prompt:
   `dismiss-gate`, `retune` and `app stop`, and an answer to a question Flight
   asked.
 
