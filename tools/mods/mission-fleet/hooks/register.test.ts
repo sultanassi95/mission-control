@@ -1045,6 +1045,9 @@ test('the guard admits a folder beside a Controller\'s repo only when its .git f
   expect((await bashBy($, 'cd /p/fronts/fieldkit/api && git status', 'p1')).decision).toBe('allow')
   // A registered worktree beside the repo is admitted.
   expect((await bashBy($, 'cd /p/fronts/fieldkit/api-ven45 && gh pr view 3', 'p1')).decision).toBe('allow')
+  // Spelled another way that folds to the same folder, it is read and admitted too.
+  expect((await bashBy($, 'cd /p/fronts/fieldkit && cd api-ven45 && gh pr view 3', 'p1')).decision).toBe('allow')
+  expect((await bashBy($, 'git -C /p/fronts/fieldkit/api/../api-ven45 status', 'p1')).decision).toBe('allow')
   // A folder named the same way that is another repo's worktree, or no worktree at all, is not.
   for (const dir of ['/p/fronts/fieldkit/api-gateway', '/p/fronts/fieldkit/api-notes']) {
     const r = await bashBy($, `cd ${dir} && git push -u origin feat/x`, 'p1')

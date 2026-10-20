@@ -103,13 +103,16 @@ function isSiblingWorktree(dir: string, scope: string, clone: CloneScope | undef
 
 /**
  * True when a folder's `.git` file (its text) makes it a worktree of the repo at `repo`: a single
- * `gitdir:` line naming a folder under `<repo>/.git/worktrees/`. A `.git` folder (a repository of its
- * own) has no such text.
+ * `gitdir:` line naming a folder under `<repo>/.git/worktrees/`, absolute, or relative to `folder` (the
+ * folder the file is in), as git writes it with worktree.useRelativePaths. A `.git` folder (a
+ * repository of its own) has no such text.
  */
-export function registersWorktree(gitFile: string, repo: string): boolean {
-  const m = /^gitdir: (\/[^\n]+?)\s*$/.exec(gitFile.trim())
-  if (!m || dotsAfterName(m[1] ?? '')) return false
-  const dir = foldPath(m[1] ?? '')
+export function registersWorktree(gitFile: string, repo: string, folder?: string): boolean {
+  const m = /^gitdir: ([^\n]+?)\s*$/.exec(gitFile.trim())
+  const line = m?.[1] ?? ''
+  if (!m || dotsAfterName(line)) return false
+  if (!line.startsWith('/') && !folder?.startsWith('/')) return false
+  const dir = foldPath(line.startsWith('/') ? line : `${folder}/${line}`)
   const under = `${foldPath(repo)}/.git/worktrees/`
   return dir.startsWith(under) && /^[^/]+$/.test(dir.slice(under.length))
 }

@@ -1172,6 +1172,10 @@ test('a .git file registers a worktree of the repo only by a gitdir line under t
   expect(registersWorktree('gitdir: /w/fronts/acme/acme/.git/modules/x', REPO)).toBe(false)
   expect(registersWorktree('gitdir: /w/fronts/acme/acme/.git/worktrees/a/../../../../globex/.git', REPO)).toBe(false)
   expect(registersWorktree('gitdir: relative/.git/worktrees/x', REPO)).toBe(false)
+  // git writes a relative line with worktree.useRelativePaths: read from the folder the .git file is in.
+  expect(registersWorktree('gitdir: ../acme/.git/worktrees/acme-x', REPO, '/w/fronts/acme/acme-x')).toBe(true)
+  expect(registersWorktree('gitdir: ../other/.git/worktrees/acme-x', REPO, '/w/fronts/acme/acme-x')).toBe(false)
+  expect(registersWorktree('gitdir: ../acme/.git/worktrees/x/../../../../globex/.git', REPO, '/w/fronts/acme/acme-x')).toBe(false)
   expect(registersWorktree('', REPO)).toBe(false)
   expect(registersWorktree('[core]\n\tbare = false', REPO)).toBe(false)
 })

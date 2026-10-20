@@ -261,9 +261,10 @@ export const register: Register = on => {
     // staffed while a clone landed only in its own front has no fronts on record, so it keeps that.
     const clone = c.cloneHome ? { home: c.cloneHome, fronts: c.cloneFronts ?? [c.front] } : undefined
     const start = shellDirs.get(e.agentId)
-    // Folders beside the repo are read only when the call names one or starts in one.
-    const beside = `${c.cwd.replace(/\/+$/, '')}-`
-    const worktrees = JSON.stringify(e.input ?? {}).includes(beside) || (start ?? '').startsWith(beside) ? await worktreesBeside($, c) : []
+    // Folders beside the repo are read only when the call names one (by the repo's name and a dash, in
+    // any spelling a cd or -C folds) or starts in one.
+    const beside = `${c.cwd.replace(/\/+$/, '').split('/').pop() ?? ''}-`
+    const worktrees = beside.length > 1 && (JSON.stringify(e.input ?? {}).includes(beside) || (start ?? '').includes(beside)) ? await worktreesBeside($, c) : []
     const why = toolRefusal(role.kind, e.tool, e.input, c.protectedBranches, c.cwd, clone, start, worktrees)
     if (!why) {
       // Audited when only the recorded shell directory pinned the call, so a live run shows where it came from.
@@ -589,7 +590,7 @@ async function worktreesBeside($: EngineInterface, c: Console): Promise<string[]
   for (const entry of await $.fs.list(home).catch(() => [])) {
     if (entry.kind !== 'dir' || !entry.name.startsWith(prefix)) continue
     const text = await $.fs.read(`${home}/${entry.name}/.git`).catch(() => '')
-    if (registersWorktree(text, repo)) out.push(`${home}/${entry.name}`)
+    if (registersWorktree(text, repo, `${home}/${entry.name}`)) out.push(`${home}/${entry.name}`)
   }
   return out
 }
