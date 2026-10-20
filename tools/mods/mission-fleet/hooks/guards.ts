@@ -835,6 +835,13 @@ function foldPath(p: string): string {
   return `/${out.join('/')}`
 }
 
+/**
+ * Programs that run as a child of the shell and so cannot move its directory. Before a git or gh call
+ * on its line, only these keep the shell where it started: any other head (a builtin, a function, an
+ * alias, eval, a zsh modifier such as noglob or repeat) might move it, so the start pins nothing after it.
+ */
+const STAYS = new Set(['git', 'gh', 'echo', 'printf', 'true', 'false', 'test', '[', 'ls', 'cat', 'grep', 'rg', 'head', 'tail', 'wc', 'sort', 'uniq', 'cut', 'tr', 'jq', 'diff', 'stat', 'file', 'find', 'mkdir', 'touch', 'cp', 'mv', 'rm', 'sleep', 'date', 'npm', 'pnpm', 'yarn', 'npx', 'bun', 'tsc'])
+
 /** The `cd <dir> &&` run directly before a command: only that pins it (anything else may not have run, or ran in a subshell). */
 function cdChain(commands: Simple[], index: number): Word[] {
   const chain: Word[] = []
@@ -860,7 +867,7 @@ function pinFollowsCdpath(commands: Simple[], index: number): boolean {
  * A fleet agent's shell starts wherever Flight's does, so an unpinned git call
  * can land in the wrong repo.
  */
-export function pinnedDir(commands: Simple[], index: number): string | undefined {
+export function pinnedDir(commands: Simple[], index: number, start?: string): string | undefined {
   const target = commands[index]
   if (!target) return undefined
   const { head, rest } = headOf(target)
@@ -871,8 +878,18 @@ export function pinnedDir(commands: Simple[], index: number): string | undefined
     const dir = c >= 0 ? rest[c + 1] : undefined
     if (dir) return dir.dynamic || dir.glob || !dir.text.startsWith('/') ? undefined : foldPath(dir.text)
   }
+  const chain = cdChain(commands, index)
+  // No cd before it: it runs where the shell starts, when the engine says where that is (an absolute
+  // path) and nothing earlier on the line can have moved the shell.
+  if (chain.length === 0) {
+    const moves = commands.slice(0, index).some(s => {
+      const h = headOf(s).head
+      return h !== undefined && (h.dynamic || h.glob || h.text.includes('/') || !STAYS.has(baseName(h.text)))
+    })
+    return start && start.startsWith('/') && !moves ? foldPath(start) : undefined
+  }
   let dir: string | undefined
-  for (const to of cdChain(commands, index)) {
+  for (const to of chain) {
     if (to.dynamic || to.glob || to.text.startsWith('-')) return undefined
     if (to.text.startsWith('/')) dir = foldPath(to.text)
     else if (dir) dir = foldPath(`${dir}/${to.text}`)
@@ -895,8 +912,11 @@ function isClone(rest: Word[]): boolean {
   return refusal === undefined && sub !== undefined && !sub.dynamic && !sub.glob && sub.text === 'clone'
 }
 
-/** The refusal for a shell command run by a fleet role, if any. */
-export function shellRefusal(role: Role, command: string, protectedBranches: string[], scopeDir?: string, clone?: CloneScope): string | undefined {
+/**
+ * The refusal for a shell command run by a fleet role, if any. `start` is the directory the engine says
+ * the shell starts in, which pins a git or gh call with no cd before it (the engine drops a leading cd to it).
+ */
+export function shellRefusal(role: Role, command: string, protectedBranches: string[], scopeDir?: string, clone?: CloneScope, start?: string): string | undefined {
   if (APP_HOME.test(command)) return APP_HOME_REFUSAL
   if (/_command\/fleet\b/.test(normalisePath(command)) || /\.claude[^/\s]*\/projects\b/.test(command)) return 'The fleet folder and Claude session transcripts are Flight\'s: fleet agents do not read them.'
   const parsed = tokenize(command)
@@ -974,7 +994,7 @@ export function shellRefusal(role: Role, command: string, protectedBranches: str
     let unpinned: string | undefined
     if (scopeDir && (name === 'git' || name === 'gh')) {
       if (name === 'gh' && rest.some(w => /^-R/.test(w.text) || /^--repo(=|$)/.test(w.text) || (/^-[A-Za-z]+$/.test(w.text) && w.text.includes('R')))) return 'gh -R/--repo is not allowed here: pin the repo with `cd <your repo> && gh ...`.'
-      const dir = pinnedDir(parsed.commands, k)
+      const dir = pinnedDir(parsed.commands, k, start)
       const scope = foldPath(scopeDir)
       if (!dir) return `Pin the repo on every ${name} call: \`cd ${scope} && ${name} ...\`${name === 'git' ? ` or \`git -C ${scope} ...\`` : ''}. Your shell may start in another repo.`
       // A Controller's clone may also run from a front's folder, where it lands one level down; nothing else runs there.
@@ -1009,12 +1029,12 @@ export function isShellLikeTool(tool: string): boolean {
 }
 
 /** The refusal for any tool call by a fleet role, if any. */
-export function toolRefusal(role: Role, tool: string, input: unknown, protectedBranches: string[], scopeDir?: string, clone?: CloneScope): string | undefined {
+export function toolRefusal(role: Role, tool: string, input: unknown, protectedBranches: string[], scopeDir?: string, clone?: CloneScope, start?: string): string | undefined {
   if (tool === 'Workflow') return 'Workflows are Flight\'s to run; a Controller dispatches its back room with the Agent tool.'
   if (isShellLikeTool(tool)) return `${tool} runs shell commands the fleet guard cannot read; use Bash.`
   const args = (input ?? {}) as Record<string, unknown>
   if (typeof args.command === 'string') {
-    const why = shellRefusal(role, args.command, protectedBranches, scopeDir, clone)
+    const why = shellRefusal(role, args.command, protectedBranches, scopeDir, clone, start)
     if (why) return why
   }
   const flat = JSON.stringify(input ?? {})

@@ -991,3 +991,36 @@ test('a stored poll is migrated at session start: an undelivered or held answer 
   expect(prompts.join('\n')).toContain('id MI3 (MISSION-CONTROL)')
   expect(prompts.join('\n')).toContain('id MI4 (MISSION-CONTROL)')
 })
+
+// ---- The shell's own directory (MC-168, MC-155) ----
+
+// The engine moving a fleet agent's shell, as its CwdChanged event reports it.
+const moved = ($: Engine, agentId: string, to: string) =>
+  $.classic.CwdChanged({ old_cwd: '/p', new_cwd: to, agent_id: agentId } as Parameters<Engine['classic']['CwdChanged']>[0])
+
+test('a Controller\'s call the engine stripped of its cd to the shell\'s own directory is pinned where the shell is', async ($, on) => {
+  portfolio(on)
+  const audit = auditLines(on)
+  seed(on, { consoles: [FK] })
+  on('agent.list', () => ({ value: [] }))
+  on('tool.check', () => ({ decision: 'allow' as const }))
+  on('classic.CwdChanged', () => ({}))
+  // Before any move is known, an unpinned call is refused, as before.
+  const before = await bashBy($, 'gh pr list --limit 1')
+  expect(before.decision).toBe('deny')
+  expect(before.reason).toContain('Pin the repo')
+  await moved($, 'f1', '/p/fronts/fieldkit')
+  expect((await bashBy($, 'gh pr list --limit 1')).decision).toBe('allow')
+  expect((await bashBy($, 'git status')).decision).toBe('allow')
+  expect(audit.join('\n')).toContain('\tguard\tFIELDKIT\tcontroller Bash pinned by the shell directory /p/fronts/fieldkit')
+  // A cd on the line moves the shell again, so its start pins nothing.
+  expect((await bashBy($, 'cd /tmp; git status')).reason).toContain('Pin the repo')
+  // Another agent's move is not this one's.
+  await moved($, 'other', '/p/fronts/shelf')
+  expect((await bashBy($, 'gh pr list --limit 1')).decision).toBe('allow')
+  // A shell outside the console is refused by where it is.
+  await moved($, 'f1', '/p/_command/portfolio/fieldkit')
+  const outside = await bashBy($, 'gh pr list --limit 1')
+  expect(outside.decision).toBe('deny')
+  expect(outside.reason).toContain('/p/_command/portfolio/fieldkit is outside your console\'s directory (/p/fronts/fieldkit)')
+})

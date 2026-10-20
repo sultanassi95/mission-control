@@ -1095,3 +1095,55 @@ test('a URL or OWNER/REPO#N anywhere in a gh write command fails closed unless i
   expect(R(`${IN}gh pr edit 40 --title 'see https://github.com/o/r/pull/3' --body 'and o/r#3'`)).toBeUndefined()
   expect(R(`${IN}gh pr edit 40 --body=https://github.com/o/r/pull/3`)).toBeUndefined()
 })
+
+// ---- The shell's own directory (MC-168, MC-155) ----
+// When a command opens with `cd <the directory the shell is already in> &&`, the engine hands the guard
+// the command without that cd, so a pinned call reads as unpinned. The fleet records where each agent's
+// shell is from the engine's CwdChanged event; the guard pins a call with no cd before it there.
+
+const S = (cmd: string, start?: string, role: 'controller' | 'back room' = 'controller') => shellRefusal(role, cmd, [], REPO, ACME, start)
+
+test('a call the engine stripped of its cd to the shell\'s own directory is pinned there', () => {
+  expect(S('gh pr list --limit 1', REPO)).toBeUndefined()
+  expect(S('gh pr view 40 --json state', `${REPO}/tools`)).toBeUndefined()
+  expect(S('git status', REPO)).toBeUndefined()
+  expect(S('git push -u origin feat/x', '/w/fronts/acme/acme-beta-318')).toBeUndefined()
+  expect(S('npm test && git status', REPO)).toBeUndefined()
+})
+
+test('the shell\'s directory pins only where nothing on the line moved it, and stays inside the console', () => {
+  // Outside the console: refused by where it is, as a cd there is.
+  expect(S('gh pr list', '/w/fronts/globex')).toContain('/w/fronts/globex is outside your console\'s directory (/w/fronts/acme/acme)')
+  // A cd earlier on the line, chained or not, moves the shell, so the start no longer pins.
+  expect(S('cd /tmp; git status', REPO)).toContain('Pin the repo')
+  expect(S('cd sub || true; gh pr list', REPO)).toContain('Pin the repo')
+  expect(S('pushd /tmp && popd && git status', REPO)).toContain('Pin the repo')
+  // With no start known, an unpinned call is refused as before.
+  expect(S('gh pr list')).toContain('Pin the repo')
+  expect(S('git status', '')).toContain('Pin the repo')
+  // A relative or unreadable start never pins.
+  expect(S('git status', 'fronts/acme/acme')).toContain('Pin the repo')
+  // The back room's git rules still hold from its start.
+  expect(S('git push -u origin feat/x', REPO, 'back room')).toContain('never runs git push')
+})
+
+test('the shell\'s directory reaches the guard through toolRefusal', () => {
+  expect(toolRefusal('controller', 'Bash', { command: 'gh pr list' }, [], REPO, ACME, REPO)).toBeUndefined()
+  expect(toolRefusal('controller', 'Bash', { command: 'gh pr list' }, [], REPO, ACME)).toContain('Pin the repo')
+})
+
+test('anything before the call that is not a known program could move the shell, so the shell\'s directory pins nothing after it', () => {
+  // Each spelling moves the shell (or may) without a cd at the head of its command.
+  for (const before of [
+    'eval cd /w/fronts/globex;', 'eval "cd /w/fronts/globex" &&', 'noglob cd /w/fronts/globex &&', 'nocorrect cd /w/fronts/globex &&',
+    'repeat 1 cd /w/fronts/globex;', 'z globex &&', 'exec /bin/zsh -c x;', 'builtin cd /w/fronts/globex &&', 'command cd /w/fronts/globex &&',
+    '$GO /w/fronts/globex &&', 'f() { cd /w/fronts/globex; };', 'go_there &&',
+  ]) {
+    // Refused, by whichever rule reads it first: the start never pins a call after a move.
+    expect(`${before} -> ${S(`${before} git status`, REPO) ?? 'allowed'}`).not.toBe(`${before} -> allowed`)
+  }
+  // Known programs cannot move the shell they run from, so the start still pins after them.
+  for (const before of ['npm test &&', 'pnpm -s build &&', 'echo ok;', 'ls -la &&', 'git fetch origin &&', 'true &&']) {
+    expect(`${before} -> ${S(`${before} git status`, REPO) ?? 'allowed'}`).toBe(`${before} -> allowed`)
+  }
+})
