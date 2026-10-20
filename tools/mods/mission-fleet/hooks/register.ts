@@ -66,6 +66,8 @@ let flightAsking: string | undefined
 // A question of Flight's routed to the app while it runs: the app answers it, or /console answer at the Mac.
 type AskQuestion = { question?: string; header?: string; options?: { label?: string; description?: string }[]; multiSelect?: boolean; type?: string; min?: number; max?: number; step?: number; unit?: string; placeholder?: string }
 let flightAsk: { id: string; questions: AskQuestion[] } | undefined
+// Where each fleet agent's shell is now, by agent id, as the engine's CwdChanged event last said.
+const shellDirs = new Map<string, string>()
 // The headers (poll ids, lower case) of the question Flight is asking now, in the app or at the terminal.
 let onScreen = new Set<string>()
 // The result of the last action the app sent, so the page can say what actually happened.
@@ -224,6 +226,17 @@ export const register: Register = on => {
   // than behind ToolSearch. Placement is tool.describe's answer; the register call takes none.
   on('tool.describe', { tool: `mcp__mission-fleet__${TOOL}` }, async ($, e, next) => ({ ...(await next(e)), isDeferred: false }))
 
+  // Where a fleet agent's shell is, as the engine tracks it. The engine drops a leading
+  // `cd <that directory> &&` from the command tool.check reads, so the guard pins such a call there
+  // instead of refusing it as unpinned (MC-168). Only agents with a recorded move are pinned this way.
+  on('classic.CwdChanged', async ($, e, next) => {
+    if (e.agent_id && typeof e.new_cwd === 'string') {
+      shellDirs.set(e.agent_id, e.new_cwd)
+      while (shellDirs.size > 500) shellDirs.delete(shellDirs.keys().next().value as string)
+    }
+    return next(e)
+  }).catch(($, e, next) => next(e))
+
   // Guards: what a Controller and its back room may run. A guard that fails denies.
   on('tool.check', async ($, e, next) => {
     // Auto mode cannot judge a call a plugin raised, so the fleet approves its own sends and spawns.
@@ -247,7 +260,8 @@ export const register: Register = on => {
     // A console staffed before clones were allowed has no folder on record, so it clones nothing; one
     // staffed while a clone landed only in its own front has no fronts on record, so it keeps that.
     const clone = c.cloneHome ? { home: c.cloneHome, fronts: c.cloneFronts ?? [c.front] } : undefined
-    const why = toolRefusal(role.kind, e.tool, e.input, c.protectedBranches, c.cwd, clone)
+    const start = shellDirs.get(e.agentId)
+    const why = toolRefusal(role.kind, e.tool, e.input, c.protectedBranches, c.cwd, clone, start)
     if (!why) return next(e)
     await log($, 'guard', role.console.callSign, `${role.kind} ${e.tool} denied: ${why}`)
     return { decision: 'deny' as const, reason: why }
