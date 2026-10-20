@@ -1022,3 +1022,31 @@ test('a Controller\'s call the engine stripped of its cd to the shell\'s own dir
   expect(outside.decision).toBe('deny')
   expect(outside.reason).toContain('/p/_command/portfolio/fieldkit is outside your console\'s directory (/p/fronts/fieldkit)')
 })
+
+// ---- Worktrees beside the repo, registered (MC-167) ----
+
+test('the guard admits a folder beside a Controller\'s repo only when its .git file registers it as a worktree of that repo', async ($, on) => {
+  const API: Console = { ...FK, callSign: 'FIELDKIT-API', project: 'api', name: 'console-fieldkit-api', agentId: 'p1', cwd: '/p/fronts/fieldkit/api' }
+  const files: Record<string, string> = {
+    '/p/fronts/fieldkit/api-ven45/.git': 'gitdir: /p/fronts/fieldkit/api/.git/worktrees/api-ven45\n',
+    '/p/fronts/fieldkit/api-gateway/.git': 'gitdir: /p/fronts/fieldkit/gateway/.git/worktrees/api-gateway\n',
+  }
+  on('session.root', () => ({ value: '/p' }))
+  // deno-lint-ignore no-explicit-any
+  const fsOn = on as any
+  fsOn('fs.read', (_$: unknown, e: { path: string }) => (files[e.path] !== undefined ? { value: files[e.path] } : { deny: `ENOENT ${e.path}` }))
+  fsOn('fs.list', (_$: unknown, e: { path: string }) => (e.path === '/p/fronts/fieldkit' ? { value: [{ name: 'api', kind: 'dir', size: 0 }, { name: 'api-ven45', kind: 'dir', size: 0 }, { name: 'api-gateway', kind: 'dir', size: 0 }, { name: 'api-notes', kind: 'dir', size: 0 }, { name: 'web', kind: 'dir', size: 0 }] } : { deny: `ENOENT ${e.path}` }))
+  seed(on, { consoles: [API] })
+  on('agent.list', () => ({ value: [] }))
+  on('tool.check', () => ({ decision: 'allow' as const }))
+  // The instrument: the hook decides as the FIELDKIT-API Controller's, in its own repo.
+  expect((await bashBy($, 'cd /p/fronts/fieldkit/api && git status', 'p1')).decision).toBe('allow')
+  // A registered worktree beside the repo is admitted.
+  expect((await bashBy($, 'cd /p/fronts/fieldkit/api-ven45 && gh pr view 3', 'p1')).decision).toBe('allow')
+  // A folder named the same way that is another repo's worktree, or no worktree at all, is not.
+  for (const dir of ['/p/fronts/fieldkit/api-gateway', '/p/fronts/fieldkit/api-notes']) {
+    const r = await bashBy($, `cd ${dir} && git push -u origin feat/x`, 'p1')
+    expect(`${dir} ${r.decision}`).toBe(`${dir} deny`)
+    expect(r.reason).toContain(`${dir} is outside your console's directory (/p/fronts/fieldkit/api)`)
+  }
+})
