@@ -66,6 +66,8 @@ let flightAsking: string | undefined
 // A question of Flight's routed to the app while it runs: the app answers it, or /console answer at the Mac.
 type AskQuestion = { question?: string; header?: string; options?: { label?: string; description?: string }[]; multiSelect?: boolean; type?: string; min?: number; max?: number; step?: number; unit?: string; placeholder?: string }
 let flightAsk: { id: string; questions: AskQuestion[] } | undefined
+// The headers (poll ids, lower case) of the question Flight is asking now, in the app or at the terminal.
+let onScreen = new Set<string>()
 // The result of the last action the app sent, so the page can say what actually happened.
 let lastOp: { id: number; text: string; at: string } | undefined
 // Flight's visible text per model response, as produced. The saved transcript sometimes keeps a
@@ -344,9 +346,11 @@ export const register: Register = on => {
         await log($, 'ask', 'deliver', `failed: ${String(err).slice(0, 160)}`)
         return 'The fleet could not deliver the Controllers\' answers; /console poll lists what is still open.'
       })
-      void askQueue($).catch(() => undefined)
       return said
     }
+    // The ids on screen, on either path, so a report arriving meanwhile never replaces a question being answered.
+    onScreen = new Set(questions.map(q => (q.header ?? '').toLowerCase()).filter(Boolean))
+    try {
     if (app?.port && app.httpOk && questions.length) {
       const id = hex(8)
       flightAsk = { id, questions }
@@ -362,7 +366,7 @@ export const register: Register = on => {
             const got = JSON.parse(r.text) as { answers: Record<string, string>; annotations?: Record<string, unknown> }
             await log($, 'ask', id, `answered: ${JSON.stringify(got.answers).slice(0, 160)}`)
             const said = await answered(got.answers)
-            return { result: { questions: (e as { questions: unknown }).questions, answers: got.answers, ...(got.annotations ? { annotations: got.annotations } : {}) }, ...(said ? { context: said } : {}) } as never
+            return { result: { questions: (e as { questions: unknown }).questions, answers: got.answers, ...(got.annotations ? { annotations: got.annotations } : {}) }, ...(said ? { context: [said] } : {}) } as never
           }
           if (r.status !== 204) break
         }
@@ -382,10 +386,15 @@ export const register: Register = on => {
       const got = r as { result?: { answers?: Record<string, string> }; isError?: boolean }
       if (got.isError || !got.result?.answers) return r
       const said = await answered(got.result.answers)
-      return (said ? { result: got.result, context: said } : r) as never
+      // Core's own result object is returned with the line added, so core keeps its messages as they are.
+      return (said ? { ...r, context: [...((r as { context?: readonly string[] }).context ?? []), said] } : r) as never
     } finally {
       flightAsking = undefined
       if (app) void pushState($, app).catch(() => undefined)
+    }
+    } finally {
+      onScreen = new Set()
+      void askQueue($).catch(() => undefined)
     }
   }).catch(($, e, next) => next(e))
 
@@ -833,7 +842,6 @@ async function recordReport($: EngineInterface, agentId: string, answer: string)
   await update($, poll, list => {
     const mine = (p: PollItem) => p.state === 'open' && p.from === c.callSign
     // A question Flight is asking right now keeps its words: the founder's answer to it wins.
-    const onScreen = new Set((flightAsk?.questions ?? []).map(q => (q.header ?? '').toLowerCase()))
     const kept = list.map(p => {
       if (!mine(p) || !ASKED(p) || onScreen.has(p.id.toLowerCase())) return p
       const again = items.find(i => sameAsk(i, p))
@@ -858,49 +866,101 @@ async function recordReport($: EngineInterface, agentId: string, answer: string)
   if (asked.length) await askQueue($).catch((err: unknown) => log($, 'ask', c.callSign, `not put to Flight: ${String(err).slice(0, 160)}`))
 }
 
-/** Questions put to Flight one batch at a time; a second call while one is being put waits for the next. */
+/** Questions put to Flight one batch at a time; a call while one is being put runs again once it is done. */
 let putting = false
+let again = false
 
 /**
  * Puts the next batch of open questions to Flight while it is idle and asks nothing itself: one prompt,
  * waiting for Flight's turn if one starts first, telling it to ask them with AskUserQuestion. Each is
- * marked askedAt, so it is put again only after ASK_AGAIN if Flight never asked it.
+ * marked askedAt, so it is put again only after ASK_AGAIN if Flight never asked it; a prompt the
+ * engine dropped or that threw unmarks them at once. The watch loop calls it too, so a question
+ * waiting while Flight stays idle is put again.
  */
 async function askQueue($: EngineInterface): Promise<void> {
-  if (putting || flightBusy || flightAsk || flightAsking) return
+  if (putting) {
+    again = true
+    return
+  }
+  if (flightBusy || flightAsk || flightAsking || onScreen.size) return
   putting = true
   try {
     const now = Date.now()
-    const batch = nextAsks(await read($, poll), now)
+    const batch = nextAsks(await read($, poll), now, await read($, consoles))
     if (!batch.length) return
     const ids = new Set(batch.map(p => p.id))
     const at = new Date(now).toISOString()
     await update($, poll, list => list.map(p => (ids.has(p.id) && p.state === 'open' ? { ...p, askedAt: at } : p)))
-    await $.prompt.submit({ text: askPrompt(batch) })
+    const unmark = () => update($, poll, list => list.map(p => (ids.has(p.id) && p.askedAt === at ? omitAsked(p) : p)))
+    let sent: Awaited<ReturnType<EngineInterface['prompt']['submit']>>
+    try {
+      sent = await $.prompt.submit({ text: askPrompt(batch) })
+    } catch (err) {
+      await unmark()
+      await log($, 'ask', [...ids].join(','), `NOT put to Flight: ${String(err).slice(0, 160)}`)
+      return
+    }
+    if (sent.drop !== undefined) {
+      await unmark()
+      await log($, 'ask', [...ids].join(','), `NOT put to Flight, the prompt was dropped: ${sent.drop.slice(0, 160)}`)
+      return
+    }
     await log($, 'ask', [...ids].join(','), `put to Flight to ask (${batch.map(p => p.from).join(', ')})`)
   } finally {
     putting = false
+    if (again) {
+      again = false
+      void askQueue($).catch(() => undefined)
+    }
   }
 }
 
-/** Reads the stored poll as the questions Flight asks read it (migratePoll) and writes it back once if anything changed. */
-async function migrate($: EngineInterface): Promise<void> {
-  const before = (await read($, poll)) as StoredPollItem[]
-  const { items, reopened } = migratePoll(before)
-  if (items.every((p, k) => p === before[k])) return
-  await update($, poll, () => items)
-  const open = (l: readonly PollItem[]) => l.filter(p => p.state === 'open').length
-  await log($, 'poll', 'migrate', `open ${open(before)} -> ${open(items)}; reopened ${reopened.length ? reopened.join(', ') : 'none'}; items ${before.length} -> ${items.length}`)
+/** The item without askedAt; state is JSON, so the field is removed, never set to undefined. */
+function omitAsked(p: PollItem): PollItem {
+  const { askedAt, ...rest } = p
+  return rest
 }
+
+/** Reads the stored poll as the questions Flight asks read it (migratePoll), inside the write, so a report landing meanwhile is kept. */
+async function migrate($: EngineInterface): Promise<void> {
+  let before: StoredPollItem[] = []
+  let reopened: string[] = []
+  let after: PollItem[] = []
+  await update($, poll, list => {
+    before = list as StoredPollItem[]
+    const m = migratePoll(before)
+    reopened = m.reopened
+    after = m.items
+    return m.items.every((p, k) => p === before[k]) ? list : m.items
+  })
+  if (after.every((p, k) => p === before[k])) return
+  const open = (l: readonly PollItem[]) => l.filter(p => p.state === 'open').length
+  await log($, 'poll', 'migrate', `open ${open(before)} -> ${open(after)}; reopened ${reopened.length ? reopened.join(', ') : 'none'}; items ${before.length} -> ${after.length}`)
+}
+
+/** A header the fleet would have written: two capitals and a number, as pollId makes them. */
+const POLL_ID = /^[A-Z]{2}\d+$/
 
 /**
  * The founder's answers to Flight's question, matched to the Controllers' open items and delivered
- * to each Controller that asked one. Returns what Flight is told about them, or '' when none matched.
+ * to each Controller that asked one. An answer under a fleet id that matches no open item (replaced
+ * or closed while it was on screen) is audited and told to Flight, never dropped. Returns what Flight
+ * is told, or '' when nothing was the fleet's.
  */
 async function deliverAnswers($: EngineInterface, questions: AskQuestion[], answers: Record<string, string>): Promise<string> {
-  const matched = matchAnswers(await read($, poll), questions, answers)
+  const items = await read($, poll)
+  const matched = matchAnswers(items, questions, answers)
   const lines: string[] = []
   for (const m of matched) lines.push(await deliver($, m.item, m.choice, m.note))
+  for (const q of questions) {
+    const header = (q.header ?? '').trim()
+    const answer = (answers[q.question ?? ''] ?? '').trim()
+    if (!POLL_ID.test(header) || !answer || matched.some(m => m.item.id.toLowerCase() === header.toLowerCase())) continue
+    const known = items.filter(p => p.id.toLowerCase() === header.toLowerCase()).at(-1)
+    const where = known ? `${header} is ${known.state} (${known.from})` : `no item ${header} is on record`
+    await log($, 'ask', header, `answer matched no open item: ${where}; answer: ${answer.slice(0, 120)}`)
+    lines.push(`The answer to ${header} ("${answer.slice(0, 120)}") reached no Controller: ${where}.${known ? ` Tell it with /console call ${known.from} <the answer> if it still matters.` : ''}`)
+  }
   return lines.length ? `[mission-fleet] ${lines.join(' ')}` : ''
 }
 
@@ -928,6 +988,8 @@ async function watchFrom($: EngineInterface, c: Console, answer: string) {
 async function watchLoop($: EngineInterface) {
   for (;;) {
     await $.clock.sleep(WATCH_EVERY)
+    // A question put to Flight that it never asked, while it stayed idle, is put again here.
+    await askQueue($).catch((err: unknown) => log($, 'ask', 'queue', `not put to Flight: ${String(err).slice(0, 160)}`))
     const fleet = await read($, consoles).catch(() => [] as Console[])
     for (const w of await read($, watches).catch(() => [] as PrWatch[])) {
       try {
@@ -986,29 +1048,39 @@ async function dismissGate($: EngineInterface, id: string): Promise<string> {
   return `${item.id} dismissed. Nothing was sent to ${item.from}.`
 }
 
+/** A send to a Controller that may throw, as one outcome: delivered, or the reason it was not. */
+async function sendTo($: EngineInterface, agentId: string, text: string): Promise<{ isDelivered: boolean; reason: string }> {
+  try {
+    const sent = await $.session.send({ to: { agentId }, text })
+    return { isDelivered: sent.isDelivered, reason: sent.isDelivered ? '' : sent.reason }
+  } catch (err) {
+    return { isDelivered: false, reason: String(err).slice(0, 200) }
+  }
+}
+
 /**
  * The founder's answer to an open item, from Flight's own question: option `choice` of what it is
- * asked with (optionsOf), or 0 for the founder's own words (`note`). A question becomes answered; a
- * blocked line or an advisory becomes go (1) or no-go (2; own words count as go with the words as
- * the note). The answer goes only to the agent that raised the item while its console is staffed;
- * an advisory's go goes to the Controllers of the fronts it names, held for a front with none. The
- * item is recorded as answered whatever the delivery; what became of it is returned for Flight.
+ * asked with (optionsOf), or 0 for the founder's own words (`note`). A question is answered with its
+ * option. A blocked line or an advisory becomes go (1) or no-go (2); own words on one are passed on
+ * as words with no verdict, so "no" typed as text never becomes a GO, and an advisory answered in
+ * words tells no front. The answer goes only to the agent that raised the item while its console is
+ * staffed; an advisory's go goes to the Controllers of the fronts it names, held for a front with
+ * none. The item is recorded as answered whatever the delivery; what became of it is returned for Flight.
  */
 async function deliver($: EngineInterface, item: PollItem, choice: number, note: string): Promise<string> {
-  const state: PollItem['state'] = item.kind === 'question' ? 'answered' : choice === 2 ? 'no-go' : 'go'
-  const pick = item.kind === 'question' ? choice : choice === 2 ? 2 : 1
-  const words = item.kind === 'question' ? note : choice === 0 ? note : ''
-  const decided: PollItem = { ...item, state, choice: pick }
+  const words = choice === 0
+  const state: PollItem['state'] = item.kind === 'question' || words ? 'answered' : choice === 2 ? 'no-go' : 'go'
+  const decided: PollItem = { ...item, state, choice }
   const word = answerWord(decided)
-  await update($, poll, list => list.map(p => (p.id === item.id && p.at === item.at ? { ...p, state, choice: pick, decidedAt: new Date().toISOString(), ...(words ? { note: words } : {}) } : p)))
+  await update($, poll, list => list.map(p => (p.id === item.id && p.at === item.at ? { ...p, state, choice, decidedAt: new Date().toISOString(), ...(note ? { note } : {}) } : p)))
   const told: string[] = []
   let failed: string | undefined
-  if (item.kind === 'gate' || item.kind === 'question') {
-    const text = decisionText(item, pick, words)
+  if (item.kind === 'gate' || item.kind === 'question' || (item.kind === 'advisory' && words)) {
+    const text = decisionText(item, choice, note)
     const seat = liveSeat(item, await read($, consoles))
     if (!seat) failed = `${item.from} is no longer staffed, so nothing was sent; tell its next Controller with /console call ${item.from} if it still matters.`
     else {
-      const sent = await $.session.send({ to: { agentId: seat.agentId }, text })
+      const sent = await sendTo($, seat.agentId, text)
       if (sent.isDelivered) told.push(item.from)
       else failed = `it did not reach ${item.from}: ${plainReason(sent.reason)} Send it with /console call ${item.from} <the answer>.`
     }
@@ -1016,10 +1088,10 @@ async function deliver($: EngineInterface, item: PollItem, choice: number, note:
   }
   if (item.kind === 'advisory' && state === 'go') {
     const fleet = await read($, consoles)
-    const text = `Advisory from Flight: ${item.from} reports a ${item.title}. Check what your front consumes from it before your next change.${words ? ` Founder note: ${words}` : ''}`
+    const text = `Advisory from Flight: ${item.from} reports a ${item.title}. Check what your front consumes from it before your next change.`
     for (const front of item.targets ?? []) {
       const target = fleet.find(c => c.front === front && c.status === 'staffed')
-      const sent = target ? await $.session.send({ to: { agentId: target.agentId }, text }) : undefined
+      const sent = target ? await sendTo($, target.agentId, text) : undefined
       if (target && sent?.isDelivered) {
         told.push(target.callSign)
         await addLoop($, { from: 'FLIGHT', to: target.callSign, kind: 'advisory', text })
@@ -1027,8 +1099,10 @@ async function deliver($: EngineInterface, item: PollItem, choice: number, note:
     }
   }
   await log($, state, item.id, failed ? `NOT delivered to ${item.from}: ${failed}` : told.length ? `told ${told.join(', ')}` : 'recorded; held for unstaffed fronts')
-  if (failed) return `${item.id} (${item.from}): answered ${word}, but ${failed}`
-  return `${item.id} (${item.from}): ${state === 'answered' ? `answered ${word}` : `${word} recorded`}${told.length ? `, told ${told.join(', ')}` : ''}.`
+  const said = state === 'answered' ? `answered ${word}` : `${word} recorded`
+  const quiet = item.kind === 'advisory' && words ? '; no dependent front was told, since the answer gave no Tell them' : ''
+  if (failed) return `${item.id} (${item.from}): ${said}, but ${failed}${quiet}`
+  return `${item.id} (${item.from}): ${said}${told.length ? `, told ${told.join(', ')}` : ''}${quiet}.`
 }
 
 /** Checks off a to-do a Controller left for the founder, and tells that Controller it is done. */
@@ -1040,7 +1114,7 @@ async function checkOff($: EngineInterface, id: string): Promise<string> {
   await update($, poll, list => list.map(p => (p.id === item.id && p.at === item.at ? { ...p, state: 'done' as const, decidedAt: new Date().toISOString() } : p)))
   const seat = liveSeat(item, await read($, consoles))
   const text = `The founder checked off your to-do ${item.id}: ${item.title}`
-  const sent = seat ? await $.session.send({ to: { agentId: seat.agentId }, text }) : undefined
+  const sent = seat ? await sendTo($, seat.agentId, text) : undefined
   if (seat && sent?.isDelivered) {
     await addLoop($, { from: 'FOUNDER', to: item.from, kind: 'decision', text })
     await log($, 'done', item.id, `${item.from} told: ${item.title.slice(0, 100)}`)
@@ -1244,7 +1318,7 @@ async function snapshot($: EngineInterface) {
       return { ...c, live: agents.find(a => a.id === c.agentId)?.status ?? null, report: parseStatus(mine[mine.length - 1]?.text ?? '') }
     }),
     // What waits on the founder: each Controller's open question (which Flight asks) and to-do.
-    questions: items.filter(isAsked).map(p => ({ id: p.id, at: p.at, from: p.from, kind: p.kind, title: p.title, asks: optionsOf(p), ...(p.urgent ? { urgent: true } : {}), ...(p.askedAt ? { askedAt: p.askedAt } : {}) })),
+    questions: items.filter(isAsked).map(p => ({ id: p.id, at: p.at, from: p.from, kind: p.kind, title: p.title, asks: optionsOf(p), ...(p.urgent ? { urgent: true } : {}), ...(p.askedAt ? { askedAt: p.askedAt } : {}), ...(liveSeat(p, fleet) ? {} : { stoodDown: true }) })),
     todos: items.filter(p => p.state === 'open' && p.kind === 'todo').map(p => ({ id: p.id, at: p.at, from: p.from, title: p.title, detail: p.detail })),
     // Each call sign's colour slot; while the store cannot be read, the live consoles still get distinct ones.
     slots: kept ?? placeSlots({}, fleet),

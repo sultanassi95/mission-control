@@ -127,9 +127,13 @@ export const MAX_OPTIONS = 4
 /** A question Flight was asked to ask and has not asked is put to it again after this long. */
 export const ASK_AGAIN = 10 * 60_000
 
-/** The next questions to put to Flight: open, not put to it within ASK_AGAIN, urgent first, then oldest; at most ASK_BATCH. */
-export function nextAsks(items: readonly PollItem[], now: number): PollItem[] {
-  const due = items.filter(p => isAsked(p) && (!p.askedAt || now - Date.parse(p.askedAt) > ASK_AGAIN))
+/**
+ * The next questions to put to Flight: open, raised by a Controller still staffed (an answer to one
+ * that stood down reaches nobody), not put to Flight within ASK_AGAIN, urgent first, then oldest; at
+ * most ASK_BATCH.
+ */
+export function nextAsks(items: readonly PollItem[], now: number, seats: readonly Seat[]): PollItem[] {
+  const due = items.filter(p => isAsked(p) && liveSeat(p, seats) && (!p.askedAt || now - Date.parse(p.askedAt) > ASK_AGAIN))
   return [...due].sort((a, b) => Number(Boolean(b.urgent)) - Number(Boolean(a.urgent)) || a.at.localeCompare(b.at)).slice(0, ASK_BATCH)
 }
 

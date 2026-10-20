@@ -1066,7 +1066,7 @@ export function fleetSelfApproval(tool: string, input: unknown, seats: FleetSeat
 }
 
 /** Console verbs that message or start an agent. From the app they run through Flight, never from the app's own loop. */
-const RELAYED = new Set(['staff', 'call', 'dismiss', 'stand-down'])
+const RELAYED = new Set(['staff', 'call', 'dismiss', 'stand-down', 'done'])
 export function isRelayedVerb(args: string): boolean {
   return RELAYED.has((args.trim().split(/\s+/)[0] ?? '').toLowerCase())
 }

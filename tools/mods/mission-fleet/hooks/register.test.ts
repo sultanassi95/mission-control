@@ -870,6 +870,97 @@ test('dismiss-gate closes an open question with nothing sent', async ($, on) => 
   expect(sends).toBe(0)
 })
 
+test('what Flight is told comes as context lines, kept beside core\'s result', async ($, on) => {
+  portfolio(on)
+  seed(on, { poll: [Q7], consoles: [MC] })
+  dialog(on, { [Q7.title]: 'The epic branch' })
+  on('session.send', () => ({ isDelivered: true }))
+  const r = (await ask($, [Q7_ASKED])) as { result?: { answers?: Record<string, string> }; context?: unknown }
+  expect(Array.isArray(r.context)).toBe(true)
+  expect((r.context as string[]).join('\n')).toContain('MI7 (MISSION-CONTROL): answered 1) The epic branch, told MISSION-CONTROL.')
+  expect(r.result?.answers).toEqual({ [Q7.title]: 'The epic branch' })
+})
+
+test('words typed on a Go or No-go question are passed on as words, never as a GO', async ($, on) => {
+  portfolio(on)
+  const polls = pollWrites(on)
+  seed(on, { poll: [OPEN], consoles: [MC] })
+  dialog(on, { 'merge the fix': 'no, not before the release' })
+  const sent: string[] = []
+  on('session.send', (_$, e) => {
+    sent.push(e.text)
+    return { isDelivered: true }
+  })
+  await ask($, [{ header: 'MI2', question: 'merge the fix', options: [{ label: 'Go' }, { label: 'No-go' }] }])
+  expect(sent[0]).toContain('The founder answered MI2 in their own words: no, not before the release')
+  expect(sent[0]).not.toContain('GO from the founder')
+  expect(polls.at(-1)?.find(p => p.id === 'MI2')).toMatchObject({ state: 'answered', choice: 0 })
+})
+
+test('an answer to a question replaced while it was on screen is never dropped: it is audited and told to Flight', async ($, on) => {
+  portfolio(on)
+  const audit = auditLines(on)
+  seed(on, { poll: [{ ...Q7, state: 'superseded' }], consoles: [MC] })
+  dialog(on, { [Q7.title]: 'The epic branch' })
+  let sends = 0
+  on('session.send', () => {
+    sends++
+    return { isDelivered: true }
+  })
+  const r = await ask($, [Q7_ASKED])
+  expect(sends).toBe(0)
+  expect(JSON.stringify(r)).toContain('The answer to MI7 (\\"The epic branch\\") reached no Controller: MI7 is superseded (MISSION-CONTROL).')
+  expect(audit.join('\n')).toContain('\task\tMI7\tanswer matched no open item: MI7 is superseded (MISSION-CONTROL)')
+})
+
+test('a send that throws is told to Flight as not delivered, and the rest of the batch is still delivered', async ($, on) => {
+  portfolio(on)
+  seed(on, { poll: [Q7, Q8], consoles: [MC] })
+  dialog(on, { [Q7.title]: 'The epic branch', [Q8.title]: 'Drop it' })
+  let n = 0
+  on('session.send', () => {
+    n++
+    if (n === 1) throw new Error('socket closed')
+    return { isDelivered: true }
+  })
+  const said = JSON.stringify(await ask($, [Q7_ASKED, Q8_ASKED]))
+  expect(said).toContain('MI7 (MISSION-CONTROL): answered 1) The epic branch, but it did not reach MISSION-CONTROL')
+  expect(said).toContain('MI8 (MISSION-CONTROL): answered 2) Drop it, told MISSION-CONTROL.')
+})
+
+test('a prompt the engine drops leaves its questions unmarked, so they are put to Flight again', async ($, on) => {
+  portfolio(on)
+  turnCore(on)
+  const clock = mock.clock(on, { now: Date.parse(ASKED_AT) })
+  const polls = pollWrites(on)
+  const audit = auditLines(on)
+  on('prompt.submit', () => ({ drop: 'a settings hook blocked it' }))
+  seed(on, { consoles: [MC] })
+  await reportEnds($, clock, 'a1', 'state: planned\ndecisions:\n- Ship it? | 1) Yes: ship | 2) No: wait\nnext: wait')
+  const shipIt = polls.at(-1)?.find(p => p.title === 'Ship it?')
+  expect(shipIt?.state).toBe('open')
+  expect(shipIt?.askedAt).toBeUndefined()
+  expect(audit.join('\n')).toContain('NOT put to Flight, the prompt was dropped: a settings hook blocked it')
+})
+
+test('a question from a Controller that has stood down is not put to Flight; it stays listed', async ($, on) => {
+  portfolio(on)
+  turnCore(on)
+  on('turn.start', (_$, e) => ({ turnId: e.turnId }))
+  const clock = mock.clock(on, { now: Date.parse(ASKED_AT) })
+  const prompts: string[] = []
+  on('prompt.submit', (_$, e) => {
+    prompts.push(e.text)
+    return { text: e.text }
+  })
+  seed(on, { poll: [Q7], consoles: [{ ...MC, status: 'stood-down' }] })
+  await $.turn.start({ text: 'hi', turnId: 'flight-2' } as Parameters<Engine['turn']['start']>[0])
+  await $.turn.complete({ answer: 'done', durationMs: 1, isAborted: false, turnId: 'flight-2', reason: 'answer' } as Parameters<Engine['turn']['complete']>[0])
+  await clock.settle()
+  expect(prompts).toEqual([])
+  expect((await person($, 'poll')).text).toContain('MI7  MISSION-CONTROL  question: Which branch should MC-136 build on?')
+})
+
 test('a stored poll is migrated at session start: an undelivered or held answer is open again and put to Flight, none dropped', async ($, on) => {
   portfolio(on)
   const written: { path: string; text: string }[] = []

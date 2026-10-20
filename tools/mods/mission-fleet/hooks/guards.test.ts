@@ -479,8 +479,9 @@ test('the fleet approves its own spawn only of a Controller under a reserved con
 })
 
 test('app console ops that message or start an agent are relayed through Flight; answers are no longer console ops', () => {
-  for (const a of ['staff acme', 'call ACME hi', 'dismiss ACME', 'stand-down ACME']) expect(isRelayedVerb(a)).toBe(true)
-  for (const a of ['list', 'poll', 'loops ACME', 'retune ACME haiku', 'dismiss-gate MI8', 'done MI9', 'go MI8', 'decide MI7 2', 'retry MI8', '']) expect(isRelayedVerb(a)).toBe(false)
+  // A Done tells the Controller, so it is a message and runs through Flight too.
+  for (const a of ['staff acme', 'call ACME hi', 'dismiss ACME', 'stand-down ACME', 'done MI9']) expect(isRelayedVerb(a)).toBe(true)
+  for (const a of ['list', 'poll', 'loops ACME', 'retune ACME haiku', 'dismiss-gate MI8', 'go MI8', 'decide MI7 2', 'retry MI8', '']) expect(isRelayedVerb(a)).toBe(false)
 })
 
 test('a relay code is split off the end of the args, and only a well-formed one', () => {

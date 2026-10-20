@@ -73,8 +73,9 @@ session starts it and a supervisor restarts it when the server dies.
   `/console staff`, `/console call`, dismissal or stand-down typed in the app
   reaches Flight as a prompt in the founder's name with a one-time code (one
   try, those exact arguments, 10 minutes, lost on a plugin reload), which
-  Flight runs with the console tool once its current turn ends. Checking off a
-  to-do, dismissing an item, retuning and stopping the app run at once. The
+  Flight runs with the console tool once its current turn ends. Done on a to-do is
+  relayed the same way, since it tells the Controller; dismissing an item,
+  retuning and stopping the app run at once. The
   fleet skill (`.claude/skills/fleet/SKILL.md`) has the details.
 - **Photos.** A photo attached in the app is stored under `_command/fleet/uploads`
   so the session can read it. Photos are pruned after 7 days, and the folder
