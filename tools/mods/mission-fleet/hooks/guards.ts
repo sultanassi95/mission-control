@@ -1058,8 +1058,11 @@ export function isShellLikeTool(tool: string): boolean {
 /** Why an Atlassian execute call is refused: reads pass, writes only by name, destructive operations never. */
 function atlassianRefusal(tool: string, input: unknown): string | undefined {
   const kind = ATLASSIAN_EXECUTE.exec(tool)?.[2]?.toLowerCase()
-  if (!kind || kind === 'executeread') return undefined
-  const name = String((input as { name?: unknown } | undefined)?.name ?? '')
+  if (!kind) return undefined
+  const raw = (input as { name?: unknown } | undefined)?.name
+  const name = typeof raw === 'string' ? raw : ''
+  // The operation runs by its name whichever execute tool carries it, so a read is judged by its name too.
+  if (kind === 'executeread') return /^(get|list|search|lookup|fetch)[A-Z]/.test(name) ? undefined : `${name || 'An unnamed operation'} is not a read (get, list, search, lookup or fetch), so executeRead does not carry it.`
   if (kind === 'executedestructive') return `${name || 'This operation'} is a destructive Jira or Confluence operation, which is the founder's; raise it as a to-do.`
   return ATLASSIAN_WRITES.has(name) ? undefined : `A fleet agent's Atlassian writes through executeWrite are only ${[...ATLASSIAN_WRITES].join(', ')} (an issue link); ${name || 'an unnamed operation'} is not one. Use the Jira tools for issues and comments, or raise it as a to-do.`
 }

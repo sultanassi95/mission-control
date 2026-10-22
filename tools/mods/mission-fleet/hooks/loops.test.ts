@@ -318,7 +318,10 @@ test('a to-do with the same words and links as an open one is not new, however i
     'merge `annotation-studio` #225 (https://github.com/o/annotation-studio/pull/225)',
     'Merge annotation-studio #226 https://github.com/o/annotation-studio/pull/226',
     'Merge annotation-studio #225 once CI is green https://github.com/o/annotation-studio/pull/225',
-  ])).toEqual([false, false, false, true, true])
+    'Merge annotation-studio #225 **https://github.com/o/annotation-studio/pull/225**',
+    'Merge annotation-studio #225 `https://github.com/o/annotation-studio/pull/225`',
+    'Merge annotation-studio #225 "https://github.com/o/annotation-studio/pull/225".',
+  ])).toEqual([false, false, false, true, true, false, false, false])
   // A tracker key is a link: the same words with another issue key are a different to-do.
   expect(newTodos(['Link VEN-263 to VEN-209'], ['Link VEN-263 to VEN-209.', 'Link VEN-267 to VEN-211'])).toEqual([false, true])
 })

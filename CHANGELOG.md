@@ -12,7 +12,8 @@ changes should never reach you silently.
   that repeats an open one from the same Controller, by its words and links,
   is not opened again. Fleet agents may link Jira issues through the
   Atlassian `executeWrite` tool (`createJiraIssueLink` only) and read through
-  `executeRead`; destructive Atlassian operations stay refused. The Controller
+  `executeRead` (operations named get, list, search, lookup or fetch);
+  destructive Atlassian operations stay refused. The Controller
   brief now says: do it yourself when you can, and raise a to-do or question
   only for a founder's decision or a step you cannot take or cannot undo.
 

@@ -1233,6 +1233,11 @@ test('an Atlassian issue link and read pass; every other Atlassian write and any
   expect(toolRefusal('controller', W, link, [])).toBeUndefined()
   expect(toolRefusal('controller', 'mcp__claude_ai_Atlassian_Rovo__executeWrite', link, [])).toBeUndefined()
   expect(toolRefusal('controller', 'mcp__plugin_atlassian_atlassian__executeRead', { name: 'listJiraIssueLinkTypes', cloudId: 'c1', inputs: {} }, [])).toBeUndefined()
+  // A write or delete named through the read tool is judged by its name, not the tool that carries it.
+  for (const name of ['createJiraIssueLink', 'deleteJiraIssue', 'editJiraIssue', 'createJiraIssueRemoteIssueLink']) {
+    expect(`${name} -> ${toolRefusal('controller', 'mcp__plugin_atlassian_atlassian__executeRead', { name, cloudId: 'c1', inputs: {} }, []) ?? 'admitted'}`).toContain('is not a read')
+  }
+  expect(toolRefusal('controller', 'mcp__plugin_atlassian_atlassian__executeWrite', { name: ['createJiraIssueLink'], cloudId: 'c1', inputs: {} }, [])).toContain('only createJiraIssueLink')
   // A web link cannot be removed by any operation, and no other write is on the list.
   expect(toolRefusal('controller', W, { name: 'createJiraIssueRemoteIssueLink', cloudId: 'c1', inputs: {} }, [])).toContain('only createJiraIssueLink')
   expect(toolRefusal('controller', W, { name: 'createJiraIssueLinkX', cloudId: 'c1', inputs: {} }, [])).toContain('only createJiraIssueLink')

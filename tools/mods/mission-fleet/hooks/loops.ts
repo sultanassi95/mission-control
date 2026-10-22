@@ -57,7 +57,7 @@ const URL_IN_TEXT = /https?:\/\/[^\s)>\]]+/g
  * and the same words once markdown marks, quotes, brackets and trailing punctuation are set aside.
  */
 export function todoKey(text: string): string {
-  const urls = (text.match(URL_IN_TEXT) ?? []).map(u => u.replace(/[.,;:!?]+$/, ''))
+  const urls = (text.match(URL_IN_TEXT) ?? []).map(u => u.replace(/[.,;:!?*_`~"'\u2018\u2019\u201c\u201d]+$/, ''))
   const refs = text.match(/\b[A-Z][A-Z0-9]+-\d+\b|#\d+\b/g) ?? []
   const words = text
     .replace(URL_IN_TEXT, ' ')
