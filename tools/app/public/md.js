@@ -96,7 +96,8 @@
             while (open.length > 1 && indent <= open[open.length - 2].indent) open.pop()
             let list = open[open.length - 1]
             const parent = list.items[list.items.length - 1]
-            if (indent > list.indent && parent) {
+            // Two spaces or more nests; a one-space slip stays in the list.
+            if (indent >= list.indent + 2 && parent) {
               list = { indent, items: [] }
               parent.lists.push(list)
               open.push(list)

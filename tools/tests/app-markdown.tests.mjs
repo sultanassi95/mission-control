@@ -74,3 +74,10 @@ test('a numbered list that starts past 1 keeps its start, at the top and nested'
 test('list text is escaped before it is marked up, nested or not', () => {
   assert.equal(md('- <b>x</b>\n  - <script>y</script>'), '<ul><li>&lt;b&gt;x&lt;/b&gt;<ul><li>&lt;script&gt;y&lt;/script&gt;</li></ul></li></ul>')
 })
+
+test('a one-space slip is not a nested list; a 0 or ) marker keeps its start; a paragraph after a nested list is a paragraph', () => {
+  assert.equal(md('1. a\n 2. b'), '<ol><li>a</li><li>b</li></ol>')
+  assert.equal(md('0. z\n1. y'), '<ol start="0"><li>z</li><li>y</li></ol>')
+  assert.equal(md('3) c\n4) d'), '<ol start="3"><li>c</li><li>d</li></ol>')
+  assert.equal(md('- a\n  - b\nAfter.'), '<ul><li>a<ul><li>b</li></ul></li></ul><p>After.</p>')
+})
