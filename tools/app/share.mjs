@@ -9,7 +9,7 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
-import { readShares, shareable, writeShares } from './files.mjs'
+import { canonical, readShares, shareable, writeShares } from './files.mjs'
 
 // The portfolio root: the nearest folder up from here holding the instance folder.
 function portfolioRoot(start) {
@@ -50,9 +50,11 @@ if (first === '--list') {
 
 if (first === '--revoke') {
   if (!second) fail('Usage: /share --revoke <path>')
-  const target = shareable(second).real ?? second
+  // Matched by the path as the disk spells it, so a file that is gone, or named in another case or
+  // through a symlinked folder, is still found.
+  const target = canonical(second)
   const kept = files.filter(f => f.path !== target && f.path !== second)
-  if (kept.length === files.length) fail(`${second} was not shared.`)
+  if (kept.length === files.length) fail(`${second} is not on the share list. Shared now:\n${files.map(f => `  ${f.path}`).join('\n') || '  nothing'}`)
   writeShares(listFile, kept)
   process.stdout.write(`No longer shared: ${second}\n`)
   process.exit(0)

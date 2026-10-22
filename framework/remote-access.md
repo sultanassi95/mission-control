@@ -86,7 +86,11 @@ session starts it and a supervisor restarts it when the server dies.
   `/share --list` shows what is shared and `/share --revoke <path>` stops it.
   The list holds each file's real path and lives in the instance's own state
   beside the app's state file, never in the repository; the fleet guard
-  refuses the share script to every Controller and back-room agent. A path in
+  refuses the share script to every Controller and back-room agent (a check
+  on the command's text, so a speed bump rather than a lock: an agent running
+  as the same Mac user could change the list another way, and what it shared
+  would still open only for the owner). The instance's own state and the
+  app's home are never shared. A path in
   a message or card links to the viewer (`view.html`, a new tab, so the
   console keeps its place) only when that file is shared; any other path
   stays plain text. Markdown renders as in the chat, text and images show in

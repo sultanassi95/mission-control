@@ -226,3 +226,44 @@ test('a ticket is issued only to the owner, from the app\'s own origin, for a sh
   assert.equal((await ticketFor(join(DIR, 'unshared.md'))).status, 404)
   assert.equal((await ticketFor(join(OUTSIDE, 'secret.txt'))).status, 404)
 })
+
+// ---- Spellings, revoking a file that is gone, and the instance's own state (MC-172 review 3) ----
+
+test('one file is one entry whatever its letter case, and revoking it in any case stops it', async () => {
+  const path = join(DIR, 'Case.md')
+  writeFileSync(path, '# case')
+  assert.equal(share(path).status, 0)
+  assert.equal(share(join(DIR, 'case.md')).status, 0)
+  assert.equal(JSON.parse(readFileSync(LIST, 'utf8')).files.filter(f => f.path.toLowerCase().endsWith('/case.md')).length, 1)
+  assert.equal(share('--revoke', join(DIR, 'CASE.MD')).status, 0)
+  assert.equal((await get(path)).status, 404)
+})
+
+test('a shared file that was deleted is revoked by any spelling of its old path, and a miss lists what is shared', async () => {
+  const path = join(DIR, 'gone.md')
+  writeFileSync(path, '# gone')
+  assert.equal(share(path).status, 0)
+  unlinkSync(path)
+  // The scratch folder is reached through /var, a symlink to /private/var on this Mac.
+  const other = path.startsWith('/private/') ? path.slice('/private'.length) : path
+  const r = share('--revoke', other)
+  assert.equal(r.status, 0, r.out)
+  assert.ok(!JSON.parse(readFileSync(LIST, 'utf8')).files.some(f => f.path.endsWith('/gone.md')))
+  writeFileSync(path, '# back, not shared')
+  assert.equal((await get(path)).status, 404)
+  const miss = share('--revoke', join(DIR, 'never-shared.md'))
+  assert.notEqual(miss.status, 0)
+  assert.match(miss.out, /Shared now:[\s\S]*report\.md/)
+})
+
+test('the instance\'s own state, the share list included, is never shared', () => {
+  const state = join(ROOT, '_command', 'fleet')
+  mkdirSync(state, { recursive: true })
+  writeFileSync(join(state, 'app-state.json'), '{}')
+  writeFileSync(join(state, 'notes.md'), '# fleet notes')
+  for (const f of ['app-state.json', 'notes.md']) {
+    const r = share(join(state, f))
+    assert.notEqual(r.status, 0, `${f}: ${r.out}`)
+    assert.match(r.out, /instance's own state/)
+  }
+})

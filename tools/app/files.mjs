@@ -3,7 +3,7 @@
 // list (written by share.mjs, the /share skill), by its real path, and it is still that regular file
 // now. The name and folder rules below are a second layer: a credential is refused even if listed.
 import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, renameSync, statSync, writeFileSync } from 'node:fs'
-import { basename, dirname, extname, isAbsolute } from 'node:path'
+import { basename, dirname, extname, isAbsolute, join } from 'node:path'
 
 export const FILE_LIMIT = 25 * 1024 * 1024
 // Every file is sandboxed: no script runs and it never shares the app's origin, an HTML report included.
@@ -33,12 +33,34 @@ const SECRET_WORD = /key|secret|token|credential|passw|private/i
 // Folders never served from: a repository's own, dependency trees, and folders that keep credentials.
 const SKIP_DIRS = /^(\.git|node_modules|\.?secrets?|\.aws|\.ssh|\.gnupg|\.config|gcloud|launch|credentials)$/i
 
+// The app's own home folder (its token and profile registry).
+const APP_HOME_DIR = /^[.]mission-control$/i
+
 /** Why a real path may never be shown, or '' when it may: a credential's name or folder (case-blind, as the Mac's disk is). */
 function credentialReason(real) {
   const name = basename(real)
-  if (real.split('/').slice(0, -1).some(part => SKIP_DIRS.test(part))) return 'it is inside a folder that keeps credentials or a repository'
+  const parts = real.split('/').slice(0, -1)
+  // The instance's own state (the share list, the app's state, its uploads) and the app's home are never shown.
+  if (parts.some((part, i) => (part.toLowerCase() === '_command' && parts[i + 1]?.toLowerCase() === 'fleet') || APP_HOME_DIR.test(part))) return "it is the instance's own state"
+  if (parts.some(part => SKIP_DIRS.test(part))) return 'it is inside a folder that keeps credentials or a repository'
   if (SECRET.some(re => re.test(name)) || (DATA.has(extname(name).toLowerCase()) && SECRET_WORD.test(name))) return 'its name says it may hold a credential'
   return ''
+}
+
+/**
+ * A path as the disk spells it, symlinks resolved and letter case the disk's own; for a path that no
+ * longer exists, its folder resolved and its name kept (so a gone file can still be revoked by name).
+ */
+export function canonical(path) {
+  try {
+    return realpathSync.native(path)
+  } catch {
+    try {
+      return join(realpathSync.native(dirname(path)), basename(path))
+    } catch {
+      return path
+    }
+  }
 }
 
 /** The share list: the real paths of the shared files, from the list file (none when it is missing or unreadable). */
@@ -62,7 +84,7 @@ export function resolveFile(requested, shares) {
   if (!path || !isAbsolute(path) || path.includes('\0') || path.split('/').includes('..')) return { status: 404 }
   let real
   try {
-    real = realpathSync(path)
+    real = realpathSync.native(path)
   } catch {
     return { status: 404 }
   }
@@ -85,17 +107,19 @@ export function shareable(path) {
   if (!isAbsolute(path)) return { reason: 'give the file\'s absolute path' }
   if (path.split('/').includes('..')) return { reason: 'a path with .. is not shared; give the file\'s own path' }
   let real
+  let st
   try {
     if (lstatSync(path).isSymbolicLink()) return { reason: 'that is a symlink; share the file it points to' }
-    real = realpathSync(path)
+    real = realpathSync.native(path)
+    st = statSync(real)
   } catch {
     return { reason: 'that is not a file on this Mac' }
   }
-  if (!statSync(real).isFile()) return { reason: 'that is not a file (a folder is never shared)' }
+  if (!st.isFile()) return { reason: 'that is not a file (a folder is never shared)' }
   const why = credentialReason(real)
   if (why) return { reason: `${why} (credential rule)` }
   if (!FILE_TYPES[extname(real).toLowerCase()]) return { reason: `the app does not show ${extname(real) || 'files without an extension'}` }
-  if (statSync(real).size > FILE_LIMIT) return { reason: 'that file is over 25 MB' }
+  if (st.size > FILE_LIMIT) return { reason: 'that file is over 25 MB' }
   return { real }
 }
 
