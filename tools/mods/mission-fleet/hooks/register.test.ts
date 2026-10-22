@@ -1056,6 +1056,86 @@ test('the guard admits a folder beside a Controller\'s repo only when its .git f
   }
 })
 
+// ---- Quieter to-dos (MC-170) ----
+
+test('a to-do that repeats an open one from the same Controller is not opened again; once that one is done, it is new', async ($, on) => {
+  portfolio(on)
+  turnCore(on)
+  const clock = mock.clock(on, { now: Date.parse(ASKED_AT) })
+  const audit = auditLines(on)
+  const polls = pollWrites(on)
+  seed(on, { poll: [TODO], consoles: [MC] })
+  on('session.send', () => ({ isDelivered: true }))
+  const report = (todos: string[]) => ['state: waiting', 'shipped: nothing', 'blocked on you: the to-dos below', 'next: wait', 'for you to do:', ...todos.map(t => `- ${t}`)].join('\n')
+  await reportEnds($, clock, 'a1', report(['**Close** PR #31: https://github.com/o/r/pull/31.', 'Hand-test the release', 'Hand-test the release.']))
+  const open = (polls.at(-1) ?? []).filter(p => p.state === 'open' && p.kind === 'todo')
+  expect(open.map(p => p.title)).toEqual(['Close PR #31 https://github.com/o/r/pull/31', 'Hand-test the release'])
+  expect(audit.filter(l => l.includes('\ttodo\t'))).toHaveLength(1)
+  // Checked off, the same to-do reported again is a new one.
+  expect((await person($, 'done MI9')).text).toContain('MI9 done')
+  await reportEnds($, clock, 'a1', report(['Close PR #31 https://github.com/o/r/pull/31 ']))
+  const again = (polls.at(-1) ?? []).filter(p => p.state === 'open' && p.kind === 'todo')
+  expect(again.map(p => p.title)).toEqual(['Hand-test the release', 'Close PR #31 https://github.com/o/r/pull/31'])
+  expect(again.at(-1)?.id).not.toBe('MI9')
+})
+
+test('the app\'s Dismiss closes a to-do and tells no one; its Done goes through Flight and tells the Controller', async ($, on) => {
+  portfolio(on)
+  const clock = mock.clock(on, { now: Date.parse(ASKED_AT) })
+  const audit = auditLines(on)
+  const polls = pollWrites(on)
+  const TODO2: PollItem = { ...TODO, id: 'MI10', title: 'Hand-test the release' }
+  seed(on, { poll: [TODO, TODO2], consoles: [MC] })
+  const sent: { to: string; text: string }[] = []
+  on('session.send', (_$, e) => {
+    sent.push({ to: JSON.stringify(e.to), text: e.text })
+    return { isDelivered: true }
+  })
+  const prompts: string[] = []
+  on('prompt.submit', (_$, e) => {
+    prompts.push(e.text)
+    return { text: e.text }
+  })
+  on('store.get', (_$, e) => ({ value: e.key === 'appAlways' ? false : undefined }))
+  on('store.set', () => ({ value: undefined }))
+  on('agent.list', () => ({ value: [] }))
+  on('process.run', () => ({ value: { exitCode: 0, stdout: '/p/tools/mods/mission-fleet\n', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+  on('http.fetch', () => ({ value: { status: 204, ok: true, headers: {}, text: '' } }))
+  // The app server as the plugin starts it: ready, then the two ops exactly as its /op route prints them
+  // for the card's Dismiss and Done buttons (tools/tests/app-todo-dismiss.tests.mjs posts them for real).
+  let end: () => void = () => undefined
+  const ended = new Promise<void>(resolve => (end = resolve))
+  on('process.spawn', async function* () {
+    yield { stream: 'stdout' as const, text: '{"type":"ready","port":4999,"profile":"demo"}\n' }
+    yield { stream: 'stdout' as const, text: `${JSON.stringify({ type: 'op', id: 1, op: 'console', text: 'dismiss-gate MI9', at: ASKED_AT })}\n` }
+    yield { stream: 'stdout' as const, text: `${JSON.stringify({ type: 'op', id: 2, op: 'console', text: 'done MI10', at: ASKED_AT })}\n` }
+    await ended
+    return { value: { code: 0, signal: null } }
+  })
+  try {
+    expect((await person($, 'app')).text).toContain('Mission Control App')
+    await clock.settle()
+    // Dismiss: closed, nothing sent to anyone, nothing put to Flight.
+    expect(polls.at(-1)?.find(p => p.id === 'MI9')?.state).toBe('dismissed')
+    expect(audit.join('\n')).toContain('\tdismissed\tMI9\tclosed with no answer')
+    expect(prompts.filter(t => t.includes('MI9'))).toEqual([])
+    // Done: put to Flight with a one-time code; Flight's call of the console tool tells the Controller.
+    const relay = prompts.find(t => t.includes('done MI10'))
+    const code = /--code ([0-9a-f]{32})/.exec(relay ?? '')?.[1]
+    expect(code).toBeDefined()
+    expect(sent).toEqual([])
+    const ran = await $.tool.call({ tool: 'mcp__mission-fleet__console', args: `done MI10 --code ${code}` } as Parameters<Engine['tool']['call']>[0])
+    expect(JSON.stringify(ran)).toContain('MI10 done; MISSION-CONTROL was told.')
+    expect(sent).toHaveLength(1)
+    expect(sent[0]?.text).toBe('The founder checked off your to-do MI10: Hand-test the release')
+    expect(audit.join('\n')).toContain('\tdone\tMI10\tMISSION-CONTROL told: Hand-test the release')
+  } finally {
+    end()
+    await person($, 'app stop')
+    await clock.advance(10_000)
+  }
+})
+
 // ---- Controller workflows, read by the parser and capped by the guard (MC-166) ----
 // Last in the file: an admitted run stays in the plugin's memory for the rest of the session.
 
