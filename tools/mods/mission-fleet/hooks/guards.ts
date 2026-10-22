@@ -1045,9 +1045,23 @@ export function shellRefusal(role: Role, command: string, protectedBranches: str
   return undefined
 }
 
+/** The Atlassian connector's execute tools, which run a named Jira or Confluence operation, not a shell. */
+const ATLASSIAN_EXECUTE = /^mcp__(plugin_atlassian_atlassian|claude_ai_Atlassian_Rovo|claude_ai_Atlassian|atlassian)__(executeRead|executeWrite|executeDestructive)$/
+/** Atlassian writes a fleet agent makes itself: reversible tracker writes, by exact operation name. */
+const ATLASSIAN_WRITES = new Set(['createJiraIssueLink'])
+
 /** MCP tools that run shell commands are refused for fleet roles: the guard reads Bash only. */
 export function isShellLikeTool(tool: string): boolean {
-  return tool.startsWith('mcp__') && /(shell|exec|terminal|run_?command|run_?code|bash)/i.test(tool)
+  return tool.startsWith('mcp__') && !ATLASSIAN_EXECUTE.test(tool) && /(shell|exec|terminal|run_?command|run_?code|bash)/i.test(tool)
+}
+
+/** Why an Atlassian execute call is refused: reads pass, writes only by name, destructive operations never. */
+function atlassianRefusal(tool: string, input: unknown): string | undefined {
+  const kind = ATLASSIAN_EXECUTE.exec(tool)?.[2]?.toLowerCase()
+  if (!kind || kind === 'executeread') return undefined
+  const name = String((input as { name?: unknown } | undefined)?.name ?? '')
+  if (kind === 'executedestructive') return `${name || 'This operation'} is a destructive Jira or Confluence operation, which is the founder's; raise it as a to-do.`
+  return ATLASSIAN_WRITES.has(name) ? undefined : `A fleet agent's Atlassian writes through executeWrite are only ${[...ATLASSIAN_WRITES].join(', ')} (an issue link); ${name || 'an unnamed operation'} is not one. Use the Jira tools for issues and comments, or raise it as a to-do.`
 }
 
 /**
@@ -1063,6 +1077,8 @@ export function toolRefusal(role: Role, tool: string, input: unknown, protectedB
     if (checked.refusal) return checked.refusal
   }
   if (isShellLikeTool(tool)) return `${tool} runs shell commands the fleet guard cannot read; use Bash.`
+  const atlassian = atlassianRefusal(tool, input)
+  if (atlassian) return atlassian
   const args = (input ?? {}) as Record<string, unknown>
   if (typeof args.command === 'string') {
     const why = shellRefusal(role, args.command, protectedBranches, scopeDir, clone, start, worktrees)
