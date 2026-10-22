@@ -6,7 +6,14 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
-- 2026-10-22 (latest): fewer, quieter to-dos (MC-170). The app's to-do card
+- 2026-10-22 (latest): a nested list in a message renders nested (MC-171). An
+  item indented two spaces or more past the item above it opens a list of its
+  own type inside that item, to any depth, and the outer numbering carries on
+  after it; a numbered list starting past 1 keeps its start. Before, every
+  indented item became a sibling, so a report's sub-items were numbered as
+  main items.
+
+- 2026-10-22: fewer, quieter to-dos (MC-170). The app's to-do card
   gains Dismiss beside Done: it closes the to-do and sends nothing to the
   Controller (`/console dismiss-gate`), while Done still tells it. A to-do
   that repeats an open one from the same Controller, by its words and links,
