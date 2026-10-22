@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import type { PollItem } from '../types'
-import { advisoryText, answerWord, ASK_AGAIN, ASK_BATCH, askPrompt, asSlots, decisionText, dependentsOf, GO_NOGO, isAsked, isNothing, liveSeat, matchAnswers, MAX_DECISIONS, MAX_OPTIONS, MAX_TODOS, migratePoll, nextAsks, optionsOf, parseDecision, parseReport, parseStatus, placeSlots, plainReason, pollId, prSignature, prsIn, SLOT_COUNT } from './loops'
+import { advisoryText, answerWord, ASK_AGAIN, ASK_BATCH, askPrompt, asSlots, decisionText, dependentsOf, GO_NOGO, isAsked, isNothing, liveSeat, matchAnswers, MAX_DECISIONS, MAX_OPTIONS, MAX_TODOS, migratePoll, newTodos, nextAsks, optionsOf, parseDecision, parseReport, parseStatus, placeSlots, plainReason, pollId, prSignature, prsIn, SLOT_COUNT } from './loops'
 import type { StoredPollItem } from './loops'
 
 // The refusal MI1's GO met on 2026-10-16, in part: written for the model, not for the founder.
@@ -306,4 +306,27 @@ test('answers are matched to the questions they answer, by id in the header, els
   // The founder's own words are choice 0, kept as the note; an empty answer matches nothing.
   expect(matchAnswers(items, [qs[0]!], { [qs[0]!.question]: 'neither, wait for the merge' }).map(m => `${m.choice} ${m.note}`)).toEqual(['0 neither, wait for the merge'])
   expect(matchAnswers(items, [qs[0]!], { [qs[0]!.question]: '  ' })).toEqual([])
+})
+
+// ---- To-dos that repeat an open one (MC-170) ----
+
+test('a to-do with the same words and links as an open one is not new, however it is marked up; a different link or wording is', () => {
+  const open = ['Merge annotation-studio #225 https://github.com/o/annotation-studio/pull/225']
+  expect(newTodos(open, [
+    'Merge annotation-studio #225 https://github.com/o/annotation-studio/pull/225',
+    '**Merge** annotation-studio #225: https://github.com/o/annotation-studio/pull/225.',
+    'merge `annotation-studio` #225 (https://github.com/o/annotation-studio/pull/225)',
+    'Merge annotation-studio #226 https://github.com/o/annotation-studio/pull/226',
+    'Merge annotation-studio #225 once CI is green https://github.com/o/annotation-studio/pull/225',
+    'Merge annotation-studio #225 **https://github.com/o/annotation-studio/pull/225**',
+    'Merge annotation-studio #225 `https://github.com/o/annotation-studio/pull/225`',
+    'Merge annotation-studio #225 "https://github.com/o/annotation-studio/pull/225".',
+  ])).toEqual([false, false, false, true, true, false, false, false])
+  // A tracker key is a link: the same words with another issue key are a different to-do.
+  expect(newTodos(['Link VEN-263 to VEN-209'], ['Link VEN-263 to VEN-209.', 'Link VEN-267 to VEN-211'])).toEqual([false, true])
+})
+
+test('a to-do repeated inside one report opens once; with nothing open, the first of each opens', () => {
+  expect(newTodos([], ['Hand-test the release', 'Hand-test the release.', 'Close PR #31'])).toEqual([true, false, true])
+  expect(newTodos([], [])).toEqual([])
 })

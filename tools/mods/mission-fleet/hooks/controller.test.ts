@@ -20,6 +20,16 @@ test('the controller prompt asks each decision as its own question with options,
   expect(CONTROLLER_PROMPT).toContain('You cannot ask the founder directly')
 })
 
+test('the controller prompt has a Controller do what it can and ask only for what it cannot (MC-170)', () => {
+  expect(CONTROLLER_PROMPT).toContain('Do it yourself when you can, screenshots and hand-tests a browser can run included')
+  for (const kind of ['a decision that is the founder\'s', 'a step you cannot take', 'cannot undo', 'a merge', 'a production write', 'a message to a third party']) expect(CONTROLLER_PROMPT).toContain(kind)
+  expect(CONTROLLER_PROMPT).toContain('Never repeat an open to-do')
+  // A changed to-do opens beside the old one, so the brief names the old one for the founder to dismiss.
+  expect(CONTROLLER_PROMPT).toContain('say under notes: which open to-do it replaces')
+  expect(CONTROLLER_PROMPT).not.toContain('a merge to a deploying base')
+  expect(CONTROLLER_PROMPT).toContain('dismissed, nothing is sent')
+})
+
 const ORDER = {
   front: 'fieldkit', project: 'api', callSign: 'FIELDKIT-API', root: '/p',
   hub: '/p/_command/portfolio/fieldkit/_front.md', spokes: ['/p/_command/portfolio/fieldkit/api/api.md'],

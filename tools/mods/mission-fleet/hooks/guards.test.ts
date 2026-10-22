@@ -1224,3 +1224,27 @@ test('workflow: every name the script reads is its own or on the allowlist; a fu
   // Its own declarations, parameters, catch bindings, loop bindings and labels are read freely.
   expect(WF("const files = args.files ?? []\nlet n = 0\nfor (const f of files) n += f.length\ntry { JSON.parse('{}') } catch (err) { log(String(err)) }\nouter: for (const a of [1]) { break outer }\nconst { a, b: [c] } = { a: 1, b: [2] }\nlog(Math.max(n, a, c))")).toBeUndefined()
 })
+
+// ---- Jira through the Atlassian execute tools (MC-170) ----
+
+test('an Atlassian issue link and read pass; every other Atlassian write and any destructive operation is refused', () => {
+  const W = 'mcp__plugin_atlassian_atlassian__executeWrite'
+  const link = { name: 'createJiraIssueLink', cloudId: 'c1', inputs: { linkType: 'Relates', inwardIssue: 'VEN-263', outwardIssue: 'VEN-209' } }
+  expect(toolRefusal('controller', W, link, [])).toBeUndefined()
+  expect(toolRefusal('controller', 'mcp__claude_ai_Atlassian_Rovo__executeWrite', link, [])).toBeUndefined()
+  expect(toolRefusal('controller', 'mcp__plugin_atlassian_atlassian__executeRead', { name: 'listJiraIssueLinkTypes', cloudId: 'c1', inputs: {} }, [])).toBeUndefined()
+  // A write or delete named through the read tool is judged by its name, not the tool that carries it.
+  for (const name of ['createJiraIssueLink', 'deleteJiraIssue', 'editJiraIssue', 'createJiraIssueRemoteIssueLink']) {
+    expect(`${name} -> ${toolRefusal('controller', 'mcp__plugin_atlassian_atlassian__executeRead', { name, cloudId: 'c1', inputs: {} }, []) ?? 'admitted'}`).toContain('is not a read')
+  }
+  expect(toolRefusal('controller', 'mcp__plugin_atlassian_atlassian__executeWrite', { name: ['createJiraIssueLink'], cloudId: 'c1', inputs: {} }, [])).toContain('only createJiraIssueLink')
+  // A web link cannot be removed by any operation, and no other write is on the list.
+  expect(toolRefusal('controller', W, { name: 'createJiraIssueRemoteIssueLink', cloudId: 'c1', inputs: {} }, [])).toContain('only createJiraIssueLink')
+  expect(toolRefusal('controller', W, { name: 'createJiraIssueLinkX', cloudId: 'c1', inputs: {} }, [])).toContain('only createJiraIssueLink')
+  expect(toolRefusal('controller', W, { cloudId: 'c1', inputs: {} }, [])).toContain('only createJiraIssueLink')
+  const destructive = toolRefusal('controller', 'mcp__plugin_atlassian_atlassian__executeDestructive', { name: 'deleteJiraIssueLink', cloudId: 'c1', inputs: {} }, [])
+  expect(destructive).toContain('destructive')
+  // The shell rule still holds for every other server's exec tools.
+  expect(toolRefusal('controller', 'mcp__plugin_serena_serena__execute_shell_command', { command: 'ls' }, [])).toContain('use Bash')
+  expect(toolRefusal('controller', 'mcp__atlassian_shell__run_command', { command: 'ls' }, [])).toContain('use Bash')
+})

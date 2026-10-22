@@ -197,9 +197,9 @@
     return h
   }
 
-  // An action only the founder can take, with its link; Done checks it off and tells the Controller.
+  // An action only the founder can take, with its link; Done checks it off and tells the Controller, Dismiss closes it and tells no one.
   function todoCard(p) {
-    return `<article class="gate todo">${meta(p, p.at)}<h2>${linked(p.title)}</h2><div class="btnrow one"><button class="go secondary" type="button" data-a="tododone" data-v="${esc(p.id)}">Done<span class="visually-hidden"> (${esc(p.id)})</span></button></div>${report(p)}</article>`
+    return `<article class="gate todo">${meta(p, p.at)}<h2>${linked(p.title)}</h2><div class="btnrow two"><button class="ghost" type="button" data-a="tododismiss" data-v="${esc(p.id)}">Dismiss<span class="visually-hidden"> (${esc(p.id)})</span></button><button class="go secondary" type="button" data-a="tododone" data-v="${esc(p.id)}">Done<span class="visually-hidden"> (${esc(p.id)})</span></button></div>${report(p)}</article>`
   }
 
   function viewLoops() {
@@ -492,6 +492,7 @@
       case 'sdyes': await send('console', `stand-down ${S.sel}`); S.sheet = null; break
       case 'dismiss': await send('console', `dismiss ${S.sel}`); S.sheet = null; break
       case 'tododone': await send('console', `done ${v}`); break
+      case 'tododismiss': await send('console', `dismiss-gate ${v}`); break
       case 'filter': S.filter = v; break
       case 'expand': S.open.has(v) ? S.open.delete(v) : S.open.add(v); break
       case 'stopask': S.sheet = 'stop'; break

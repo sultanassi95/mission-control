@@ -99,7 +99,12 @@ block, a `notes:` line and a `for you to do:` block:
   whose items do not parse changes nothing, so a malformed block never
   withdraws the open questions.
 - Each `for you to do:` line opens a to-do, checked off with
-  `/console done <id>` or the app's Done, which tells the Controller.
+  `/console done <id>` or the app's Done, which tells the Controller, or
+  closed with the app's Dismiss (`/console dismiss-gate <id>`), which tells
+  no one. A to-do with the same words and links as one still open from the
+  same Controller (markdown, quotes and trailing punctuation aside) is not
+  opened again, nor is one repeated inside a report; after the open one is
+  closed, the same to-do is new.
 - `notes:` opens nothing, nor do `nothing`, `none` or `nothing new`.
 - A report from a Controller staffed before this format, with a
   `blocked on you:` line and no `decisions:`, `for you to do:` or `notes:`
@@ -128,9 +133,10 @@ block, a `notes:` line and a `for you to do:` block:
 - **Questions while Flight works.** The app's Flight tab lists the questions
   Flight has not asked yet ("Flight asks them here when its turn ends"), and
   `/console poll` lists every open one.
-- **To-dos.** Each is a card in the app's Flight tab with its links live, and
+- **To-dos.** Each is a card in the app's Flight tab with its links live.
   Done checks it off and tells the Controller that left it (`/console done
-  <id>` at the Mac). It survives an app reload: the fleet sends it with every
+  <id>` at the Mac); Dismiss closes it and tells no one (`/console
+  dismiss-gate <id>`), and runs at once, not through Flight. It survives an app reload: the fleet sends it with every
   state push.
 - **Stored before this change.** At session start the fleet reads its stored
   items once: an answer that never reached its Controller, or waited for the
@@ -176,6 +182,7 @@ A Controller runs what the skills run in its own repo, from the repo itself or a
 
 - **gh**: `pr create`, `view`, `list`, `checks`, `diff`, `status`, `comment`, `edit` and `ready`; `issue` but `delete` and `transfer`; `run list`, `view`, `watch` and `rerun`. gh reads the repo from the pinned directory, so a write verb names its PR or issue by number or branch, never by URL.
 - **gh api**: reads (GET) anywhere; writes only to the pinned repo, spelled `repos/{owner}/{repo}/...`, and only to its PR, issue, comment and CI-rerun endpoints (`pulls/N`, `issues/N/comments`, `actions/runs/N/rerun` and the like). Refused by name: `-X DELETE`, a merge endpoint, `graphql`, `--hostname`, a method-override header and clustered short options.
+- **Jira through the Atlassian execute tools**: `executeRead` passes for an operation named as a read (get, list, search, lookup, fetch), `executeWrite` passes only for `createJiraIssueLink` (an issue link), and `executeDestructive` is refused; a web link (`createJiraIssueRemoteIssueLink`) stays refused, since nothing removes one. Other MCP tools named for a shell or exec are refused as before.
 - **Kept refused**: pushes to a base or deploy branch, force pushes, remote branch deletion, `--mirror` and `--all`, `gh pr merge`, stash, `gh auth switch` (it changes the account every session on this Mac uses), `gh issue develop` (it creates a branch under any name, in any repo), the app's token and ports, starting another `claude`, and the Workflow tool unless the founder turns Controller workflows on.
 - **Controller workflows** (off by default; `/console workflows on|off`, typed by the founder): with them on, a Controller (never its back room) may run an inline Workflow script. The guard parses it with a JavaScript parser and admits it only when every `agent()` is a direct call with a literal `model` and `effort`, nothing reaches the global object, a constructor or `eval`, no saved workflow, script file or resumed run is named, and the number of agents the code can start (counted from top-level calls, `[..].map(...)`, `parallel([..])` and `pipeline([..], ...)`; a loop counts as unbounded) fits the room left in the back-room budget. Each agent the run starts is capped by that count and recorded as the Controller's back room, so the guard holds it to back-room rules. While a run is recent, an agent the fleet cannot place is refused shell and write tools.
 - **Known gap**: `gh run rerun` takes any run id, and a rerun of an old deploy run deploys its original commit again. Deploy environments need required reviewers on the server side.

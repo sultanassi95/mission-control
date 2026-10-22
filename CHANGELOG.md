@@ -6,7 +6,18 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
-- 2026-10-21 (latest): a Controller may run a Workflow script the guard can read, once
+- 2026-10-22 (latest): fewer, quieter to-dos (MC-170). The app's to-do card
+  gains Dismiss beside Done: it closes the to-do and sends nothing to the
+  Controller (`/console dismiss-gate`), while Done still tells it. A to-do
+  that repeats an open one from the same Controller, by its words and links,
+  is not opened again. Fleet agents may link Jira issues through the
+  Atlassian `executeWrite` tool (`createJiraIssueLink` only) and read through
+  `executeRead` (operations named get, list, search, lookup or fetch);
+  destructive Atlassian operations stay refused. The Controller
+  brief now says: do it yourself when you can, and raise a to-do or question
+  only for a founder's decision or a step you cannot take or cannot undo.
+
+- 2026-10-21: a Controller may run a Workflow script the guard can read, once
   the founder turns it on (MC-166). `/console workflows on|off` is the founder's
   switch, off by default. With it on, the guard parses a Controller's inline script
   with a vendored JavaScript parser (acorn 8.14.0, MIT) and admits it only when every
