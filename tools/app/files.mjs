@@ -18,18 +18,20 @@ export const FILE_TYPES = {
   '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml',
   '.pdf': 'application/pdf',
 }
-// A name that holds or may hold a credential: a word key, secret, token, credential, password or
-// private (as a word between separators, so "keyboard" or "secretary" pass), a service account, a
-// dotenv file, a key or certificate file, Terraform variables or state, or a tool's auth file.
+// A name that holds or may hold a credential, whatever the file: a dotenv file, a key or certificate
+// file, Terraform variables or state, a tool's auth file, a service account or a Firebase admin key.
 const SECRET = [
-  /(^|[^a-z])(keys?|secrets?|tokens?|credentials?|passwords?|passwd|private)([^a-z]|$)/i,
-  /service[-_]?account/i,
   /^\.env(\..*)?$/i,
   /\.(pem|key|p12|pfx|keystore|jks|tfvars|tfstate)(\.json|\.backup)?$/i,
   /^(id_[a-z0-9]+(\.pub)?|\.netrc|\.npmrc|\.pypirc|\.git-credentials)$/i,
+  /service[-_]?account|adminsdk/i,
 ]
-// Folders never served from: a repository's own, and dependency trees.
-const SKIP_DIRS = new Set(['.git', 'node_modules'])
+// A data file (where credentials live, unlike a report) whose name holds a credential word anywhere,
+// camelCase included: apiKey.json, authtoken.txt, db-password.yml.
+const DATA = new Set(['.json', '.txt', '.yml', '.yaml', '.log', '.csv'])
+const SECRET_WORD = /key|secret|token|credential|passw|private/i
+// Folders never served from: a repository's own, dependency trees, and folders that keep credentials.
+const SKIP_DIRS = /^(\.git|node_modules|\.?secrets?|\.aws|\.ssh|\.gnupg|\.config|gcloud|launch|credentials)$/i
 
 // A path's folders as a slug the way session folders under the temporary root are named (/a/b -> -a-b).
 const slug = path => path.replace(/[^A-Za-z0-9]/g, '-')
@@ -48,7 +50,7 @@ export function fileRoots(env, portfolio, uid, tmpBase = '/private/tmp') {
     const sessions = join(tmpBase, `claude-${uid}`)
     let own = []
     try {
-      own = readdirSync(sessions).filter(name => name.startsWith(slug(portfolio))).map(name => join(sessions, name))
+      own = readdirSync(sessions).filter(name => name === slug(portfolio) || name.startsWith(`${slug(portfolio)}-`)).map(name => join(sessions, name))
     } catch {
       /* no sessions yet */
     }
@@ -77,9 +79,11 @@ export function resolveFile(requested, roots) {
   } catch {
     return { status: 404 }
   }
-  if (!roots.some(r => real.startsWith(`${r}/`))) return { status: 404 }
-  // Folder names compare without case: the Mac's disk does not tell .git from .GIT.
-  if (real.split('/').some(part => SKIP_DIRS.has(part.toLowerCase())) || SECRET.some(re => re.test(basename(real)))) return { status: 404 }
+  const root = roots.find(r => real.startsWith(`${r}/`))
+  if (!root) return { status: 404 }
+  // The folders below the root are judged, without case: the Mac's disk does not tell .git from .GIT.
+  const name = basename(real)
+  if (real.slice(root.length + 1).split('/').slice(0, -1).some(part => SKIP_DIRS.test(part)) || SECRET.some(re => re.test(name)) || (DATA.has(extname(name).toLowerCase()) && SECRET_WORD.test(name))) return { status: 404 }
   let st
   try {
     st = statSync(real)

@@ -91,10 +91,12 @@ session starts it and a supervisor restarts it when the server dies.
   folders of this portfolio's own sessions under the temporary root,
   `_command/portfolio` and `fronts`, or the absolute paths in
   `MCAPP_FILE_ROOTS` (joined by `:`) when that is set. A `..` in the path, a
-  folder, anything inside a `.git` or `node_modules` folder, and any name that
-  may hold a credential (a word key, secret, token, credential, password or
-  private; a service account; `.env`; key, certificate and Terraform variable
-  or state files) is a 404. Every file is sent with a locking-down
+  folder, anything inside a `.git`, `node_modules`, `secrets`, `.aws`, `.ssh`,
+  `.gnupg`, `.config`, `gcloud`, `launch` or `credentials` folder, a data file
+  (`.json`, `.txt`, `.yml`, `.yaml`, `.log`, `.csv`) whose name holds key,
+  secret, token, credential, passw or private anywhere, and a service account,
+  Firebase admin key, `.env`, key, certificate or Terraform variable or state
+  file is a 404; a report named for a key finding still opens. Every file is sent with a locking-down
   Content-Security-Policy (sandboxed, so an HTML report runs no script and
   never shares the app's origin; a PDF without the sandbox flag, which some
   PDF viewers refuse), `Cross-Origin-Resource-Policy: same-origin` and

@@ -199,3 +199,14 @@ test('every file response, HEAD included, refuses other sites and referrers; a P
   assert.match(pdf, /default-src 'none'/)
   assert.doesNotMatch(pdf, /sandbox/)
 })
+
+test('a data file whose name holds a credential word in any form, or any file in a secrets folder, is a 404; a report named for a key finding is shown', async () => {
+  const dir = join(ROOT, 'tasks', 'MC-3')
+  for (const sub of ['secrets', '.aws', 'launch', 'gcloud']) mkdirSync(join(dir, sub), { recursive: true })
+  const refused = ['apiKey.json', 'accessToken.json', 'authtoken.txt', 'shop-firebase-adminsdk-x1y2-abc123.json', 'secrets/prod.json', '.aws/notes.txt', 'launch/staging.md', 'gcloud/adc.json']
+  for (const f of refused) writeFileSync(join(dir, f), '{}')
+  const shown = ['key-findings.md', 'token-spend-report.md', 'private-beta-plan.md', 'password-reset-flow.md']
+  for (const f of shown) writeFileSync(join(dir, f), '# report')
+  for (const f of refused) assert.equal(`${f} -> ${(await get(join(dir, f))).status}`, `${f} -> 404`)
+  for (const f of shown) assert.equal(`${f} -> ${(await get(join(dir, f))).status}`, `${f} -> 200`)
+})
