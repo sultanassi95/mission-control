@@ -1,17 +1,20 @@
 // A path to a file on this Mac, written in any message or card, becomes a link to the file viewer
 // (view.html) once the server says it can show that file. The link opens in a new tab, so the
 // console keeps its place. Paths are found in text after the app renders; nothing here changes
-// what the app sends.
+// what the app sends. Which folders count is the server's (/files.json); this only asks.
 ;(() => {
   let token = ''
   try {
     token = localStorage.getItem('mcapp-token') ?? ''
   } catch {}
   const headers = token ? { 'x-mcapp-token': token } : {}
-  // An absolute path on this Mac, or one relative to the portfolio, up to whitespace or a quote.
-  const PATH = /(?:\/(?:Users|private|tmp)\/|(?:_command\/portfolio|fronts)\/)[^\s<>"'`|]+/g
+  // An absolute path, or one relative to the portfolio, standing on its own (not the tail of a URL or
+  // a longer path), up to whitespace or a quote.
+  const PATH = /(?<![\w.:/~-])(?:\/|_command\/portfolio\/|fronts\/)[^\s<>"'`|]+/g
   const HAS_PATH = new RegExp(PATH.source)
   const TRAIL = /[.,;:!?)\]]+$/
+  // A refusal or a failure is asked again after this long: a report named before it is written links once it exists.
+  const RECHECK = 30_000
   let config = null
   const shown = new Map()
 
@@ -19,25 +22,27 @@
     if (config) return config
     try {
       const r = await fetch('/files.json', { headers })
-      config = r.ok ? await r.json() : { roots: [] }
-    } catch {
-      config = null
-      return { roots: [] }
-    }
-    return config
+      if (r.ok) config = await r.json()
+    } catch {}
+    return config ?? { roots: [] }
   }
 
-  // The absolute path a written path names, or '' when it falls outside every root.
+  // The absolute path a written path names, or '' when it falls outside every root the server named.
   function absolute(written, cfg) {
     const path = written.startsWith('/') ? written : cfg.portfolio ? `${cfg.portfolio}/${written}` : ''
     const plain = path.startsWith('/tmp/') ? `/private${path}` : path
     return cfg.roots.some(r => plain.startsWith(`${r}/`)) ? plain : ''
   }
 
-  // Whether the server shows this file: one HEAD per path, remembered.
+  // Whether the server shows this file: one HEAD per path, a yes kept, a no asked again later.
   function canShow(path) {
-    if (!shown.has(path)) shown.set(path, fetch(`/file?path=${encodeURIComponent(path)}`, { method: 'HEAD', headers }).then(r => r.ok, () => false))
-    return shown.get(path)
+    const known = shown.get(path)
+    if (known && (known.yes || Date.now() - known.at < RECHECK)) return known.answer
+    const answer = fetch(`/file?path=${encodeURIComponent(path)}`, { method: 'HEAD', headers }).then(r => r.ok, () => false)
+    const entry = { at: Date.now(), yes: false, answer }
+    answer.then(ok => (entry.yes = ok))
+    shown.set(path, entry)
+    return answer
   }
 
   function linkFor(text, path) {
@@ -60,7 +65,7 @@
     for (let n = walker.nextNode(); n; n = walker.nextNode()) nodes.push(n)
     for (const node of nodes) {
       const found = [...node.data.matchAll(PATH)].map(m => {
-        const text = m[0].replace(TRAIL, '')
+        const text = m[0].slice(0, 2000).replace(TRAIL, '')
         return { at: m.index, text, path: absolute(text, cfg) }
       }).filter(f => f.path)
       const ok = await Promise.all(found.map(f => canShow(f.path)))
@@ -91,6 +96,7 @@
   if (main) {
     new MutationObserver(() => schedule(main)).observe(main, { childList: true, subtree: true, characterData: true })
     schedule(main)
+    // A file named before it was written links once it exists, without waiting for the next render.
+    setInterval(() => schedule(main), RECHECK)
   }
-  window.mcFiles = { absolute, PATH }
 })()

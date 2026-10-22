@@ -84,14 +84,21 @@ session starts it and a supervisor restarts it when the server dies.
   (a report, research, a screenshot) becomes a link once the server says it can
   show that file; it opens in a new tab (`view.html`), so the console keeps its
   place. Markdown renders as in the chat, text and images show in the viewer,
-  and a PDF or HTML report opens as itself. The server shows a file read-only,
-  and only when its real path (symlinks resolved) is under an allowed root:
-  this user's session scratchpads, `_command/portfolio` and `fronts`, or the
-  absolute paths in `MCAPP_FILE_ROOTS` (joined by `:`) when that is set. A `..`
-  in the path, a folder, a credential's name (`.env`, keys, `credentials`) or
-  anything in a repository's own `.git` folder is a 404. Every file is sent
-  with a sandboxing Content-Security-Policy, so an HTML report runs no script
-  and never shares the app's origin. The roots are the control: a confidential
+  and a PDF or HTML report opens as itself through a single-use ticket the
+  server issues for that one file (it works once, within a minute), so no URL
+  ever carries the app's token. The server shows a file read-only, and only
+  when its real path (symlinks resolved) is under an allowed root: the session
+  folders of this portfolio's own sessions under the temporary root,
+  `_command/portfolio` and `fronts`, or the absolute paths in
+  `MCAPP_FILE_ROOTS` (joined by `:`) when that is set. A `..` in the path, a
+  folder, anything inside a `.git` or `node_modules` folder, and any name that
+  may hold a credential (a word key, secret, token, credential, password or
+  private; a service account; `.env`; key, certificate and Terraform variable
+  or state files) is a 404. Every file is sent with a locking-down
+  Content-Security-Policy (sandboxed, so an HTML report runs no script and
+  never shares the app's origin; a PDF without the sandbox flag, which some
+  PDF viewers refuse), `Cross-Origin-Resource-Policy: same-origin` and
+  `Referrer-Policy: no-referrer`. The roots are the control: a confidential
   front's files under `fronts` are readable from the phone by the owner.
 
 ## One-time setup

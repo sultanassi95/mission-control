@@ -23,7 +23,7 @@ import { timingSafeEqual, randomBytes } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { execFile } from 'node:child_process'
 import { FILE_MAX, TOO_LARGE, FILE_ROUTE, SERVED, classify, prune } from './uploads.mjs'
-import { FILE_POLICY, fileRoots, resolveFile } from './files.mjs'
+import { fileRoots, resolveFile } from './files.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const PUBLIC = join(here, 'public')
@@ -301,8 +301,10 @@ function handler(port) {
     }
 
     // The page and its scripts carry no secrets and are public; every data endpoint needs the token.
-    const isData = url.pathname === '/op' || url.pathname === '/events' || url.pathname === '/state.json' || url.pathname === '/flights.json' || url.pathname === '/upload' || url.pathname.startsWith('/upload/') || url.pathname === '/file' || url.pathname === '/files.json' || url.pathname.startsWith('/p/')
+    const isData = url.pathname === '/op' || url.pathname === '/events' || url.pathname === '/state.json' || url.pathname === '/flights.json' || url.pathname === '/upload' || url.pathname.startsWith('/upload/') || url.pathname === '/file' || url.pathname === '/file-ticket' || url.pathname === '/files.json' || url.pathname.startsWith('/p/')
     if (req.method === 'GET' && !isData) return serveStatic(res, url.pathname).then(() => undefined, () => send(res, 500, 'error'))
+    // A file opened as itself (a PDF, an HTML report) comes with a single-use ticket instead of the token, so no URL carries the token.
+    if (url.pathname === '/file' && url.searchParams.has('ticket') && req.method === 'GET') return serveTicket(res, url.searchParams.get('ticket'))
     if (!authorised(req, url)) return send(res, 401, 'token required: open the URL /console app printed')
 
     if (req.method === 'POST') {
@@ -323,7 +325,7 @@ function handler(port) {
     if (routed) {
       const [, profile, rest] = routed
       // A file is on this Mac whichever profile asks for it, so any server answers it itself.
-      if (profile !== PROFILE && rest !== '/file' && rest !== '/files.json') {
+      if (profile !== PROFILE && rest !== '/file' && rest !== '/file-ticket' && rest !== '/files.json') {
         // Only the three data routes cross to another profile, and only by GET or POST.
         if (!FORWARDED.has(rest) && !FILE_ROUTE.test(rest)) return send(res, 404, 'not found')
         if (req.method !== 'GET' && req.method !== 'POST') return send(res, 405, 'method not allowed')
@@ -335,6 +337,7 @@ function handler(port) {
     }
 
     if (req.method === 'POST' && path === '/upload') return receiveUpload(req, res)
+    if (req.method === 'POST' && path === '/file-ticket') return issueTicket(req, res)
     if (req.method === 'POST') {
       if (path !== '/op') return send(res, 404, 'not found')
       let op
@@ -391,12 +394,44 @@ function handler(port) {
 async function serveFile(req, res, requested) {
   const got = resolveFile(requested, roots())
   if (!got.file) return send(res, got.status, got.status === 415 ? 'not a file the app shows' : got.status === 413 ? 'that file is too large to show' : 'not found')
-  const headers = { 'Content-Type': got.type, 'Content-Length': String(got.size), 'Content-Security-Policy': FILE_POLICY }
-  if (req.method === 'HEAD') {
-    res.writeHead(200, { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'X-Frame-Options': 'DENY', ...headers })
-    return res.end()
+  // The length is the bytes read, so a file still being written is never sent short or long.
+  const body = await readFile(got.file)
+  return send(res, 200, req.method === 'HEAD' ? '' : body, fileHeaders(got, body.length))
+}
+
+// What every file response carries besides send()'s own: its type and length, its lock-down policy,
+// and a resource policy so no other site can load it, even from the owner's own tailnet device.
+const fileHeaders = (got, length) => ({ 'Content-Type': got.type, 'Content-Length': String(length), 'Content-Security-Policy': got.policy, 'Cross-Origin-Resource-Policy': 'same-origin' })
+
+// Single-use tickets for opening one file as itself, by ticket: the file's path and when it was issued.
+const tickets = new Map()
+const TICKET_TTL = 60_000
+
+async function issueTicket(req, res) {
+  let path
+  try {
+    path = JSON.parse(await readBody(req, 8 * 1024))?.path
+  } catch {
+    return send(res, 400, 'bad json')
   }
-  return send(res, 200, await readFile(got.file), headers)
+  const got = resolveFile(path, roots())
+  if (!got.file) return send(res, got.status, 'not found')
+  const now = Date.now()
+  for (const [k, t] of tickets) if (now - t.at > TICKET_TTL) tickets.delete(k)
+  const ticket = randomBytes(16).toString('hex')
+  tickets.set(ticket, { path: got.file, at: now })
+  return send(res, 200, JSON.stringify({ ticket }), { 'Content-Type': 'application/json' })
+}
+
+// A ticket opens its one file once, within a minute; the file is checked against the roots again.
+async function serveTicket(res, ticket) {
+  const t = tickets.get(String(ticket))
+  tickets.delete(String(ticket))
+  if (!t || Date.now() - t.at > TICKET_TTL) return send(res, 404, 'that link has been used or has expired; open the file again from the app')
+  const got = resolveFile(t.path, roots())
+  if (!got.file) return send(res, got.status, 'not found')
+  const body = await readFile(got.file)
+  return send(res, 200, body, fileHeaders(got, body.length))
 }
 
 // Stores one file from the app. Its type comes from its own bytes (uploads.mjs, classify); a text

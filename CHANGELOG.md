@@ -10,10 +10,11 @@ changes should never reach you silently.
   (MC-172). A path in a message or card to a file under an allowed root (the
   session scratchpads, `_command/portfolio`, `fronts`, or `MCAPP_FILE_ROOTS`)
   becomes a link that opens a viewer in a new tab: Markdown renders, text and
-  images show, a PDF or HTML report opens as itself, sandboxed. The new
-  `/file` route is read-only and needs the same token or tailnet owner as
-  every data route; anything outside the roots, a `..`, a folder or a
-  credential's name is a 404.
+  images show, a PDF or HTML report opens as itself through a single-use
+  ticket, so no URL carries the app's token. The new `/file` route is
+  read-only and needs the same token or tailnet owner as every data route;
+  anything outside the roots, a `..`, a folder, a `.git` or `node_modules`
+  folder or a name that may hold a credential is a 404.
 
 - 2026-10-22: a nested list in a message renders nested (MC-171). An
   item indented two spaces or more past the item above it opens a list of its
