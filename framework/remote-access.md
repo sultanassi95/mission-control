@@ -26,7 +26,7 @@ flowchart LR
 ## How a request is let in
 
 A data request to the app (`/op`, `/events`, `/state.json`, `/flights.json`,
-uploads, `/p/*`) is accepted on either of two proofs:
+uploads, `/file`, `/files.json`, `/p/*`) is accepted on either of two proofs:
 
 - **Tailnet sign-in.** A request that arrives through `tailscale serve` on this
   Mac's own tailnet name carries the viewer's Tailscale login, and `serve` sets
@@ -80,6 +80,19 @@ session starts it and a supervisor restarts it when the server dies.
 - **Photos.** A photo attached in the app is stored under `_command/fleet/uploads`
   so the session can read it. Photos are pruned after 7 days, and the folder
   never holds more than 200 photos or 256 MB (oldest first).
+- **Files on the Mac.** A path in a message or card to a file a session wrote
+  (a report, research, a screenshot) becomes a link once the server says it can
+  show that file; it opens in a new tab (`view.html`), so the console keeps its
+  place. Markdown renders as in the chat, text and images show in the viewer,
+  and a PDF or HTML report opens as itself. The server shows a file read-only,
+  and only when its real path (symlinks resolved) is under an allowed root:
+  this user's session scratchpads, `_command/portfolio` and `fronts`, or the
+  absolute paths in `MCAPP_FILE_ROOTS` (joined by `:`) when that is set. A `..`
+  in the path, a folder, a credential's name (`.env`, keys, `credentials`) or
+  anything in a repository's own `.git` folder is a 404. Every file is sent
+  with a sandboxing Content-Security-Policy, so an HTML report runs no script
+  and never shares the app's origin. The roots are the control: a confidential
+  front's files under `fronts` are readable from the phone by the owner.
 
 ## One-time setup
 
