@@ -940,6 +940,8 @@ function isClone(rest: Word[]): boolean {
  */
 export function shellRefusal(role: Role, command: string, protectedBranches: string[], scopeDir?: string, clone?: CloneScope, start?: string, worktrees?: readonly string[]): string | undefined {
   if (APP_HOME.test(command)) return APP_HOME_REFUSAL
+  // The share list opens a file to the phone; adding to it is the founder's or Flight's (/share).
+  if (/\bshare\.mjs\b/.test(command)) return 'Sharing a file with the phone is the founder\'s or Flight\'s (/share <path>); put the file under "for you to do:" if it should be shared.'
   if (/_command\/fleet\b/.test(normalisePath(command)) || /\.claude[^/\s]*\/projects\b/.test(command)) return 'The fleet folder and Claude session transcripts are Flight\'s: fleet agents do not read them.'
   const parsed = tokenize(command)
   if (parsed.commands.some(s => [...s.words, ...s.redirects].some(w => APP_HOME.test(w.text)))) return APP_HOME_REFUSAL

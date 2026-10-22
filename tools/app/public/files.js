@@ -1,7 +1,7 @@
 // A path to a file on this Mac, written in any message or card, becomes a link to the file viewer
-// (view.html) once the server says it can show that file. The link opens in a new tab, so the
-// console keeps its place. Paths are found in text after the app renders; nothing here changes
-// what the app sends. Which folders count is the server's (/files.json); this only asks.
+// (view.html) only when that file is shared (the /share skill); any other path stays plain text. The
+// link opens in a new tab, so the console keeps its place. Paths are found in text after the app
+// renders; nothing here changes what the app sends. Whether a file is shared is the server's to say.
 ;(() => {
   let token = ''
   try {
@@ -13,7 +13,7 @@
   const PATH = /(?<![\w.:/~-])(?:\/|_command\/portfolio\/|fronts\/)[^\s<>"'`|]+/g
   const HAS_PATH = new RegExp(PATH.source)
   const TRAIL = /[.,;:!?)\]]+$/
-  // A refusal or a failure is asked again after this long: a report named before it is written links once it exists.
+  // A refusal or a failure is asked again after this long: a file shared after it was named links then.
   const RECHECK = 30_000
   let config = null
   const shown = new Map()
@@ -24,17 +24,15 @@
       const r = await fetch('/files.json', { headers })
       if (r.ok) config = await r.json()
     } catch {}
-    return config ?? { roots: [] }
+    return config ?? {}
   }
 
-  // The absolute path a written path names, or '' when it falls outside every root the server named.
+  // The absolute path a written path names: as written, or under the portfolio when relative to it.
   function absolute(written, cfg) {
-    const path = written.startsWith('/') ? written : cfg.portfolio ? `${cfg.portfolio}/${written}` : ''
-    const plain = path.startsWith('/tmp/') ? `/private${path}` : path
-    return cfg.roots.some(r => plain.startsWith(`${r}/`)) ? plain : ''
+    return written.startsWith('/') ? written : cfg.portfolio ? `${cfg.portfolio}/${written}` : ''
   }
 
-  // Whether the server shows this file: one HEAD per path, a yes kept, a no asked again later.
+  // Whether the file is shared: one HEAD per path, a yes kept, a no asked again later (it may be shared since).
   function canShow(path) {
     const known = shown.get(path)
     if (known && (known.yes || Date.now() - known.at < RECHECK)) return known.answer
@@ -57,7 +55,6 @@
 
   async function scan(root) {
     const cfg = await loadConfig()
-    if (!cfg.roots.length) return
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
       acceptNode: n => (n.parentElement?.closest('a, textarea, input, script, style') ? NodeFilter.FILTER_REJECT : HAS_PATH.test(n.data) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP),
     })
@@ -96,7 +93,7 @@
   if (main) {
     new MutationObserver(() => schedule(main)).observe(main, { childList: true, subtree: true, characterData: true })
     schedule(main)
-    // A file named before it was written links once it exists, without waiting for the next render.
+    // A file shared after it was named links then, without waiting for the next render.
     setInterval(() => schedule(main), RECHECK)
   }
 })()

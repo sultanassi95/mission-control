@@ -39,7 +39,7 @@
     if (r.status === 401) return say('This page needs the app open on this device first: open the link /console app printed, then this file again.')
     if (r.status === 415) return say('The app does not show this kind of file.')
     if (r.status === 413) return say('This file is too large to show here.')
-    if (!r.ok) return say('That file is not there, or it is outside the folders the app shows.')
+    if (!r.ok) return say('That file is not shared, or it is not there any more. Share it from the Mac with /share <path>.')
     const type = r.headers.get('content-type') ?? ''
     const shownHere = type.startsWith('text/markdown') || type.startsWith('text/plain') || (type.startsWith('image/') && type !== 'image/svg+xml')
     if (!shownHere) {

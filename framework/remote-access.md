@@ -26,7 +26,7 @@ flowchart LR
 ## How a request is let in
 
 A data request to the app (`/op`, `/events`, `/state.json`, `/flights.json`,
-uploads, `/file`, `/files.json`, `/p/*`) is accepted on either of two proofs:
+uploads, `/file`, `/file-ticket`, `/files.json`, `/p/*`) is accepted on either of two proofs:
 
 - **Tailnet sign-in.** A request that arrives through `tailscale serve` on this
   Mac's own tailnet name carries the viewer's Tailscale login, and `serve` sets
@@ -80,28 +80,32 @@ session starts it and a supervisor restarts it when the server dies.
 - **Photos.** A photo attached in the app is stored under `_command/fleet/uploads`
   so the session can read it. Photos are pruned after 7 days, and the folder
   never holds more than 200 photos or 256 MB (oldest first).
-- **Files on the Mac.** A path in a message or card to a file a session wrote
-  (a report, research, a screenshot) becomes a link once the server says it can
-  show that file; it opens in a new tab (`view.html`), so the console keeps its
-  place. Markdown renders as in the chat, text and images show in the viewer,
-  and a PDF or HTML report opens as itself through a single-use ticket the
-  server issues for that one file (it works once, within a minute), so no URL
-  ever carries the app's token. The server shows a file read-only, and only
-  when its real path (symlinks resolved) is under an allowed root: the session
-  folders of this portfolio's own sessions under the temporary root,
-  `_command/portfolio` and `fronts`, or the absolute paths in
-  `MCAPP_FILE_ROOTS` (joined by `:`) when that is set. A `..` in the path, a
-  folder, anything inside a `.git`, `node_modules`, `secrets`, `.aws`, `.ssh`,
-  `.gnupg`, `.config`, `gcloud`, `launch` or `credentials` folder, a data file
-  (`.json`, `.txt`, `.yml`, `.yaml`, `.log`, `.csv`) whose name holds key,
-  secret, token, credential, passw or private anywhere, and a service account,
+- **Files on the Mac.** Nothing on the Mac is reachable from the phone by
+  default. The founder or Flight shares one file at a time with `/share
+  <path>` (`.claude/skills/share/SKILL.md`), which prints its tailnet link;
+  `/share --list` shows what is shared and `/share --revoke <path>` stops it.
+  The list holds each file's real path and lives in the instance's own state
+  beside the app's state file, never in the repository; the fleet guard
+  refuses the share script to every Controller and back-room agent. A path in
+  a message or card links to the viewer (`view.html`, a new tab, so the
+  console keeps its place) only when that file is shared; any other path
+  stays plain text. Markdown renders as in the chat, text and images show in
+  the viewer, and a PDF or HTML report opens as itself through a single-use
+  ticket the server issues for that one file (it works once, within a
+  minute), so no URL ever carries the app's token. The server shows a shared
+  file read-only, as it is now: one that moved, or whose path now resolves
+  somewhere else (a symlink put in its place), is a 404. A `..` in the path, a
+  folder, a symlink, anything in a `.git`, `node_modules`, `secrets`, `.aws`,
+  `.ssh`, `.gnupg`, `.config`, `gcloud`, `launch` or `credentials` folder, a
+  data file (`.json`, `.txt`, `.yml`, `.yaml`, `.log`, `.csv`) whose name holds
+  key, secret, token, credential, passw or private, and a service account,
   Firebase admin key, `.env`, key, certificate or Terraform variable or state
-  file is a 404; a report named for a key finding still opens. Every file is sent with a locking-down
-  Content-Security-Policy (sandboxed, so an HTML report runs no script and
-  never shares the app's origin; a PDF without the sandbox flag, which some
-  PDF viewers refuse), `Cross-Origin-Resource-Policy: same-origin` and
-  `Referrer-Policy: no-referrer`. The roots are the control: a confidential
-  front's files under `fronts` are readable from the phone by the owner.
+  file is refused when shared and again when requested, even if added to the
+  list by hand. Every file is sent with a locking-down Content-Security-Policy
+  (sandboxed, so an HTML report runs no script and never shares the app's
+  origin; a PDF without the sandbox flag, which some PDF viewers refuse),
+  `Cross-Origin-Resource-Policy: same-origin` and `Referrer-Policy:
+  no-referrer`.
 
 ## One-time setup
 

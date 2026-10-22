@@ -1248,3 +1248,11 @@ test('an Atlassian issue link and read pass; every other Atlassian write and any
   expect(toolRefusal('controller', 'mcp__plugin_serena_serena__execute_shell_command', { command: 'ls' }, [])).toContain('use Bash')
   expect(toolRefusal('controller', 'mcp__atlassian_shell__run_command', { command: 'ls' }, [])).toContain('use Bash')
 })
+
+test('sharing a file with the phone is not a fleet agent\'s: the share script is refused in any spelling (MC-172)', () => {
+  for (const command of ['node tools/app/share.mjs /p/fronts/x/report.md', 'cd /p && node ./tools/app/share.mjs --revoke /p/x.md', 'node /p/tools/app/share.mjs --list']) {
+    expect(`${command} -> ${shellRefusal('controller', command, []) ?? 'allowed'}`).toContain('founder\'s or Flight\'s (/share <path>)')
+    expect(shellRefusal('back room', command, [])).toContain('/share <path>')
+  }
+  expect(shellRefusal('controller', 'cat /p/notes/share.mjsx', []) ?? '').not.toContain('/share <path>')
+})

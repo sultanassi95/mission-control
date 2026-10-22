@@ -21,6 +21,7 @@ export const FLIGHT_ONLY: Record<string, string> = {
   triage: 'routes items across every front and writes the daily pointer',
   standup: 'reports across fronts by default and appends to the daily ledger',
   'product-flow': 'phases 0 to 5 run /new-front; its build epics run on a front\'s Controller through /epic-flow',
+  share: 'opens a file on this Mac to the phone, which is the founder\'s or Flight\'s to do',
 }
 
 /** Refusals the fleet keeps although a skill names the command: a base, a merge, an undo-less or shared-state act. */

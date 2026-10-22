@@ -23,7 +23,7 @@ import { timingSafeEqual, randomBytes } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { execFile } from 'node:child_process'
 import { FILE_MAX, TOO_LARGE, FILE_ROUTE, SERVED, classify, prune } from './uploads.mjs'
-import { fileRoots, resolveFile } from './files.mjs'
+import { readShares, resolveFile } from './files.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const PUBLIC = join(here, 'public')
@@ -87,11 +87,14 @@ const TOKEN = (() => {
 const STATE_FILE = process.env.MCAPP_STATE_FILE ? join(dirname(process.env.MCAPP_STATE_FILE), `app-state-${PROFILE}.json`) : ''
 // Uploads sit inside the portfolio beside the state file, where the session can Read them without a new permission.
 const UPLOADS = process.env.MCAPP_STATE_FILE ? join(dirname(process.env.MCAPP_STATE_FILE), 'uploads') : join(HOME, 'uploads')
-// The portfolio this server's state lives in (its state file sits two folders down, in _command's own folder), for the default file roots.
+// The portfolio this server's state lives in (its state file sits two folders down, in _command's own
+// folder), so a path the page finds relative to the portfolio can be made absolute.
 const stateDir = process.env.MCAPP_STATE_FILE ? dirname(process.env.MCAPP_STATE_FILE) : ''
 const PORTFOLIO = stateDir && basename(dirname(stateDir)) === '_command' ? dirname(dirname(stateDir)) : ''
-// Read on each request, so a root created after start (a new session's scratchpad) is served too.
-const roots = () => fileRoots(process.env, PORTFOLIO, process.getuid?.() ?? 0)
+// The share list (share.mjs, the /share skill writes it beside the state file); read on each request,
+// so a file shared or revoked counts at once. No list, nothing shared.
+const SHARE_FILE = process.env.MCAPP_SHARE_FILE || (stateDir ? join(stateDir, 'shared-files.json') : '')
+const shares = () => readShares(SHARE_FILE)
 mkdirSync(UPLOADS, { recursive: true, mode: 0o700 })
 // Old uploads go, and the folder stays under its caps, oldest first (uploads.mjs); hourly and after each upload.
 prune(UPLOADS)
@@ -365,7 +368,7 @@ function handler(port) {
 
     if (path === '/file' && (req.method === 'GET' || req.method === 'HEAD')) return serveFile(req, res, url.searchParams.get('path'))
     if (req.method !== 'GET') return send(res, 405, 'method not allowed')
-    if (path === '/files.json') return send(res, 200, JSON.stringify({ roots: roots(), ...(PORTFOLIO ? { portfolio: PORTFOLIO } : {}) }), { 'Content-Type': 'application/json' })
+    if (path === '/files.json') return send(res, 200, JSON.stringify(PORTFOLIO ? { portfolio: PORTFOLIO } : {}), { 'Content-Type': 'application/json' })
     if (path === '/events') {
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' })
       res.write(`data: ${JSON.stringify(state)}\n\n`)
@@ -392,7 +395,7 @@ function handler(port) {
 // A file a session wrote on this Mac, read-only, when it lies under an allowed root (files.mjs).
 // Every refusal of a path is the same 404, so a request learns nothing about a path it may not read.
 async function serveFile(req, res, requested) {
-  const got = resolveFile(requested, roots())
+  const got = resolveFile(requested, shares())
   if (!got.file) return send(res, got.status, got.status === 415 ? 'not a file the app shows' : got.status === 413 ? 'that file is too large to show' : 'not found')
   // The length is the bytes read, so a file still being written is never sent short or long.
   const body = await readFile(got.file)
@@ -414,7 +417,7 @@ async function issueTicket(req, res) {
   } catch {
     return send(res, 400, 'bad json')
   }
-  const got = resolveFile(path, roots())
+  const got = resolveFile(path, shares())
   if (!got.file) return send(res, got.status, 'not found')
   const now = Date.now()
   for (const [k, t] of tickets) if (now - t.at > TICKET_TTL) tickets.delete(k)
@@ -428,7 +431,7 @@ async function serveTicket(res, ticket) {
   const t = tickets.get(String(ticket))
   tickets.delete(String(ticket))
   if (!t || Date.now() - t.at > TICKET_TTL) return send(res, 404, 'that link has been used or has expired; open the file again from the app')
-  const got = resolveFile(t.path, roots())
+  const got = resolveFile(t.path, shares())
   if (!got.file) return send(res, got.status, 'not found')
   const body = await readFile(got.file)
   return send(res, 200, body, fileHeaders(got, body.length))
