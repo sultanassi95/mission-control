@@ -10,7 +10,7 @@ const MODEL_LIST = Object.keys(MODEL_IDS).join(', ')
 import { workflowCheck } from './workflow'
 import { fleetSelfApproval, isRelayedVerb, protectedFromSpoke, registersWorktree, RELAY_TTL, splitRelayCode, spendRelayCode, toolRefusal } from './guards'
 import type { RelayCodes } from './guards'
-import { advisoryText, answerWord, askPrompt, asSlots, decisionText, dependentsOf, isAsked, isNothing, liveSeat, matchAnswers, migratePoll, nextAsks, optionsOf, parseReport, parseStatus, placeSlots, plainReason, pollId, prSignature, prsIn } from './loops'
+import { advisoryText, answerWord, askPrompt, asSlots, decisionText, dependentsOf, isAsked, isNothing, liveSeat, matchAnswers, migratePoll, newTodos, nextAsks, optionsOf, parseReport, parseStatus, placeSlots, plainReason, pollId, prSignature, prsIn } from './loops'
 import type { StoredPollItem } from './loops'
 import type { Role as GuardRole } from './guards'
 
@@ -1036,7 +1036,10 @@ async function recordReport($: EngineInterface, agentId: string, answer: string)
       return replacing && replaces(p) ? { ...p, state: 'superseded' as const } : p
     })
     replaced = kept.filter((p, k) => p.state === 'superseded' && list[k]?.state === 'open')
-    fresh = items.filter(i => !kept.some(p => mine(p) && sameAsk(p, i))).map((i, k) => ({ ...i, id: pollId(i.from, first + k) }))
+    // A to-do repeating an open one from this Controller is left out; the open one stays.
+    const todos = items.filter(i => i.kind === 'todo')
+    const isNew = newTodos(kept.filter(p => mine(p) && p.kind === 'todo').map(p => p.title), todos.map(i => i.title))
+    fresh = items.filter(i => (i.kind === 'todo' ? isNew[todos.indexOf(i)] : !kept.some(p => mine(p) && sameAsk(p, i)))).map((i, k) => ({ ...i, id: pollId(i.from, first + k) }))
     return [...kept, ...fresh].slice(-200)
   })
   for (const p of replaced) await log($, 'replaced', p.id, `${c.callSign}: no longer asked`)

@@ -50,6 +50,39 @@ export function pollId(callSign: string, n: number): string {
   return `${callSign.replace(/[^A-Z]/g, '').slice(0, 2) || 'XX'}${n}`
 }
 
+const URL_IN_TEXT = /https?:\/\/[^\s)>\]]+/g
+
+/**
+ * What makes two to-dos the same: the same links (every URL, tracker key and #number in the text)
+ * and the same words once markdown marks, quotes, brackets and trailing punctuation are set aside.
+ */
+export function todoKey(text: string): string {
+  const urls = (text.match(URL_IN_TEXT) ?? []).map(u => u.replace(/[.,;:!?]+$/, ''))
+  const refs = text.match(/\b[A-Z][A-Z0-9]+-\d+\b|#\d+\b/g) ?? []
+  const words = text
+    .replace(URL_IN_TEXT, ' ')
+    .toLowerCase()
+    .replace(/[*_`~"'‘’“”()[\]<>]/g, ' ')
+    .replace(/[.,;:!?]+(?=\s|$)/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return `${words}|${[...new Set([...urls, ...refs])].sort().join(' ')}`
+}
+
+/**
+ * Which of a report's to-dos are new, in order: one matching an open to-do from the same Controller,
+ * or one earlier in the same report, is not.
+ */
+export function newTodos(open: readonly string[], incoming: readonly string[]): boolean[] {
+  const seen = new Set(open.map(todoKey))
+  return incoming.map(t => {
+    const key = todoKey(t)
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 /** Fronts whose dependency map names this scope, from (front, map text) pairs. */
 export function dependentsOf(scope: string, maps: { front: string; text: string }[], own: string): string[] {
   const needle = new RegExp(`\\b${scope.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i')
