@@ -26,6 +26,16 @@
   const isRule = l => /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$/.test(l)
   const cells = l => l.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim())
 
+  const LIST_ITEM = /^(\s*)([-*]|\d+[.)])\s+(.*)$/
+  // Leading spaces, a tab counting as four.
+  const indentOf = l => /^\s*/.exec(l)[0].replace(/\t/g, '    ').length
+  // A list and the lists nested in its items; an ordered list starting past 1 keeps its start.
+  const listHtml = list => {
+    const tag = list.ordered ? 'ol' : 'ul'
+    const start = list.ordered && list.start !== 1 && Number.isFinite(list.start) ? ` start="${list.start}"` : ''
+    return `<${tag}${start}>${list.items.map(it => `<li>${inline(it.text)}${it.lists.map(listHtml).join('')}</li>`).join('')}</${tag}>`
+  }
+
   function render(src) {
     const lines = String(src ?? '').replace(/\r\n?/g, '\n').split('\n')
     const out = []
@@ -74,20 +84,33 @@
         out.push(`<blockquote>${render(body.join('\n'))}</blockquote>`)
         continue
       }
-      // lists (one level; continuation lines join the item)
-      const li = /^\s*([-*]|\d+[.)])\s+(.*)$/.exec(line)
-      if (li) {
-        const ordered = /\d/.test(li[1])
-        const items = []
+      // lists: an item indented deeper than the item above it nests inside that item, as its own list;
+      // continuation lines join the deepest open item
+      if (LIST_ITEM.test(line)) {
+        const top = { indent: indentOf(line), items: [] }
+        const open = [top]
         while (i < lines.length) {
-          const m = /^\s*([-*]|\d+[.)])\s+(.*)$/.exec(lines[i])
-          if (m) items.push(m[2])
-          else if (/^\s{2,}\S/.test(lines[i]) && items.length) items[items.length - 1] += ` ${lines[i].trim()}`
-          else break
+          const m = LIST_ITEM.exec(lines[i])
+          if (m) {
+            const indent = indentOf(lines[i])
+            while (open.length > 1 && indent <= open[open.length - 2].indent) open.pop()
+            let list = open[open.length - 1]
+            const parent = list.items[list.items.length - 1]
+            if (indent > list.indent && parent) {
+              list = { indent, items: [] }
+              parent.lists.push(list)
+              open.push(list)
+            }
+            list.ordered ??= /\d/.test(m[2])
+            list.start ??= list.ordered ? parseInt(m[2], 10) : undefined
+            list.items.push({ text: m[3], lists: [] })
+          } else if (/^\s{2,}\S/.test(lines[i])) {
+            const deepest = open[open.length - 1]
+            deepest.items[deepest.items.length - 1].text += ` ${lines[i].trim()}`
+          } else break
           i++
         }
-        const tag = ordered ? 'ol' : 'ul'
-        out.push(`<${tag}>${items.map(t => `<li>${inline(t)}</li>`).join('')}</${tag}>`)
+        out.push(listHtml(top))
         continue
       }
       // blank
