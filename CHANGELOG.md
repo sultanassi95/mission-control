@@ -6,7 +6,19 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
-- 2026-10-22 (latest): a nested list in a message renders nested (MC-171). An
+- 2026-10-22 (latest): open a file a session wrote on the Mac from the phone
+  (MC-172), one shared file at a time. Nothing is reachable by default: the
+  founder or Flight runs `/share <path>` (the new `share` skill) to share one
+  file and get its tailnet link, `/share --list` and `/share --revoke <path>`.
+  A path in a message or card links to a viewer in a new tab only when that
+  file is shared: Markdown renders, text and images show, a PDF or HTML report
+  opens as itself through a single-use ticket, sandboxed, so no URL carries
+  the app's token. The new `/file` route is read-only and needs the same
+  token or tailnet owner as every data route; a symlink, a moved file and
+  anything that may hold a credential are refused, even if listed by hand.
+  The fleet guard refuses the share script to Controllers and their back room.
+
+- 2026-10-22: a nested list in a message renders nested (MC-171). An
   item indented two spaces or more past the item above it opens a list of its
   own type inside that item, to any depth, and the outer numbering carries on
   after it; a numbered list starting past 1 keeps its start. Before, every

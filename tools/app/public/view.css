@@ -1,0 +1,9 @@
+/* The file viewer (view.html): one file a session wrote on the Mac, read in its own tab. Tokens only. */
+body.viewer { min-height: 100vh; }
+.viewer-top h1 { overflow-wrap: anywhere; }
+.viewer-top .sub { overflow-wrap: anywhere; }
+.viewer-body { padding: var(--s4); max-width: var(--read); margin: 0 auto; outline: none; }
+.viewer-doc { max-width: none; margin: 0; }
+.viewer-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--mono); font-size: var(--t-sm); line-height: var(--lh-sm); }
+.viewer-image { display: block; max-width: 100%; height: auto; border-radius: var(--r-field); }
+.file-link { overflow-wrap: anywhere; }

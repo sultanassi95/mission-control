@@ -23,6 +23,7 @@ import { timingSafeEqual, randomBytes } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { execFile } from 'node:child_process'
 import { FILE_MAX, TOO_LARGE, FILE_ROUTE, SERVED, classify, prune } from './uploads.mjs'
+import { readShares, resolveFile } from './files.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const PUBLIC = join(here, 'public')
@@ -86,6 +87,14 @@ const TOKEN = (() => {
 const STATE_FILE = process.env.MCAPP_STATE_FILE ? join(dirname(process.env.MCAPP_STATE_FILE), `app-state-${PROFILE}.json`) : ''
 // Uploads sit inside the portfolio beside the state file, where the session can Read them without a new permission.
 const UPLOADS = process.env.MCAPP_STATE_FILE ? join(dirname(process.env.MCAPP_STATE_FILE), 'uploads') : join(HOME, 'uploads')
+// The portfolio this server's state lives in (its state file sits two folders down, in _command's own
+// folder), so a path the page finds relative to the portfolio can be made absolute.
+const stateDir = process.env.MCAPP_STATE_FILE ? dirname(process.env.MCAPP_STATE_FILE) : ''
+const PORTFOLIO = stateDir && basename(dirname(stateDir)) === '_command' ? dirname(dirname(stateDir)) : ''
+// The share list (share.mjs, the /share skill writes it beside the state file); read on each request,
+// so a file shared or revoked counts at once. No list, nothing shared.
+const SHARE_FILE = process.env.MCAPP_SHARE_FILE || (stateDir ? join(stateDir, 'shared-files.json') : '')
+const shares = () => readShares(SHARE_FILE)
 mkdirSync(UPLOADS, { recursive: true, mode: 0o700 })
 // Old uploads go, and the folder stays under its caps, oldest first (uploads.mjs); hourly and after each upload.
 prune(UPLOADS)
@@ -295,8 +304,10 @@ function handler(port) {
     }
 
     // The page and its scripts carry no secrets and are public; every data endpoint needs the token.
-    const isData = url.pathname === '/op' || url.pathname === '/events' || url.pathname === '/state.json' || url.pathname === '/flights.json' || url.pathname === '/upload' || url.pathname.startsWith('/upload/') || url.pathname.startsWith('/p/')
+    const isData = url.pathname === '/op' || url.pathname === '/events' || url.pathname === '/state.json' || url.pathname === '/flights.json' || url.pathname === '/upload' || url.pathname.startsWith('/upload/') || url.pathname === '/file' || url.pathname === '/file-ticket' || url.pathname === '/files.json' || url.pathname.startsWith('/p/')
     if (req.method === 'GET' && !isData) return serveStatic(res, url.pathname).then(() => undefined, () => send(res, 500, 'error'))
+    // A file opened as itself (a PDF, an HTML report) comes with a single-use ticket instead of the token, so no URL carries the token.
+    if (url.pathname === '/file' && url.searchParams.has('ticket') && req.method === 'GET') return serveTicket(res, url.searchParams.get('ticket'))
     if (!authorised(req, url)) return send(res, 401, 'token required: open the URL /console app printed')
 
     if (req.method === 'POST') {
@@ -316,7 +327,8 @@ function handler(port) {
     const routed = /^\/p\/([a-z0-9-]+)(\/.*)$/.exec(path)
     if (routed) {
       const [, profile, rest] = routed
-      if (profile !== PROFILE) {
+      // A file is on this Mac whichever profile asks for it, so any server answers it itself.
+      if (profile !== PROFILE && rest !== '/file' && rest !== '/file-ticket' && rest !== '/files.json') {
         // Only the three data routes cross to another profile, and only by GET or POST.
         if (!FORWARDED.has(rest) && !FILE_ROUTE.test(rest)) return send(res, 404, 'not found')
         if (req.method !== 'GET' && req.method !== 'POST') return send(res, 405, 'method not allowed')
@@ -328,6 +340,7 @@ function handler(port) {
     }
 
     if (req.method === 'POST' && path === '/upload') return receiveUpload(req, res)
+    if (req.method === 'POST' && path === '/file-ticket') return issueTicket(req, res)
     if (req.method === 'POST') {
       if (path !== '/op') return send(res, 404, 'not found')
       let op
@@ -353,7 +366,9 @@ function handler(port) {
       return send(res, 202, JSON.stringify({ id }), { 'Content-Type': 'application/json' })
     }
 
+    if (path === '/file' && (req.method === 'GET' || req.method === 'HEAD')) return serveFile(req, res, url.searchParams.get('path'))
     if (req.method !== 'GET') return send(res, 405, 'method not allowed')
+    if (path === '/files.json') return send(res, 200, JSON.stringify(PORTFOLIO ? { portfolio: PORTFOLIO } : {}), { 'Content-Type': 'application/json' })
     if (path === '/events') {
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' })
       res.write(`data: ${JSON.stringify(state)}\n\n`)
@@ -375,6 +390,51 @@ function handler(port) {
     }
     return send(res, 404, 'not found')
   }
+}
+
+// A file a session wrote on this Mac, read-only, when it lies under an allowed root (files.mjs).
+// Every refusal of a path is the same 404, so a request learns nothing about a path it may not read.
+async function serveFile(req, res, requested) {
+  const got = resolveFile(requested, shares())
+  if (!got.file) return send(res, got.status, got.status === 415 ? 'not a file the app shows' : got.status === 413 ? 'that file is too large to show' : 'not found')
+  // The length is the bytes read, so a file still being written is never sent short or long.
+  const body = await readFile(got.file)
+  return send(res, 200, req.method === 'HEAD' ? '' : body, fileHeaders(got, body.length))
+}
+
+// What every file response carries besides send()'s own: its type and length, its lock-down policy,
+// and a resource policy so no other site can load it, even from the owner's own tailnet device.
+const fileHeaders = (got, length) => ({ 'Content-Type': got.type, 'Content-Length': String(length), 'Content-Security-Policy': got.policy, 'Cross-Origin-Resource-Policy': 'same-origin' })
+
+// Single-use tickets for opening one file as itself, by ticket: the file's path and when it was issued.
+const tickets = new Map()
+const TICKET_TTL = 60_000
+
+async function issueTicket(req, res) {
+  let path
+  try {
+    path = JSON.parse(await readBody(req, 8 * 1024))?.path
+  } catch {
+    return send(res, 400, 'bad json')
+  }
+  const got = resolveFile(path, shares())
+  if (!got.file) return send(res, got.status, 'not found')
+  const now = Date.now()
+  for (const [k, t] of tickets) if (now - t.at > TICKET_TTL) tickets.delete(k)
+  const ticket = randomBytes(16).toString('hex')
+  tickets.set(ticket, { path: got.file, at: now })
+  return send(res, 200, JSON.stringify({ ticket }), { 'Content-Type': 'application/json' })
+}
+
+// A ticket opens its one file once, within a minute; the file is checked against the roots again.
+async function serveTicket(res, ticket) {
+  const t = tickets.get(String(ticket))
+  tickets.delete(String(ticket))
+  if (!t || Date.now() - t.at > TICKET_TTL) return send(res, 404, 'that link has been used or has expired; open the file again from the app')
+  const got = resolveFile(t.path, shares())
+  if (!got.file) return send(res, got.status, 'not found')
+  const body = await readFile(got.file)
+  return send(res, 200, body, fileHeaders(got, body.length))
 }
 
 // Stores one file from the app. Its type comes from its own bytes (uploads.mjs, classify); a text
