@@ -1,0 +1,103 @@
+#!/usr/bin/env node
+// The founder's verbs for named terminal sessions: show one in the Mission Control App, stop the
+// app, list the sessions. One app server runs per machine; `app --code <name>` starts it when it is
+// down and prints the session's link. Node standard library only (CommonJS: this file has no extension).
+//
+//   console app --code <name>   print the app link for the named session, starting the app if needed
+//   console app stop            stop the app server
+//   console list                the registered sessions: name, alive, role, folder
+//
+// Env: MCAPP_HOME (default ~/.mission-control) holds sessions/, flights/ and app-token;
+//      MCAPP_PORT (default 4777) is the app's front-door port.
+'use strict'
+const fs = require('node:fs')
+const os = require('node:os')
+const path = require('node:path')
+const crypto = require('node:crypto')
+const { spawn } = require('node:child_process')
+
+const HOME = process.env.MCAPP_HOME || path.join(os.homedir(), '.mission-control')
+const SESSIONS = path.join(HOME, 'sessions')
+const FLIGHTS = path.join(HOME, 'flights')
+const REGISTRY = path.join(FLIGHTS, 'mc.json')
+const PORT = Number(process.env.MCAPP_PORT || 4777)
+const SERVER = path.join(__dirname, 'app', 'server.mjs')
+// The registry reader is shared with the server (an ES module, so imported, not required).
+let lib
+const sessions = () => lib.listSessions(SESSIONS).map(s => ({ name: s.name, cwd: s.cwd, role: s.role, pid: s.pid, alive: s.alive, tmux: s.tmux_pane !== '' }))
+const alive = pid => lib.pidAlive(pid)
+const cleanName = raw => lib.cleanName(raw)
+const USAGE = 'Usage:\n  console app --code <name>   show the named session in the app\n  console app stop            stop the app server\n  console list                list the registered sessions\n'
+
+const die = (msg, code = 1) => {
+  process.stderr.write(`${msg}\n`)
+  process.exit(code)
+}
+const running = () => {
+  try {
+    const e = JSON.parse(fs.readFileSync(REGISTRY, 'utf8'))
+    return Number.isInteger(e.port) && alive(e.pid) ? e : null
+  } catch {
+    return null
+  }
+}
+const sleep = ms => new Promise(r => setTimeout(r, ms))
+
+// The one server: reuse the running one, else start it detached and wait for it to register.
+async function ensureServer() {
+  const have = running()
+  if (have) return have
+  fs.mkdirSync(FLIGHTS, { recursive: true, mode: 0o700 })
+  const log = fs.openSync(path.join(HOME, 'server.log'), 'a', 0o600)
+  const child = spawn(process.execPath, [SERVER], {
+    detached: true,
+    stdio: ['pipe', log, log],
+    env: { ...process.env, MCAPP_PROFILE: 'mc', MCAPP_HOME: HOME, MCAPP_PORT: String(PORT) },
+  })
+  // The token and key travel on the child's stdin, never in its environment.
+  child.stdin.end(JSON.stringify({ token: crypto.randomBytes(24).toString('hex'), key: crypto.randomBytes(24).toString('hex') }))
+  child.unref()
+  for (let i = 0; i < 80; i++) {
+    await sleep(100)
+    const up = running()
+    if (up) return up
+  }
+  die(`the app server did not start; see ${path.join(HOME, 'server.log')}`)
+}
+
+async function app(args) {
+  if (args[0] === 'stop') {
+    const e = running()
+    if (!e) return console.log('The app server is not running.')
+    process.kill(e.pid, 'SIGTERM')
+    return console.log(`The app server is stopped (pid ${e.pid}).`)
+  }
+  const i = args.findIndex(a => a === '--code' || a.startsWith('--code='))
+  const raw = i < 0 ? '' : args[i].includes('=') ? args[i].slice(7) : args[i + 1]
+  const name = cleanName(raw)
+  if (!name || name !== String(raw).toLowerCase()) die(`app needs --code <name> (letters, digits, . _ -); got ${JSON.stringify(raw ?? '')}\n${USAGE}`)
+  if (!sessions().some(s => s.name === name)) die(`no session named ${name}. Start it with: claude -n ${name}   (the hook registers it), or run /console app --code ${name} inside the session.`)
+  const server = await ensureServer()
+  let token = ''
+  try {
+    token = fs.readFileSync(path.join(HOME, 'app-token'), 'utf8').trim()
+  } catch {
+    /* the server writes it at start; without it the link needs a tailnet login */
+  }
+  console.log(`Mission Control App, session ${name}: http://127.0.0.1:${server.port}/s/${name}/${token ? `?t=${token}` : ''}`)
+}
+
+import(path.join(__dirname, 'app', 'sessions.mjs')).then(m => {
+  lib = m
+  main()
+})
+
+function main() {
+const [verb, ...rest] = process.argv.slice(2)
+if (verb === 'app') app(rest).catch(err => die(String(err?.message ?? err)))
+else if (verb === 'list') {
+  const all = sessions()
+  if (!all.length) console.log('No sessions registered. Start one with: claude -n <name>')
+  for (const s of all) console.log(`${s.name}\t${s.alive ? 'alive' : 'dead'}\t${s.role}\t${s.cwd}`)
+} else die(USAGE, verb ? 1 : 0)
+}

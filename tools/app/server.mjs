@@ -24,6 +24,8 @@ import { fileURLToPath } from 'node:url'
 import { execFile } from 'node:child_process'
 import { FILE_MAX, TOO_LARGE, FILE_ROUTE, SERVED, classify, prune } from './uploads.mjs'
 import { readShares, resolveFile } from './files.mjs'
+import { statSync } from 'node:fs'
+import { cleanName, listSessions, messagesFrom, readSession } from './sessions.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const PUBLIC = join(here, 'public')
@@ -56,6 +58,8 @@ if (typeof secrets.token !== 'string' || secrets.token.length < 32 || BRIDGE_KEY
 const PROFILE = (process.env.MCAPP_PROFILE || process.env.CLAUDE_PROFILE || basename(process.env.CLAUDE_CONFIG_DIR ?? '').replace(/^\.?claude-?/, '') || 'work').toLowerCase().replace(/[^a-z0-9-]/g, '') || 'work'
 const HOME = process.env.MCAPP_HOME || join(homedir(), '.mission-control')
 const FLIGHTS = join(HOME, 'flights')
+// Named terminal sessions, one file each, written by tools/hooks/session-register.sh.
+const SESSIONS = join(HOME, 'sessions')
 mkdirSync(FLIGHTS, { recursive: true, mode: 0o700 })
 chmodSync(HOME, 0o700)
 chmodSync(FLIGHTS, 0o700)
@@ -304,7 +308,10 @@ function handler(port) {
     }
 
     // The page and its scripts carry no secrets and are public; every data endpoint needs the token.
-    const isData = url.pathname === '/op' || url.pathname === '/events' || url.pathname === '/state.json' || url.pathname === '/flights.json' || url.pathname === '/upload' || url.pathname.startsWith('/upload/') || url.pathname === '/file' || url.pathname === '/file-ticket' || url.pathname === '/files.json' || url.pathname.startsWith('/p/')
+    const isData = url.pathname === '/sessions.json' || /^\/s\/[^/]+\/(state\.json|events)$/.test(url.pathname) || url.pathname === '/op' || url.pathname === '/events' || url.pathname === '/state.json' || url.pathname === '/flights.json' || url.pathname === '/upload' || url.pathname.startsWith('/upload/') || url.pathname === '/file' || url.pathname === '/file-ticket' || url.pathname === '/files.json' || url.pathname.startsWith('/p/')
+    // /s/<name>/ is one session's page; it carries no secrets, its data routes below need the token.
+    if (req.method === 'GET' && /^\/s\/[^/]+$/.test(url.pathname)) return send(res, 302, '', { Location: `${url.pathname}/` })
+    if (req.method === 'GET' && /^\/s\/[^/]+\/$/.test(url.pathname)) return serveStatic(res, '/session.html').then(() => undefined, () => send(res, 500, 'error'))
     if (req.method === 'GET' && !isData) return serveStatic(res, url.pathname).then(() => undefined, () => send(res, 500, 'error'))
     // A file opened as itself (a PDF, an HTML report) comes with a single-use ticket instead of the token, so no URL carries the token.
     if (url.pathname === '/file' && url.searchParams.has('ticket') && req.method === 'GET') return serveTicket(res, url.searchParams.get('ticket'))
@@ -315,6 +322,19 @@ function handler(port) {
       const expected = [`http://127.0.0.1:${port}`, `http://localhost:${port}`]
       const tailnet = origin && /^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)*\.ts\.net$/.test(origin) && new URL(origin).host === req.headers.host
       if (!origin || (!expected.includes(origin) && !tailnet)) return send(res, 403, 'foreign origin')
+    }
+
+    if (url.pathname === '/sessions.json') {
+      if (req.method !== 'GET') return send(res, 405, 'method not allowed')
+      return send(res, 200, JSON.stringify({ sessions: listSessions(SESSIONS).map(({ name, cwd, role, alive }) => ({ name, cwd, role, alive })) }), { 'Content-Type': 'application/json' })
+    }
+    const sess = /^\/s\/([^/]+)\/(state\.json|events)$/.exec(url.pathname)
+    if (sess) {
+      if (req.method !== 'GET') return send(res, 405, 'method not allowed')
+      const known = sessionState(sess[1])
+      if (!known) return send(res, 404, `no session named ${sess[1].slice(0, 41)}: start it with claude -n <name>, or run /console app --code <name> inside it`)
+      if (sess[2] === 'state.json') return send(res, 200, JSON.stringify(known), { 'Content-Type': 'application/json' })
+      return streamSession(req, res, sess[1])
     }
 
     if (url.pathname === '/flights.json') {
@@ -390,6 +410,62 @@ function handler(port) {
     }
     return send(res, 404, 'not found')
   }
+}
+
+// One session as the app shows it: who it is, whether its process still runs, and its last messages.
+// null when no session of that name is registered.
+const bound = new Set()
+// A transcript is re-read only when its size or mtime changed, so open streams cost a stat per second.
+const msgCache = new Map()
+function cachedMessages(file) {
+  let key = ''
+  try {
+    const st = statSync(file)
+    key = `${st.size}:${st.mtimeMs}`
+  } catch {
+    return []
+  }
+  const hit = msgCache.get(file)
+  if (hit?.key === key) return hit.messages
+  const messages = messagesFrom(file, TOKEN)
+  msgCache.set(file, { key, messages })
+  if (msgCache.size > 64) msgCache.delete(msgCache.keys().next().value)
+  return messages
+}
+function sessionState(name) {
+  const e = readSession(SESSIONS, name)
+  if (!e || cleanName(name) !== name) return null
+  const key = `${e.name} ${e.session_id}`
+  if (!bound.has(key)) {
+    bound.add(key)
+    process.stderr.write(`session bound ${e.name} ${e.session_id}\n`)
+  }
+  return {
+    session: { name: e.name, session_id: e.session_id, cwd: e.cwd, role: e.role, started: e.at, alive: e.alive, tmux: e.tmux_pane !== '' },
+    messages: cachedMessages(e.transcript_path),
+  }
+}
+
+// The session's state as an event stream: sent at once, then again whenever the transcript or the
+// session's liveness changes (checked each second; a transcript is a file, not an event source).
+function streamSession(req, res, name) {
+  res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' })
+  let last = ''
+  const push = () => {
+    const st = sessionState(name)
+    const body = JSON.stringify(st ?? { gone: true })
+    if (body !== last) {
+      last = body
+      res.write(`data: ${body}\n\n`)
+    }
+  }
+  push()
+  const poll = setInterval(push, 1000)
+  const ping = setInterval(() => res.write(': ping\n\n'), 20000)
+  res.on('close', () => {
+    clearInterval(poll)
+    clearInterval(ping)
+  })
 }
 
 // A file a session wrote on this Mac, read-only, when it lies under an allowed root (files.mjs).

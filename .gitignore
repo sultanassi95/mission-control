@@ -15,11 +15,13 @@
 # CI: the leak sweep on every push and pull request
 !/.github/
 
-# .claude ships ONLY its skills (auto-discovered on clone); session-local
-# files (settings.local.json, caches) must never be tracked.
+# .claude ships ONLY its skills (auto-discovered on clone) and the shared
+# hook wiring in settings.json; session-local files (settings.local.json,
+# caches) must never be tracked.
 !/.claude/
 /.claude/*
 !/.claude/skills/
+!/.claude/settings.json
 
 # operator-local; never ships
 tools/leak-sweep.private.txt

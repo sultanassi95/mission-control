@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0A6A70" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111819" media="(prefers-color-scheme: dark)">
+<title>Session - Mission Control</title>
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<script src="/theme.js"></script>
+<link rel="stylesheet" href="/tokens.css">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<div class="app" id="app">
+  <header class="top">
+    <div class="grow">
+      <h1 id="title">Session</h1>
+      <p class="sub" id="link" role="status"><span class="dot" aria-hidden="true"></span><span id="link-text">Connecting…</span></p>
+    </div>
+  </header>
+  <main class="main" id="main" tabindex="-1"></main>
+</div>
+<script src="/md.js"></script>
+<script src="/session.js"></script>
+</body>
+</html>
