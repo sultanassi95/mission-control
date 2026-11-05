@@ -41,15 +41,12 @@ button { cursor: pointer; }
 .slash { border: 1px solid var(--line); background: var(--surface); font-family: var(--mono); font-weight: 700; font-size: var(--t-lg); }
 .send { border: 0; background: var(--accent); color: var(--accent-ink); }
 
-/* Tabs */
 
 /* Chips and cards */
-/* A call sign: a chip in its Controller's colour wherever the app names it (DESIGN.md, Call-sign chip); with no slot, the idle fill. */
 .task { color: var(--ink-soft); font-size: var(--t-sm); line-height: var(--lh-sm); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .meta { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; font-size: var(--t-xs); line-height: var(--lh-xs); color: var(--ink-faint); }
 .section-label { font-size: var(--t-xs); line-height: var(--lh-xs); text-transform: uppercase; letter-spacing: var(--ls-4); color: var(--ink-faint); margin-top: var(--s2); }
 
-/* Cards in Flight: Flight's question, a Controller's to-do */
 .gate { border: 1px solid var(--line); background: var(--raised); border-radius: var(--r-card); padding: var(--s4); display: grid; gap: var(--s2); }
 .gate .kind { font-size: var(--t-xs); line-height: var(--lh-xs); text-transform: uppercase; letter-spacing: var(--ls-3); color: var(--ink-faint); display: flex; gap: var(--s2); flex-wrap: wrap; }
 .gate h2 { margin: 0; font-size: var(--t-md); line-height: var(--lh-md); font-weight: 400; overflow-wrap: anywhere; }

@@ -34,11 +34,9 @@ Step 4 (lessons) and the caps are discipline, never skipped at any tier.
 
 ## Step 1 - Roll up state (per touched front)
 
-When Controllers are staffed (the mission-fleet plugin loaded), read the fleet
-first: `/console list`, then `/console loops <CALL-SIGN>` for each staffed
-console's last status. A front a Controller worked counts as touched, and its
-status (shipped, next, blocked on you) goes into that front's `progress.md`
-below with the rest. Flight writes these files; a Controller never does.
+Read the other named sessions first: `node tools/console list`. A front another
+terminal session worked counts as touched; read that front's `progress.md`
+and the branch log for what it shipped, and fold it in below with the rest.
 
 For each project this session touched, append to its `progress.md`:
 - what moved (with the literal evidence: test counts, gate outputs, PR
@@ -90,8 +88,7 @@ reality today, fix its rows in the same pass.
 
 List, in one short block, everything that now waits on the founder: a PR
 to review, a credential to rotate, a decision to make, a payment gate, and
-every open question and to-do in `/console poll` (with its call sign) when Controllers
-are staffed.
+anything another named session left waiting on the founder.
 These items go at the TOP of `today.md` under a "Founder-gated" heading,
 **each carrying its date**, so they cannot silently rot (`/retro` flags
 any older than two weeks). Scoped debriefs hold their gated items in the

@@ -21,8 +21,8 @@
 checks-green PR; `/epic-flow` plans work bigger than one ticket into a
 founder-locked fragment tree and executes each fragment as a mission-flow
 child; `/product-flow` takes a product from an idea to launch, running each
-epic as an epic-flow run. `/console` staffs a kept-alive Controller per front
-when several fronts run at once. Where a front declares standards via
+epic as an epic-flow run. `/console` shows a named terminal session in the app;
+several fronts running at once are several terminals. Where a front declares standards via
 `/compliance-ref`, the review, verify and PR steps read that profile; fronts
 declaring nothing pay nothing.
 

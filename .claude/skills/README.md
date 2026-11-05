@@ -8,7 +8,7 @@ flowchart LR
     E -.->|one child at a time| W
     PF["/product-flow<br/>idea to launch"] -.->|each epic| E
     DS["/design-new · /design-review<br/>called for UI-shaped work"] -.-> W
-    CN["/console<br/>a Controller per front"] -.->|runs flows in parallel| W
+    CN["/console<br/>shows a named session in the app"] -.-> W
     W --> SU["/standup<br/>paste-ready report"]
     W --> D["/debrief<br/>evening · campsite clean"]
   end
@@ -69,7 +69,7 @@ default):
 | | `retro` | Shipped / live / stuck per front, scoreboard, week-scale lessons, next week locked | Fridays |
 | **Delivery** | `mission-flow` | One ticket to a checks-green PR: the fixed playbook, Phase 0 to 8 (Jira, GitHub Issues, or the native task board) | per work item |
 | | `product-flow` | A product from an idea to launch: frame, research, define, design, architect, then each epic via epic-flow, verify, deploy, beta, launch; five founder gates, at irreversibility, money and the design; `--learn` weeks later | an idea, a vision or a problem to build for |
-| | `fleet` | Flight's fleet, run with `/console`: staff a kept-alive Controller per front or project, call and retune it, keep the poll of the questions and to-dos it leaves you, stand it down; the Mission Control App drives the same. Needs the `mission-fleet` mod loaded | when work runs on several fronts at once |
+| | `console` | Shows a named terminal session in the Mission Control App (`/console app --code <name>`), stops the app, lists the registered sessions (`node tools/console`); from a shell it launches the session in tmux so the phone can type into it | to read or drive a session from the phone |
 | | `share` | Shares one file on this Mac with the Mission Control App so it opens from the phone (`--list`, `--revoke <path>`); nothing is shared by default | to read a report, research or a screenshot on the phone |
 | | `epic-flow` | Work too big for one ticket: gated stages E0-E6 plan it into decoupled fragments behind a founder-locked tree, E7 runs each fragment as a mission-flow child - one squashed commit each - and E8 closes with one epic PR | when the shape is several tickets |
 | | `triage` | Messy inbox to per-project task boards, one table, STOP-gated | when items pile up |
@@ -102,13 +102,10 @@ Want them in ALL your projects, not just this portfolio? Copy the
 folders to `~/.claude/skills/` (and re-copy after doctrine pulls, since
 global copies do not auto-update).
 
-`fleet` is the one exception: the `/console` commands it describes come from
-the `mission-fleet` mod (`tools/mods/mission-fleet`, with the local app in
-`tools/app`), which must be loaded into the session. How to load it, and the
-app, are in `tools/README.md`. Never name a skill `console`, here or in
-`~/.claude/skills/`: the engine gives the name to the skill and refuses the
-mod's command, and a typed `/console` can then load the skill's text instead
-of running.
+`console` runs `node tools/console` (and the app in `tools/app`); the hooks it relies
+on ship in the repository's `.claude/settings.json`. A session started in another
+folder registers only when those hooks are also wired in user settings;
+`tools/README.md` says how.
 
 Invoke as `/<name>` (e.g. `/briefing`). Skills are plain markdown - read
 any `SKILL.md` to see exactly what it will do before you run it. Name

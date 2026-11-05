@@ -6,7 +6,43 @@ changes should never reach you silently.
 
 ## Unreleased (pre-publish)
 
-- 2026-10-22 (latest): open a file a session wrote on the Mac from the phone
+- 2026-11-05 (latest): Mission Control runs without mods (MC-177). Every
+  terminal session is a Flight, told apart by its name (`claude -n <name>`).
+  The mission-fleet and spend-recorder mods, the Controllers, the console
+  fleet's staffing, call, retune, poll and workflow verbs, and the app's
+  per-profile servers are removed. What replaces them is plain Claude Code:
+  `.claude/settings.json` ships the hooks, `tools/hooks/session-register.sh`
+  records each named session, `node tools/console` (`app --code <name>`,
+  `app stop`, `list`) shows a session in the one app server and, from a
+  shell, launches it in tmux so the app can type into it and answer its
+  prompts, `tools/guard/guard.mjs` asks before any push to a base or deploy
+  branch in every session and touches no other git command, and
+  `node tools/spend.mjs` answers `/spend` from the session transcripts. The
+  `fleet` skill is the `console` skill again. The app listens on port 4777
+  itself and shows sessions at `/s/<name>/`.
+
+  Migrating an instance, in this order, because a profile that points at a
+  deleted mod folder must not start:
+  1. End any staffed Controller (its handoff goes to the front's progress
+     file), then `/console app stop`, the last mod verb.
+  2. Remove `CLAUDE_CODE_PLUGIN_DIRS` (and any `--plugin-dir`) from every
+     profile's `settings.json` or shell profile, keeping a backup of each file.
+  3. `git pull upstream main`.
+  4. Sessions started outside this repository's folder only register and ask
+     before a base push when the same hooks are wired in that profile's user
+     settings: add the SessionStart and UserPromptSubmit hook for
+     `tools/hooks/session-register.sh` and the PreToolUse (Bash) hook for
+     `node tools/guard/guard.mjs`, with absolute paths. Hooks you added to
+     `.claude/settings.local.json` for the old guard can go.
+  5. Move `_command/fleet/shared-files.json` to
+     `~/.mission-control/shared-files.json` if you share files with the phone,
+     delete `~/.mission-control/flights/`, and archive `_command/fleet/`.
+  6. Install tmux (`brew install tmux`) to type into sessions from the phone.
+  Behaviour that changed on purpose: a push to a base branch is asked, not
+  refused; Controllers, back-room budgets and Controller workflows no longer
+  exist; photos attached in the app are stored in `~/.mission-control/uploads`.
+
+- 2026-10-22: open a file a session wrote on the Mac from the phone
   (MC-172), one shared file at a time. Nothing is reachable by default: the
   founder or Flight runs `/share <path>` (the new `share` skill) to share one
   file and get its tailnet link, `/share --list` and `/share --revoke <path>`.
