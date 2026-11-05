@@ -311,7 +311,7 @@ runs:
 A session started in another folder registers and is guarded only when the same
 two hooks are wired in user settings, with absolute paths.
 
-Tests: `node --test tools/guard/ tools/tests/app-sessions.test.mjs tools/tests/app-tmux.test.mjs`.
+Tests: `node --test 'tools/guard/*.test.mjs' tools/tests/app-sessions.test.mjs tools/tests/app-tmux.test.mjs`.
 
 ## spend
 
