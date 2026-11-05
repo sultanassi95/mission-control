@@ -1,81 +1,48 @@
-// The Mission Control App's local server. Started by the mission-fleet mod
-// (`/console app`), never on its own: it serves the app on 127.0.0.1 only,
-// streams the fleet state to the browser, and hands the browser's actions to
-// the mod as one JSON line each on stdout. Node standard library only.
+// The Mission Control App's local server: one per machine, on 127.0.0.1. It shows named terminal
+// sessions (registered by tools/hooks/session-register.sh) by reading their transcripts, types into
+// the ones that run in tmux, and serves shared files and uploads. Started by tools/console; node
+// standard library only.
 //
-// One server runs per Claude profile (work, personal, or any other). Each registers in
-// ~/.mission-control/flights and also tries to hold the shared front-door port;
-// whichever holds it serves the app and routes /p/<profile>/* to that profile's
-// server, so the front door survives any one session closing.
-//
-// Security: every data request (/op, /events, /state.json, /flights.json, /p/*) needs either the
-// shared app token (kept 0600 beside the registry, sent from the page's localStorage) or, through
+// Security: every data request (/sessions.json, /s/<name>/..., /upload, /file, /files.json) needs either
+// the app token (kept 0600 in the app home, sent from the page's localStorage) or, through
 // `tailscale serve`, the signed-in Tailscale identity of this Mac's owner (serve sets that header
 // itself); the Host header must be loopback or a Tailscale name (DNS rebinding); a POST must come
-// from this page's own origin (cross-site requests); the bridge endpoint takes the mod's own key.
+// from this page's own origin (cross-site requests).
 
-import { createServer, request as httpRequest } from 'node:http'
-import { readFile, watch } from 'node:fs/promises'
-import { existsSync, mkdirSync, chmodSync, readFileSync, writeFileSync, readdirSync, unlinkSync, linkSync, renameSync } from 'node:fs'
-import { join, dirname, normalize, extname, basename } from 'node:path'
+import { createServer } from 'node:http'
+import { readFile } from 'node:fs/promises'
+import { existsSync, mkdirSync, chmodSync, readFileSync, writeFileSync, unlinkSync, linkSync, renameSync, statSync } from 'node:fs'
+import { join, dirname, normalize, extname } from 'node:path'
 import { homedir } from 'node:os'
 import { timingSafeEqual, randomBytes } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { execFile } from 'node:child_process'
 import { FILE_MAX, TOO_LARGE, FILE_ROUTE, SERVED, classify, prune } from './uploads.mjs'
 import { readShares, resolveFile } from './files.mjs'
-import { statSync } from 'node:fs'
 import { capture, menuOf, paneAlive, sendKey, sendText } from './tmux.mjs'
 import { cleanName, listSessions, messagesFrom, readSession } from './sessions.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const PUBLIC = join(here, 'public')
-// The token and the bridge key arrive on stdin, never in the environment (which other local processes can read).
-const secrets = await new Promise(resolve => {
-  let raw = ''
-  process.stdin.setEncoding('utf8')
-  process.stdin.on('data', d => (raw += d))
-  process.stdin.on('end', () => {
-    try {
-      resolve(JSON.parse(raw))
-    } catch {
-      resolve({})
-    }
-  })
-})
-const BRIDGE_KEY = typeof secrets.key === 'string' ? secrets.key : ''
-const FRONT_PORT = Number(process.env.MCAPP_PORT ?? 4777)
-const OPS = new Set(['prompt', 'command', 'console', 'answer'])
-const FORWARDED = new Set(['/op', '/events', '/state.json', '/upload'])
+const PORT = Number(process.env.MCAPP_PORT ?? 4777)
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.png': 'image/png' }
 
-if (typeof secrets.token !== 'string' || secrets.token.length < 32 || BRIDGE_KEY.length < 32) {
-  process.stderr.write('mcapp: a token and a bridge key (32+ chars each) are required as JSON on stdin\n')
-  process.exit(2)
-}
-
-// The profile is the Claude config this session runs under: CLAUDE_PROFILE when the shell set it,
-// else the config dir's name (~/.claude-personal -> personal), else the default config, work.
-const PROFILE = (process.env.MCAPP_PROFILE || process.env.CLAUDE_PROFILE || basename(process.env.CLAUDE_CONFIG_DIR ?? '').replace(/^\.?claude-?/, '') || 'work').toLowerCase().replace(/[^a-z0-9-]/g, '') || 'work'
+// The app home: the token, the session registry, uploads and the share list. Private to this user.
 const HOME = process.env.MCAPP_HOME || join(homedir(), '.mission-control')
-const FLIGHTS = join(HOME, 'flights')
-// Named terminal sessions, one file each, written by tools/hooks/session-register.sh.
 const SESSIONS = join(HOME, 'sessions')
-mkdirSync(FLIGHTS, { recursive: true, mode: 0o700 })
+mkdirSync(SESSIONS, { recursive: true, mode: 0o700 })
 chmodSync(HOME, 0o700)
-chmodSync(FLIGHTS, 0o700)
+chmodSync(SESSIONS, 0o700)
 
-// One token for every profile's server, so the Mac's link survives the front door changing hands.
-// The first server writes it; the rest read it. Deleting the file revokes it at the next start.
+// One token for the machine. The first start writes it; deleting the file revokes it at the next start.
 const TOKEN = (() => {
   const file = join(HOME, 'app-token')
   const read = () => (existsSync(file) ? readFileSync(file, 'utf8').trim() : '')
-  // Written whole to a temp file and linked into place, so no server ever reads a half-written token.
+  // Written whole to a temp file and linked into place, so nothing ever reads a half-written token.
   if (read().length < 32) {
     const tmp = `${file}.${process.pid}`
-    writeFileSync(tmp, secrets.token, { mode: 0o600 })
+    writeFileSync(tmp, randomBytes(24).toString('hex'), { mode: 0o600 })
     try {
-      // Only a short (corrupt) file is replaced; one another server just wrote stays.
       if (existsSync(file) && read().length < 32) unlinkSync(file)
       linkSync(tmp, file)
     } catch (err) {
@@ -88,55 +55,21 @@ const TOKEN = (() => {
   return read()
 })()
 
-// Each profile keeps its own fallback state file; one shared path let two profiles overwrite each other.
-const STATE_FILE = process.env.MCAPP_STATE_FILE ? join(dirname(process.env.MCAPP_STATE_FILE), `app-state-${PROFILE}.json`) : ''
-// Uploads sit inside the portfolio beside the state file, where the session can Read them without a new permission.
-const UPLOADS = process.env.MCAPP_STATE_FILE ? join(dirname(process.env.MCAPP_STATE_FILE), 'uploads') : join(HOME, 'uploads')
-// The portfolio this server's state lives in (its state file sits two folders down, in _command's own
-// folder), so a path the page finds relative to the portfolio can be made absolute.
-const stateDir = process.env.MCAPP_STATE_FILE ? dirname(process.env.MCAPP_STATE_FILE) : ''
-const PORTFOLIO = stateDir && basename(dirname(stateDir)) === '_command' ? dirname(dirname(stateDir)) : ''
-// The share list (share.mjs, the /share skill writes it beside the state file); read on each request,
-// so a file shared or revoked counts at once. No list, nothing shared.
-const SHARE_FILE = process.env.MCAPP_SHARE_FILE || (stateDir ? join(stateDir, 'shared-files.json') : '')
+const UPLOADS = process.env.MCAPP_UPLOADS || join(HOME, 'uploads')
+// The portfolio this server was cloned into (the folder above tools/ that holds the instance folder), so a
+// path the page finds relative to it can be made absolute. Empty in a bare clone.
+const ROOT = dirname(dirname(here))
+const PORTFOLIO = existsSync(join(ROOT, '_command')) ? ROOT : ''
+// The share list (share.mjs, the /share skill writes it); read on each request, so a file shared or
+// revoked counts at once. No list, nothing shared.
+const SHARE_FILE = process.env.MCAPP_SHARE_FILE || join(HOME, 'shared-files.json')
 const shares = () => readShares(SHARE_FILE)
 mkdirSync(UPLOADS, { recursive: true, mode: 0o700 })
 // Old uploads go, and the folder stays under its caps, oldest first (uploads.mjs); hourly and after each upload.
 prune(UPLOADS)
 setInterval(() => prune(UPLOADS), 3_600_000).unref()
 
-const alive = pid => {
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch (err) {
-    return err.code === 'EPERM'
-  }
-}
-function flights() {
-  const out = []
-  for (const f of readdirSync(FLIGHTS)) {
-    if (!f.endsWith('.json')) continue
-    try {
-      const e = JSON.parse(readFileSync(join(FLIGHTS, f), 'utf8'))
-      if (typeof e.profile !== 'string' || !Number.isInteger(e.port) || !Number.isInteger(e.pid)) continue
-      // A dead server's entry is removed as soon as it is seen, before its pid can be reused.
-      if (alive(e.pid)) out.push(e)
-      else dropStale(e)
-    } catch {
-      /* a file mid-write or malformed is skipped this round */
-    }
-  }
-  return out.sort((a, b) => a.profile.localeCompare(b.profile))
-}
-
-// One Flight per profile: two would fight over the same login's state.
-const holder = flights().find(e => e.profile === PROFILE && e.pid !== process.pid)
-if (holder) {
-  process.stdout.write(`${JSON.stringify({ type: 'refused', reason: `the ${PROFILE} profile already has an app server (pid ${holder.pid}); /console app stop in that session first` })}\n`)
-  process.exit(3)
-}
-const REGISTRY_FILE = join(FLIGHTS, `${PROFILE}.json`)
+const REGISTRY_FILE = join(HOME, 'server.json')
 function unregister() {
   try {
     if (JSON.parse(readFileSync(REGISTRY_FILE, 'utf8')).pid === process.pid) unlinkSync(REGISTRY_FILE)
@@ -164,24 +97,6 @@ const TAILNET = await new Promise(resolve => {
     }
   })
 })
-
-let state = { at: null, fleet: null }
-// Answers to Flight's questions, held until the plugin's long-poll collects them.
-const answers = new Map()
-const answerWaiters = new Map()
-function putAnswer(id, value) {
-  answers.set(id, value)
-  for (const wake of answerWaiters.get(id) ?? []) wake()
-  answerWaiters.delete(id)
-}
-const cleanAnswer = v => {
-  if (!v || typeof v.id !== 'string' || !/^[a-f0-9]{8,32}$/.test(v.id) || !v.answers || typeof v.answers !== 'object') return null
-  const out = {}
-  for (const [q, a] of Object.entries(v.answers)) if (typeof a === 'string' && q.length <= 2000 && a.length <= 4000) out[q] = a
-  return Object.keys(out).length ? { id: v.id, answers: out } : null
-}
-const clients = new Set()
-let opSeq = 0
 
 const emit = obj => process.stdout.write(`${JSON.stringify(obj)}\n`)
 function same(a, b) {
@@ -225,11 +140,6 @@ function send(res, status, body, headers = {}) {
   res.end(body)
 }
 
-function broadcast() {
-  const data = `data: ${JSON.stringify(state)}\n\n`
-  for (const c of clients) c.write(data)
-}
-
 function readBody(req, limit = 64 * 1024) {
   return new Promise((resolve, reject) => {
     let size = 0
@@ -267,56 +177,15 @@ function handler(port) {
       return send(res, 400, 'bad request')
     }
 
-    // The plugin waits here for the answer to Flight's question (15 s rounds), or posts one typed at the Mac.
-    if (url.pathname === '/bridge/answer') {
-      if (req.method !== 'POST' || !same(req.headers['x-bridge-key'], BRIDGE_KEY)) return send(res, 403, 'forbidden')
-      const id = url.searchParams.get('id')
-      if (!id) {
-        const got = cleanAnswer(JSON.parse((await readBody(req)) || 'null'))
-        if (!got) return send(res, 400, 'bad answer')
-        putAnswer(got.id, { answers: got.answers })
-        return send(res, 204, '')
-      }
-      const take = () => {
-        const got = answers.get(id)
-        answers.delete(id)
-        return send(res, 200, JSON.stringify(got), { 'Content-Type': 'application/json' })
-      }
-      if (answers.has(id)) return take()
-      await new Promise(resolve => {
-        const timer = setTimeout(resolve, 15_000)
-        const wake = () => {
-          clearTimeout(timer)
-          resolve()
-        }
-        answerWaiters.set(id, [...(answerWaiters.get(id) ?? []), wake])
-        res.on('close', wake)
-      })
-      if (res.writableEnded || res.destroyed) return
-      return answers.has(id) ? take() : send(res, 204, '')
-    }
-
-    // The mod pushes state here with its own key; the browser never can.
-    if (url.pathname === '/bridge/state') {
-      if (req.method !== 'POST' || !same(req.headers['x-bridge-key'], BRIDGE_KEY)) return send(res, 403, 'forbidden')
-      try {
-        state = { at: new Date().toISOString(), fleet: JSON.parse(await readBody(req, 4 * 1024 * 1024)) }
-        broadcast()
-        return send(res, 204, '')
-      } catch {
-        return send(res, 400, 'bad state')
-      }
-    }
-
-    // The page and its scripts carry no secrets and are public; every data endpoint needs the token.
-    const isData = url.pathname === '/sessions.json' || /^\/s\/[^/]+\/(state\.json|events|screen|send|key)$/.test(url.pathname) || url.pathname === '/op' || url.pathname === '/events' || url.pathname === '/state.json' || url.pathname === '/flights.json' || url.pathname === '/upload' || url.pathname.startsWith('/upload/') || url.pathname === '/file' || url.pathname === '/file-ticket' || url.pathname === '/files.json' || url.pathname.startsWith('/p/')
     // /s/<name>/ is one session's page; it carries no secrets, its data routes below need the token.
     if (req.method === 'GET' && /^\/s\/[^/]+$/.test(url.pathname)) return send(res, 302, '', { Location: `${url.pathname}/` })
     if (req.method === 'GET' && /^\/s\/[^/]+\/$/.test(url.pathname)) return serveStatic(res, '/session.html').then(() => undefined, () => send(res, 500, 'error'))
+    // The page and its scripts carry no secrets and are public; every data endpoint needs the token.
+    const isData = url.pathname === '/sessions.json' || /^\/s\/[^/]+\/(state\.json|events|screen|send|key)$/.test(url.pathname) || url.pathname === '/upload' || url.pathname.startsWith('/upload/') || url.pathname === '/file' || url.pathname === '/file-ticket' || url.pathname === '/files.json'
     if (req.method === 'GET' && !isData) return serveStatic(res, url.pathname).then(() => undefined, () => send(res, 500, 'error'))
     // A file opened as itself (a PDF, an HTML report) comes with a single-use ticket instead of the token, so no URL carries the token.
     if (url.pathname === '/file' && url.searchParams.has('ticket') && req.method === 'GET') return serveTicket(res, url.searchParams.get('ticket'))
-    if (!authorised(req, url)) return send(res, 401, 'token required: open the URL /console app printed')
+    if (!authorised(req, url)) return send(res, 401, 'token required: open the URL the console printed')
 
     if (req.method === 'POST') {
       const origin = req.headers.origin
@@ -327,7 +196,7 @@ function handler(port) {
 
     if (url.pathname === '/sessions.json') {
       if (req.method !== 'GET') return send(res, 405, 'method not allowed')
-      return send(res, 200, JSON.stringify({ sessions: listSessions(SESSIONS).map(({ name, cwd, role, alive }) => ({ name, cwd, role, alive })) }), { 'Content-Type': 'application/json' })
+      return send(res, 200, JSON.stringify({ sessions: listSessions(SESSIONS).map(({ name, cwd, role, alive, tmux_pane }) => ({ name, cwd, role, alive, tmux: tmux_pane !== '' })) }), { 'Content-Type': 'application/json' })
     }
     const drive = /^\/s\/([^/]+)\/(screen|send|key)$/.exec(url.pathname)
     if (drive) return driveSession(req, res, drive[1], drive[2])
@@ -340,71 +209,14 @@ function handler(port) {
       return streamSession(req, res, sess[1])
     }
 
-    if (url.pathname === '/flights.json') {
-      if (req.method !== 'GET') return send(res, 405, 'method not allowed')
-      return send(res, 200, JSON.stringify(await flightsSummary()), { 'Content-Type': 'application/json' })
-    }
+    if (req.method === 'POST' && url.pathname === '/upload') return receiveUpload(req, res)
+    if (req.method === 'POST' && url.pathname === '/file-ticket') return issueTicket(req, res)
+    if (req.method === 'POST') return send(res, 404, 'not found')
 
-    // /p/<profile>/<path>: this server's own profile is answered here, any other is forwarded to its server.
-    let path = url.pathname
-    const routed = /^\/p\/([a-z0-9-]+)(\/.*)$/.exec(path)
-    if (routed) {
-      const [, profile, rest] = routed
-      // A file is on this Mac whichever profile asks for it, so any server answers it itself.
-      if (profile !== PROFILE && rest !== '/file' && rest !== '/file-ticket' && rest !== '/files.json') {
-        // Only the three data routes cross to another profile, and only by GET or POST.
-        if (!FORWARDED.has(rest) && !FILE_ROUTE.test(rest)) return send(res, 404, 'not found')
-        if (req.method !== 'GET' && req.method !== 'POST') return send(res, 405, 'method not allowed')
-        const target = flights().find(e => e.profile === profile)
-        if (!target) return send(res, 404, `no ${profile} Flight is running`)
-        return forward(req, res, target.port, rest, target)
-      }
-      path = rest
-    }
-
-    if (req.method === 'POST' && path === '/upload') return receiveUpload(req, res)
-    if (req.method === 'POST' && path === '/file-ticket') return issueTicket(req, res)
-    if (req.method === 'POST') {
-      if (path !== '/op') return send(res, 404, 'not found')
-      let op
-      try {
-        op = JSON.parse(await readBody(req))
-      } catch {
-        return send(res, 400, 'bad json')
-      }
-      if (!op || !OPS.has(op.op) || typeof op.text !== 'string' || op.text.length === 0 || op.text.length > 8000) return send(res, 400, 'op must be {op: prompt|command|console|answer, text}')
-      if (op.op === 'answer') {
-        let got = null
-        try {
-          got = cleanAnswer(JSON.parse(op.text))
-        } catch {
-          /* not JSON */
-        }
-        if (!got) return send(res, 400, 'an answer is {id, answers}')
-        putAnswer(got.id, { answers: got.answers })
-        return send(res, 202, JSON.stringify({ answered: got.id }), { 'Content-Type': 'application/json' })
-      }
-      const id = ++opSeq
-      emit({ type: 'op', id, op: op.op, text: op.text, at: new Date().toISOString() })
-      return send(res, 202, JSON.stringify({ id }), { 'Content-Type': 'application/json' })
-    }
-
-    if (path === '/file' && (req.method === 'GET' || req.method === 'HEAD')) return serveFile(req, res, url.searchParams.get('path'))
+    if (url.pathname === '/file' && (req.method === 'GET' || req.method === 'HEAD')) return serveFile(req, res, url.searchParams.get('path'))
     if (req.method !== 'GET') return send(res, 405, 'method not allowed')
-    if (path === '/files.json') return send(res, 200, JSON.stringify(PORTFOLIO ? { portfolio: PORTFOLIO } : {}), { 'Content-Type': 'application/json' })
-    if (path === '/events') {
-      res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' })
-      res.write(`data: ${JSON.stringify(state)}\n\n`)
-      clients.add(res)
-      const ping = setInterval(() => res.write(': ping\n\n'), 20000)
-      req.on('close', () => {
-        clearInterval(ping)
-        clients.delete(res)
-      })
-      return
-    }
-    if (path === '/state.json') return send(res, 200, JSON.stringify(state), { 'Content-Type': 'application/json' })
-    const stored = FILE_ROUTE.exec(path)
+    if (url.pathname === '/files.json') return send(res, 200, JSON.stringify(PORTFOLIO ? { portfolio: PORTFOLIO } : {}), { 'Content-Type': 'application/json' })
+    const stored = FILE_ROUTE.exec(url.pathname)
     if (stored) {
       const file = join(UPLOADS, `${stored[1]}.${stored[2]}`)
       if (!existsSync(file)) return send(res, 404, 'that file is gone')
@@ -421,7 +233,7 @@ async function driveSession(req, res, name, what) {
   if (what === 'screen' ? req.method !== 'GET' : req.method !== 'POST') return send(res, 405, 'method not allowed')
   const e = readSession(SESSIONS, name)
   if (!e || cleanName(name) !== name) return send(res, 404, `no session named ${name.slice(0, 41)}`)
-  if (!e.tmux_pane) return send(res, 409, `this session is not running in tmux, so the app can only read it. Reopen it with: tools/console app --code ${e.name}`)
+  if (!e.tmux_pane) return send(res, 409, `this session is not running in tmux, so the app can only read it. Reopen it with: node tools/console app --code ${e.name}`)
   const target = { pane: e.tmux_pane, socket: e.tmux_socket, pid: e.pid }
   if (!e.alive || !(await paneAlive(target))) return send(res, 410, 'this session has ended')
   try {
@@ -579,74 +391,6 @@ async function receiveUpload(req, res) {
   return send(res, 201, JSON.stringify({ id: `${id}.${ext}`, path: file }), { 'Content-Type': 'application/json' })
 }
 
-// Forwards an already-authorised request to another profile's server on loopback, carrying the
-// shared token and that server's own origin; the response (an event stream included) is piped back.
-function forward(req, res, port, path, entry) {
-  const headers = { host: `127.0.0.1:${port}`, 'x-mcapp-token': TOKEN, accept: req.headers.accept ?? '*/*' }
-  if (req.method === 'POST') {
-    headers.origin = `http://127.0.0.1:${port}`
-    if (req.headers['content-type']) headers['content-type'] = req.headers['content-type']
-    // A text file's extension travels as a header; without it the other profile's server refuses the file.
-    if (req.headers['x-mcapp-ext']) headers['x-mcapp-ext'] = req.headers['x-mcapp-ext']
-  }
-  const upstream = httpRequest({ host: '127.0.0.1', port, method: req.method, path, headers }, up => {
-    if (res.headersSent) return up.resume()
-    res.writeHead(up.statusCode ?? 502, { 'cache-control': 'no-store', ...up.headers, 'x-content-type-options': 'nosniff' })
-    up.pipe(res)
-    // A server that dies mid-stream never ends its response; end ours so the browser reconnects.
-    up.on('close', () => res.writableEnded || res.end())
-  })
-  upstream.on('error', err => {
-    if (err.code === 'ECONNREFUSED') dropStale(entry)
-    return res.headersSent ? res.end() : send(res, 502, 'that Flight did not answer')
-  })
-  res.on('close', () => upstream.destroy())
-  // The front door holds the file size limit itself, so a body without a length still ends in a 413, not a 502.
-  if (path === '/upload') {
-    let size = 0
-    req.on('data', c => {
-      size += c.length
-      if (size > FILE_MAX && !res.headersSent) {
-        send(res, 413, TOO_LARGE, { Connection: 'close' })
-        upstream.destroy()
-        req.unpipe(upstream)
-        req.resume()
-      }
-    })
-  }
-  req.pipe(upstream)
-}
-
-// A registered port that refuses connections belongs to a server that died without cleaning up
-// (a crash or SIGKILL); its entry goes, so its pid or port being reused later cannot inherit it.
-function dropStale(entry) {
-  const file = join(FLIGHTS, `${entry.profile}.json`)
-  try {
-    const now = JSON.parse(readFileSync(file, 'utf8'))
-    if (now.pid === entry.pid && now.port === entry.port) unlinkSync(file)
-  } catch {
-    /* already gone or replaced */
-  }
-}
-
-// Every live profile with what the switcher shows: what waits on the founder (the Controllers' open
-// questions, which Flight asks, and their open to-dos) and whether Flight is working. The count is
-// named gates for the client, which reads it as "N waiting"; the page's waiting() counts the same.
-async function flightsSummary() {
-  const summarise = s => ({ busy: Boolean(s?.fleet?.flight?.busy), gates: (s?.fleet?.questions ?? []).length + (s?.fleet?.todos ?? []).length })
-  return Promise.all(
-    flights().map(async e => {
-      if (e.profile === PROFILE) return { profile: e.profile, self: true, ...summarise(state) }
-      try {
-        const r = await fetch(`http://127.0.0.1:${e.port}/state.json`, { headers: { 'x-mcapp-token': TOKEN }, signal: AbortSignal.timeout(1500) })
-        return { profile: e.profile, self: false, ...summarise(r.ok ? await r.json() : null), ...(r.ok ? {} : { unreachable: true }) }
-      } catch (err) {
-        if (err?.cause?.code === 'ECONNREFUSED') dropStale(e)
-        return { profile: e.profile, self: false, busy: false, gates: 0, unreachable: true }
-      }
-    }),
-  )
-}
 
 function serve(port, onReady, onError) {
   const server = createServer()
@@ -661,60 +405,20 @@ function serve(port, onReady, onError) {
   server.listen(port, '127.0.0.1', () => onReady(server))
 }
 
-// This profile's own server: the first free port above the front door's.
-function listen(port, tries = 20) {
-  serve(
-    port,
-    () => {
-      const tmp = `${REGISTRY_FILE}.${process.pid}`
-      writeFileSync(tmp, JSON.stringify({ profile: PROFILE, port, pid: process.pid, at: new Date().toISOString() }), { mode: 0o600 })
-      renameSync(tmp, REGISTRY_FILE)
-      emit({ type: 'ready', port, profile: PROFILE, token: TOKEN, tokenFile: join(HOME, 'app-token'), stateFile: STATE_FILE })
-      holdFrontDoor()
-    },
-    err => {
-      if (err.code === 'EADDRINUSE' && tries > 0) listen(port + 1, tries - 1)
-      else {
-        process.stderr.write(`mcapp: ${err.message}\n`)
-        process.exit(1)
-      }
-    },
-  )
-}
-
-// Whoever holds the front door serves every profile; the others keep trying, so when its session
-// ends one of them takes over within a few seconds.
-function holdFrontDoor() {
-  serve(
-    FRONT_PORT,
-    () => emit({ type: 'front', port: FRONT_PORT }),
-    () => setTimeout(holdFrontDoor, 3000),
-  )
-}
-
-// The file fallback: if the mod cannot reach loopback over http, it writes the state to a file.
-async function watchStateFile() {
-  if (!STATE_FILE) return
-  const load = async () => {
-    try {
-      state = { at: new Date().toISOString(), fleet: JSON.parse(await readFile(STATE_FILE, 'utf8')) }
-      broadcast()
-    } catch {
-      /* the file is written whole by the mod; a partial read is retried on the next event */
-    }
-  }
-  await load()
-  const name = STATE_FILE.slice(STATE_FILE.lastIndexOf('/') + 1)
-  try {
-    // Watch the folder, not the file: the file appears only once the mod falls back to it.
-    for await (const ev of watch(dirname(STATE_FILE))) if (ev.filename === name) await load()
-  } catch {
-    /* the folder is missing: the http bridge still works */
-  }
-}
-
 process.on('unhandledRejection', err => process.stderr.write(`mcapp: unhandled ${String(err).slice(0, 200)}\n`))
 process.on('uncaughtException', err => process.stderr.write(`mcapp: uncaught ${String(err).slice(0, 200)}\n`))
 
-listen(FRONT_PORT + 1)
-void watchStateFile()
+// One server per machine: a second start finds the port taken and says so.
+serve(
+  PORT,
+  () => {
+    const tmp = `${REGISTRY_FILE}.${process.pid}`
+    writeFileSync(tmp, JSON.stringify({ port: PORT, pid: process.pid, at: new Date().toISOString() }), { mode: 0o600 })
+    renameSync(tmp, REGISTRY_FILE)
+    emit({ type: 'ready', port: PORT })
+  },
+  err => {
+    process.stderr.write(err.code === 'EADDRINUSE' ? `mcapp: port ${PORT} is taken: the app is already running (tools/console app stop), or set MCAPP_PORT\n` : `mcapp: ${err.message}\n`)
+    process.exit(err.code === 'EADDRINUSE' ? 3 : 1)
+  },
+)

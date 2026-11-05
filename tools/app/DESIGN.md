@@ -2,16 +2,16 @@
 
 ```mermaid
 flowchart LR
-  T[public/tokens.css + tokens.json] --> C[components: tab bar, sheet, card, question card, to-do card, chip, composer]
-  C --> V[views: Flight, Consoles, Loops]
+  T[public/tokens.css + tokens.json] --> C[components: session card, switcher chip, menu card, composer]
+  C --> V[views: Sessions, Session]
   V --> S[state matrix]
 ```
 
 ## Identity
 
-The founder runs a fleet of agents from a phone, often away from the desk, in
+The founder runs terminal sessions from a phone, often away from the desk, in
 short glances between other things: is anything waiting on me, what is each
-console doing, answer it, move on. The same page opens on the laptop beside the
+session doing, answer it, move on. The same page opens on the laptop beside the
 terminal. It is a control surface, read in seconds and operated with a thumb.
 
 **The deciding sentence:** a glance answers "is anything waiting on me", and one
@@ -50,32 +50,6 @@ Ratios computed with the WCAG relative-luminance formula on 2026-10-15; the
 lowest text pair is idle on its tint, 4.93:1, above 4.5:1. Text on a solid `.go` button uses
 `--bg` on `--done` (6.44 / 10.25).
 
-**Call-sign colours** `--slot-1` to `--slot-8`: each Controller's own colour,
-the fill of its call-sign chip wherever the app names it (Call-sign chip, below).
-Chip text is `--bg` on the fill; the outlined Loops filter uses the colour as text
-on `--surface`.
-
-| Slot | Light | Dark | `--bg` on the fill (light / dark) | As text on surface (light / dark) |
-|---|---|---|---|---|
-| `--slot-1` | `#1C4E88` | `#458FE9` | 8.42 / 5.44 | 7.66 / 4.97 |
-| `--slot-2` | `#A4592B` | `#D2743A` | 5.20 / 5.39 | 4.73 / 4.92 |
-| `--slot-3` | `#824AE4` | `#BEAEF2` | 5.19 / 9.01 | 4.72 / 8.22 |
-| `--slot-4` | `#86256D` | `#ED48C2` | 8.40 / 5.40 | 7.65 / 4.92 |
-| `--slot-5` | `#746F2A` | `#968F38` | 5.19 / 5.38 | 4.72 / 4.91 |
-| `--slot-6` | `#2E748E` | `#52C5ED` | 5.24 / 9.04 | 4.77 / 8.25 |
-| `--slot-7` | `#8F30AA` | `#D580EE` | 6.62 / 6.98 | 6.03 / 6.37 |
-| `--slot-8` | `#3233CE` | `#899EED` | 8.40 / 7.00 | 7.65 / 6.39 |
-
-Measured 2026-10-16 with the same formula; every pair is above 4.5:1. Slots are
-handed out lowest first, so the first ones are the most distinct: CIEDE2000
-distance between any two of the first four is at least 21.7 light and 22.9 dark,
-and between any two of all eight at least 11.1 and 10.7. The nearest state
-colour is `--run` to `--slot-6` (10.5 / 10.6). Under simulated protanopia and
-deuteranopia some pairs come close (as low as 1.6), so colour is never the only
-carrier: the chip always shows the call sign. A call sign with no slot (a ninth
-live Controller, or one stood down before colours were kept) is drawn with the
-`--idle` fill, `--bg` text 5.77 / 7.24.
-
 **Spacing scale:** `--s1` 4 · `--s2` 8 · `--s3` 12 · `--s4` 16 · `--s5` 24 · `--s6` 32 px.
 **Type scale:** `--t-xs` 12/16 · `--t-sm` 13/18 · `--t-md` 15/22 · `--t-lg` 18/24 px; system faces
 only (`--sans` and `--mono`, the full stacks in `public/tokens.css`), because the app is served
@@ -90,67 +64,37 @@ moves under `prefers-reduced-motion: reduce`.
 
 | Component | States | Pattern it follows | Notes |
 |---|---|---|---|
-| Tab bar | default, selected, badge, focus | iOS tab bar / Material navigation bar (3 destinations) | bottom, thumb zone; the Flight tab's badge (its number hidden from screen readers, which read ", 3 waiting" with the tab's name) = what waits on the founder: the Controllers' open questions (Flight asks them) and open to-dos |
-| Composer | empty, typing, with attachments, sending, queued, refused | messaging composer | `/` opens the command sheet; the paperclip attaches files (Attachments); Enter sends on desktop. A queued message shows as the founder's bubble until Flight's transcript holds it, or until the fleet answers its op itself (a console command such as list); a slash command reads back as typed, never as the engine's command tags |
-| Session composer | typing, sending, read-only (not in tmux), ended | messaging composer in the session view (`/s/<name>/`) | the text goes into the session's terminal through tmux, so it reads exactly as typed; a session not run in tmux, or one that ended, disables the field and says why in one line above it, naming `tools/console app --code <name>` |
+| Session composer | typing, sending, read-only (not in tmux), ended | messaging composer in the session view (`/s/<name>/`) | the text goes into the session's terminal through tmux, so it reads exactly as typed; a session not run in tmux, or one that ended, disables the field and says why in one line above it, naming `node tools/console app --code <name>` |
 | Terminal menu card | hidden, two options, three or more, answering | `.gate` action card above the composer | read from the session's screen while the page is open: the question, then one button per numbered option (the option under the cursor filled, the rest outlined), 44 px targets; a tap presses that option's key; a permission prompt for a push to a base branch is answered here |
-| Command sheet | open, filtered, empty result | bottom sheet + search | grouped by source; "at the Mac" mark for terminal menus |
-| Console card | running, waiting, idle, stood down, failed, focus | list card with a state stripe | stripe + pill, never colour alone |
-| Console sheet | default, retuning, confirming stand-down | bottom sheet | Call, Retune, Stand down; destructive action confirms in-page |
-| To-do card | open, sending Done | action card in the Flight tab, beneath the messages, oldest first | `.gate.todo`: an action only the founder can take. The meta line is the call-sign chip, then `· id · time`; the title in regular weight with its links live; Done (`.go.secondary`) checks it off and tells the Controller that left it, and the card leaves; the report it came from sits behind a details row, "The report it came from" |
-| Waiting questions | one, several, urgent | `.notice` in the Flight tab, above Flight's question | a named section, not a live region (a new question never re-reads the rest): the Controllers' open questions Flight has not asked yet, a list item each: the call-sign chip, "asks" ("asks (urgent)"), the question; then "Flight asks it here when its turn ends." A question on the Question card below is not listed again |
-| Question card | unanswered, option picked, typing, sending (Send answer disabled until one question is answered) | action card in the Flight tab | Flight's own question, a Controller's included: Flight asks a Controller's decision with its options and the id as the header, which the card draws as the Controller's call-sign chip then `· id` (and `· urgent`); the question carries its own context, since the Controller writes it for a phone, so the card has no report row. Each question shows its options (single or pick-any), an "Or type your own answer" box, or a text or number input; one answer is enough to send; the answer returns to the session as the question tool's own answer, and the fleet delivers a Controller's answer to that Controller; at the Mac the same question is answered with `/console answer` |
-| Destructive button | default, focus | `.danger`, tinted fill | stand down, dismiss all, stop the server; always behind an in-page confirm |
-| Tags | default | `.tag` for values (model, budget), `.kindtag` for a loop row's kind | two jobs, two looks, on purpose; a call sign is never a tag, it is a Call-sign chip |
-| Call-sign chip | slot 1 to 8, no slot (idle fill), Loops filter (outlined in the slot colour; pressed, filled) | identity chip: one colour per person, as in chat and calendar apps | `.call` plus `.slot-N`; wherever the app names a Controller: Flight message headers, a Controller's question on the Question card, to-do cards and waiting questions, Consoles rows and sheets, Loops filters and rows. The colour comes from the snapshot's `slots`, which the fleet keeps per call sign in its store: given at staffing, kept across reloads and sessions, and never shared by two live Controllers. A Flight message carries chips only when its first line is the marker (`public/badge.js`): its call signs in bold, joined by a middle dot or a space, every one known to the fleet, the marker ending at a space, a colon or the line's end; a bold call sign run into a word, or one named in the body, stays text. The label carries the identity; the colour only helps the eye find it |
-| State chip | five states | tinted pill | label carries the state |
-| Loop row | status, call, decision, advisory | timeline row | advisory rows tinted `--wait-tint` |
-| Toast | info, error | snackbar | announced via `role="status"`; an op Flight runs later reads as sent, never done (Relayed console actions, below) |
-| Profile switcher | hidden (before the first listing, while fewer than two profiles are listed, or while the Mac cannot be reached), current, attention dot, sheet open, not answering | header button + bottom sheet of `.prof` rows | shows the current Claude profile, always a listed one, while another is running to switch to: the app names and connects to none until the first listing, and the first listing that names a profile opens the remembered profile if it is listed, else the front door's own (the profile whose server holds 4777), else the first listed; the dot means another profile has something waiting on the founder (`busy` colour) or is working (`live`); each row carries a state chip; the choice is remembered per device, and so is an automatic move; a long name ends in an ellipsis in the button and wraps in its row |
+| Sessions list | none, one or more, ended, unreachable, needs the link | list of `.session` link cards on the front page | one card per named session: its name, its folder, a dot and the words Running or Ended, and "you can type into it" or "read-only"; an ended one has a dashed border; each card is one 44 px+ target; none says how to start one: `node tools/console app --code <name>` |
+| Session switcher | hidden (fewer than two sessions), current, ended | row of `.chip` links under the session header, scrolling sideways | the current session's chip is filled in the accent tint and carries `aria-current=page`, an ended one is dashed; the header's back arrow returns to the list |
+| Toast | info, error | snackbar | announced via `role="status"`; used for a refused send or a refused file |
 | Attachments | hidden, picked (1 to 10), sending (locked), refused (toast) | paperclip button beside `/` + a tray above the composer | the paperclip ("Attach photos or files") opens a picker for several files: photos, downscaled on the device to 1600 px JPEG, and PDF, `.txt`, `.md`, `.csv` or `.json` files, sent as they are. At most 8 MB a file, 10 files and 32 MB a message, checked in the page before a file joins and again by the server, which reads each file's own bytes; files not added are named in one toast with why. The tray scrolls sideways in its own row: each item, on `--surface` with a `--line` border and `--r-field` corners, holds a photo thumbnail or a type badge (`.ftype`, the extension in mono), the name ending in an ellipsis at `--att-name`, and a remove button of `--target` size named "Remove <name>"; a hint line reads "3 of 10 files · 4.1 of 32 MB". A slash command with attachments is refused ("Remove the attachments to run a command."). Each file travels as one line at the end of the message naming its stored path; the line is never shown |
 | Sent photos | one, several, loading, gone | inside the sent bubble, above its text | one at most 40 vh high; several in a two-column grid of square crops; a photo still loading, or no longer on the Mac, is a `--surface` placeholder that says so |
 | Document chip | loading, ready (a link), gone | inline chip in the sent bubble, below its photos | on `--surface` with a `--line` border, `--r-field` corners and `--target` high: the type badge and the name, ending in an ellipsis. Ready, it opens the file in a new tab from a blob of a fixed type (a PDF as PDF, every text file as plain text), fetched with the token in a header so the token never sits in the page; loading reads "<name> · loading", gone "<name> · no longer on the Mac". On the accent bubble its focus ring is `--accent-ink` |
 | Theme choice | System (default), Light, Dark | a segmented control in the menu sheet | kept per device in localStorage; `public/theme.js` sets `data-theme` on `<html>` before first paint (the CSP allows no inline script); `tokens.css` applies the dark palette for a dark device unless Light is chosen, and always for Dark |
 | Markdown reply | default, badged (a first-line call-sign marker) | rendered by `public/md.js` | headings, emphasis, code, lists, quotes, http(s) links in a new tab, tables in their own horizontal scroll: the reply then takes the chat column's whole width, a cell of up to 24 characters keeps to one line and a longer one wraps at its spaces (at least `--cell-long` wide), so a word never breaks to fit, and a shadow at an edge shows more lies that way; the scroll box is a named region a keyboard can reach; text escaped before markup; a first-line marker becomes Call-sign chips beside FLIGHT and leaves the text |
 
-## Relayed console actions
-
-A staffing, call, dismissal, stand-down or Done sent from the app reaches Flight as a
-prompt and runs once Flight's current turn ends, so the app never reports one as
-done: its words are "sent to Flight" and "runs once Flight is free", as in the
-fleet's own result toast. Dismissing an item, retuning and stopping the app run
-at once. A tap that sends several ops says what it sent in
-one toast: Dismiss all reads "2 dismissals sent to Flight; they run once Flight
-is free.", and when an op is not sent the toast is an error naming each console
-left out, with the reason. The fleet's toast for each op that summary covers is
-not shown over it.
-
 ## State matrix
 
 | View | Empty | Loading | Error | Long content | Direction | Narrow |
 |---|---|---|---|---|---|---|
-| Flight | "No messages yet. Ask Flight anything, or tap / for a command." With no open question or to-do nothing more shows. A message with no marker reads FLIGHT alone; a marker naming a call sign the fleet does not know stays text, unbadged | the link line reads "Connecting to Flight…"; a sent file not yet fetched reads "loading" in its place | link line "Reconnecting…" (EventSource retries); a refused send shows the server's reason; a sent file the Mac no longer keeps reads "no longer on the Mac"; an answer that could not reach its Controller is told to Flight, which says so in the chat | messages wrap; code blocks scroll in their own box; several chips wrap beside FLIGHT; a long call sign wraps inside its chip; several photos sit in a two-column grid and document chips wrap, each name ending in an ellipsis; to-do cards stack oldest first, a link wrapping in its title; the waiting questions list one line each | LTR only, stated | 320 px, one column |
-| Attachment tray | hidden | the items lock (remove buttons, the paperclip and the draft disabled) and the hint reads "Sending 2 of 3…" | a refused pick names each file and why in one toast; a failed upload names the file and the server's reason and keeps the tray for a retry, which does not send a stored file twice | names end in an ellipsis, the full name kept in the remove button's name; ten items scroll in their own row | LTR | 320 px: the row scrolls sideways with no page scroll |
-| Consoles | "No consoles staffed." + the `/console staff` hint | four grey summary tiles | as Flight; a call sign with no slot gets the idle chip | task text wraps to 3 lines; the sheet shows all | LTR | 320 px |
-| Loops | "No loop traffic yet." | none (data arrives with state) | as Flight | first line only; tap expands; a row's route names each known Controller with its chip | LTR | 320 px, filter chips scroll sideways in their own row |
-| Header and profiles sheet | no profile listed: the front door's own Flight is shown unnamed, switcher hidden, the remembered profile kept and nothing said about it, and the next listing that names a profile decides as on open; a sheet left open reads "No Flight is running. Type /console app in a Claude session." | before the first listing: no profile named, switcher hidden, link line "Connecting to Flight…"; a send waits with "Still connecting to Flight. Try again in a moment." | Mac unreachable: link line "Not connected: sign in to Tailscale, or open the link /console app printed", switcher hidden; an open profiles sheet reads "Can't reach the Mac to list profiles; trying again."; the Mac reached but the current profile's Flight not answering: link line "Flight not answering; retrying", the cause first so a narrow header still shows it; a remembered or current profile that stopped: one line, "Personal is not running; showing Work." | many profiles: the sheet lists every one and scrolls; a long name ends in an ellipsis in the header button and wraps in its row | LTR | 320 px: title, switcher and menu stay on one line |
+| Sessions | "No named session yet" with the command that starts one | the link line reads "Connecting…" | "Couldn't reach the Mac" in the link line; a missing link says to open the one the console printed | a long folder wraps | LTR | 320 px |
+| Session | "Nothing said in this session yet." | the link line reads "Connecting…" | "Reconnecting…" in the link line; an unknown name says how to start it | a long reply scrolls in its bubble; a table scrolls sideways | LTR | 320 px |
+| Ended session | its last messages stay; the composer is disabled and says why | not applicable | not applicable | as Session | LTR | 320 px |
+| Attachments | none attached | a file is uploading while the field waits | a refused file is named with the reason in one toast | at most 10 files, 8 MB each | LTR | 320 px |
 
-## Desktop (1024 px and wider)
+## Layout
 
-The three destinations move to a left navigation rail (`--rail`) with the Flight badge beside its label; Flight's conversation and composer sit at a reading width (`--read`); Consoles lays its cards in columns (`--card-min`); sheets float as centred panels. Below 1024 px the phone layout is unchanged.
+One column at every width, at most 720 px wide and centred; sheets and rails are not used. The session view is a header (back arrow, name, link line), the switcher, the conversation, the terminal menu card when the session asks, and the composer.
 
-## Profiles
+## Sessions
 
-One server runs per Claude profile (work, personal and any other config). The one that holds the shared front-door port, 4777, serves the app and every other profile's data through `/p/<profile>/`, so one URL and one token cover every profile, and the front door survives any single session closing. The profile switcher in the header names the current profile and lists the live profiles with an attention dot while two or more are running; with one running there is nothing to switch to, so it is hidden, as it is while no profile is listed or the Mac cannot be reached. The remembered choice is a wish, not the state: on open the app names no profile and connects to none until the first listing, and the first listing that names a profile decides: the remembered profile when it is listed, else the front door's own, else the first listed, remembering the one it opened and saying so in one line when the remembered one was not running. A listing with no profile in it opens the front door's own Flight unnamed and leaves the remembered choice alone. A profile missing from two timed listings in a row (a restarting server misses one) is left the same way, and that move is remembered too, so a profile that starts again never pulls the app back unasked. The listing a tap on the switcher asks for refreshes the sheet but is never counted as a miss. A profile already running refuses a second server for itself.
+One server runs per machine and serves every named session at `/s/<name>/`; one URL and one token cover them all. A session is registered by the session hook and shown by reading its transcript. Typing needs the session to run in tmux (`node tools/console app --code <name>` starts it there); any other session is read-only.
 
 ## Platform (mobile fronts)
 
-A web app installed to the home screen (PWA manifest, standalone display). It
-follows iOS and Material behaviour where they agree: bottom navigation with four
-destinations, bottom sheets for detail, 44 px minimum targets, safe-area insets
-on the bars; a sheet closes with its close button, the scrim or Escape. Departures: the system back gesture does not close a sheet yet (no history entries are pushed); no
-pull-to-refresh (the stream is live), no swipe actions (one tap is enough and
-discoverable).
+A web app installed to the home screen (PWA manifest, standalone display). It follows iOS and Material behaviour where they agree: 44 px minimum targets, safe-area insets on the bars; no pull-to-refresh (the stream is live), no swipe actions (one tap is enough and discoverable).
 
 ## Quality bar
 

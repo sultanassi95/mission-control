@@ -22,7 +22,7 @@ let token = ''
 let pane = ''
 let socket = ''
 const call = (path, { method = 'GET', body, headers } = {}) =>
-  fetch(`http://127.0.0.1:${PORT + 1}${path}`, { method, body: body === undefined ? undefined : JSON.stringify(body), headers: { 'x-mcapp-token': token, ...(method === 'POST' ? { origin: `http://127.0.0.1:${PORT + 1}`, 'content-type': 'application/json' } : {}), ...headers } })
+  fetch(`http://127.0.0.1:${PORT}${path}`, { method, body: body === undefined ? undefined : JSON.stringify(body), headers: { 'x-mcapp-token': token, ...(method === 'POST' ? { origin: `http://127.0.0.1:${PORT}`, 'content-type': 'application/json' } : {}), ...headers } })
 const register = (name, extra) => {
   mkdirSync(join(HOME, 'sessions'), { recursive: true })
   writeFileSync(join(HOME, 'sessions', `${name}.json`), JSON.stringify({ name, session_id: `sid-${name}`, transcript_path: join(scratch, 'none.jsonl'), cwd: scratch, role: 'flight', pid: process.pid, at: 'now', ...extra }))

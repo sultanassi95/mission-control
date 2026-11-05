@@ -28,7 +28,7 @@ const transcript = (name, lines) => {
 const register = (payload, event = 'SessionStart') => spawnSync('bash', [HOOK], { input: JSON.stringify({ hook_event_name: event, ...payload }), env, encoding: 'utf8' })
 const consoleRun = args => spawnSync(process.execPath, [CONSOLE, ...args], { env, encoding: 'utf8' })
 let token = ''
-const get = (path, headers = { 'x-mcapp-token': token }) => fetch(`http://127.0.0.1:${PORT + 1}${path}`, { headers })
+const get = (path, headers = { 'x-mcapp-token': token }) => fetch(`http://127.0.0.1:${PORT}${path}`, { headers })
 
 before(() => {
   mkdirSync(HOME, { recursive: true })
@@ -73,11 +73,11 @@ test('console app --code starts the one server and prints the link; a second nam
   assert.equal(a.status, 0, a.stderr)
   const url = /http:\/\/127\.0\.0\.1:(\d+)\/s\/alpha\/\?t=([0-9a-f]+)/.exec(a.stdout)
   assert.ok(url, a.stdout)
-  assert.equal(Number(url[1]), PORT + 1)
+  assert.equal(Number(url[1]), PORT)
   token = url[2]
   const b = consoleRun(['app', '--code', 'beta'])
   assert.equal(b.status, 0, b.stderr)
-  assert.match(b.stdout, new RegExp(`:${PORT + 1}/s/beta/`))
+  assert.match(b.stdout, new RegExp(`:${PORT}/s/beta/`))
   assert.doesNotMatch(b.stdout + b.stderr, /already has an app server/)
   const log = readFileSync(join(HOME, 'server.log'), 'utf8')
   assert.equal(log.split('\n').filter(l => l.includes('"type":"ready"')).length, 1, 'one server, started once')
@@ -132,7 +132,7 @@ test('/sessions.json lists the registered sessions', async () => {
 
 test('the events stream sends the session at once and again when its transcript grows', async () => {
   const ctl = new AbortController()
-  const r = await fetch(`http://127.0.0.1:${PORT + 1}/s/beta/events?t=${token}`, { signal: ctl.signal })
+  const r = await fetch(`http://127.0.0.1:${PORT}/s/beta/events?t=${token}`, { signal: ctl.signal })
   assert.equal(r.status, 200)
   const reader = r.body.getReader()
   const dec = new TextDecoder()

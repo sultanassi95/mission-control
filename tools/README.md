@@ -351,19 +351,16 @@ the time of writing; the run prints the count).
 
 ## app
 
-The Mission Control App, a local web app for the fleet: Flight, Consoles,
-Poll and Loops. `app/server.mjs` is Node standard library only, with no build
-step. You do not run it by hand: `/console app` starts it from the mod, and
-`/console app stop` ends it.
+The Mission Control App, a local web app that shows your named terminal sessions
+(`claude -n <name>`) and types into the ones that run in tmux. `app/server.mjs`
+is Node standard library only, with no build step. You start it with
+`node tools/console app --code <name>`, which starts the server when it is down
+and prints that session's link; `node tools/console app stop` ends it.
 
-- One server runs per Claude profile. The one holding port 4777 is the front
-  door: it serves the app and routes `/p/<profile>/` to the other profiles'
-  servers, so one URL covers every profile.
+- One server runs per machine, on port 4777 (`MCAPP_PORT`), and serves every
+  session at `/s/<name>/`; the front page lists them.
 - It listens on 127.0.0.1 only. Reaching it from a phone is through
   `tailscale serve`, never a public tunnel: `framework/remote-access.md`.
-- The design, tokens and states: `app/DESIGN.md`. The token ratchet is held at
-  zero: `tools/token-lint.sh tools/app`.
+- The design, tokens and states: `app/DESIGN.md`.
 
-Tests: `node --test tools/tests/app-badge.tests.mjs` (the call-sign marker that
-badges a Flight message and the call-sign chip, `app/public/badge.js`; 22
-tests at the time of writing).
+Tests: `node --test tools/tests/*.tests.mjs tools/tests/*.test.mjs tools/guard/`.

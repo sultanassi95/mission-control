@@ -7,19 +7,17 @@
 //   console app stop            stop the app server
 //   console list                the registered sessions: name, alive, role, folder
 //
-// Env: MCAPP_HOME (default ~/.mission-control) holds sessions/, flights/ and app-token;
+// Env: MCAPP_HOME (default ~/.mission-control) holds sessions/, server.json and app-token;
 //      MCAPP_PORT (default 4777) is the app's front-door port.
 'use strict'
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
-const crypto = require('node:crypto')
 const { spawn, spawnSync } = require('node:child_process')
 
 const HOME = process.env.MCAPP_HOME || path.join(os.homedir(), '.mission-control')
 const SESSIONS = path.join(HOME, 'sessions')
-const FLIGHTS = path.join(HOME, 'flights')
-const REGISTRY = path.join(FLIGHTS, 'mc.json')
+const REGISTRY = path.join(HOME, 'server.json')
 const PORT = Number(process.env.MCAPP_PORT || 4777)
 const SERVER = path.join(__dirname, 'app', 'server.mjs')
 // The registry reader is shared with the server (an ES module, so imported, not required).
@@ -47,15 +45,13 @@ const sleep = ms => new Promise(r => setTimeout(r, ms))
 async function ensureServer() {
   const have = running()
   if (have) return have
-  fs.mkdirSync(FLIGHTS, { recursive: true, mode: 0o700 })
+  fs.mkdirSync(HOME, { recursive: true, mode: 0o700 })
   const log = fs.openSync(path.join(HOME, 'server.log'), 'a', 0o600)
   const child = spawn(process.execPath, [SERVER], {
     detached: true,
-    stdio: ['pipe', log, log],
-    env: { ...process.env, MCAPP_PROFILE: 'mc', MCAPP_HOME: HOME, MCAPP_PORT: String(PORT) },
+    stdio: ['ignore', log, log],
+    env: { ...process.env, MCAPP_HOME: HOME, MCAPP_PORT: String(PORT) },
   })
-  // The token and key travel on the child's stdin, never in its environment.
-  child.stdin.end(JSON.stringify({ token: crypto.randomBytes(24).toString('hex'), key: crypto.randomBytes(24).toString('hex') }))
   child.unref()
   for (let i = 0; i < 80; i++) {
     await sleep(100)
@@ -101,7 +97,7 @@ async function app(args) {
   // From a shell, a name nothing runs under is launched: in tmux, so the app can type into it. A name
   // that runs but not in tmux is shown read-only; one that ended is launched again.
   if (!known || (!known.alive && !known.tmux)) await launch(name)
-  else if (!known.tmux) process.stderr.write(`Session ${name} is not running in tmux, so the app can only read it. To type into it from the app, end it and run: tools/console app --code ${name}\n`)
+  else if (!known.tmux) process.stderr.write(`Session ${name} is not running in tmux, so the app can only read it. To type into it from the app, end it and run: node tools/console app --code ${name}\n`)
   const server = await ensureServer()
   let token = ''
   try {
