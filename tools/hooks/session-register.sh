@@ -21,7 +21,7 @@ dir="$home/sessions"
 umask 077
 mkdir -p "$dir" 2>/dev/null || exit 0
 chmod 700 "$home" "$dir" 2>/dev/null
-# The session's process: the hook runs as its child. A hook run by a wrapper shell reports that shell, which dies with the call; say so by a pid of 0 only when it is gone.
+# The session process: the hook runs as its child, so $PPID is claude itself (checked against ps in a live tmux session, MC-178).
 pid="$PPID"
 tsock="${TMUX:-}"; tsock="${tsock%%,*}"
 tmp="$dir/.$name.$$"
