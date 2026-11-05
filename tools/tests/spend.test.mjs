@@ -17,7 +17,7 @@ const call = (id, model, u, at = '2026-11-05T10:00:00Z') => JSON.stringify({ typ
 const user = JSON.stringify({ type: 'user', message: { role: 'user', content: 'hi' } })
 
 // A session with two models in the main file (one response written twice, as a two-block response is) and one subagent.
-const SID = '11111111-2222-3333-4444-555555555555'
+const SID = '1111aaaa-2222-bbbb-3333-cccc4444dddd'
 const proj = join(scratch, 'projects', '-work')
 mkdirSync(join(proj, SID, 'subagents'), { recursive: true })
 const main = join(proj, `${SID}.jsonl`)
@@ -47,10 +47,10 @@ test('the CLI reads a session by id from MCSPEND_PROJECTS and lists recent sessi
   const env = { ...process.env, MCSPEND_PROJECTS: join(scratch, 'projects'), MCAPP_HOME: join(scratch, 'nohome') }
   const one = spawnSync(process.execPath, [SPEND, '--session', SID.slice(0, 8)], { env, encoding: 'utf8' })
   assert.equal(one.status, 0, one.stderr)
-  assert.match(one.stdout, /session 11111111/)
+  assert.match(one.stdout, /session 1111aaaa/)
   assert.match(one.stdout, /\| main session \| main \| model-big \| 2 \| 30 \|/)
   const list = spawnSync(process.execPath, [SPEND, '--sessions'], { env, encoding: 'utf8' })
-  assert.match(list.stdout, /11111111  5 calls  3,436 tokens  3 lines/)
+  assert.match(list.stdout, /1111aaaa  5 calls  3,436 tokens  3 lines/)
   const none = spawnSync(process.execPath, [SPEND, '--session', 'ffffffff'], { env, encoding: 'utf8' })
   assert.equal(none.status, 1)
   assert.match(none.stderr, /No transcript found/)
