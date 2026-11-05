@@ -92,10 +92,10 @@ changes should never reach you silently.
   write verb names its PR or issue by number or branch, never by URL. git and
   gh also run from a worktree beside the repo, `fronts/<front>/<repo>-<slug>`.
   `gh auth switch` and the Workflow tool stay refused for Controllers. A new
-  test (`bun test tools/tests/skill-coverage.test.ts`) reads every skill and
+  test (the skill-coverage test, since replaced by tools/tests/skill-coverage.test.mjs) reads every skill and
   fails when one a Controller may run names a git or gh command the guard
   refuses; the skills only Flight runs are listed with the reason in
-  `tools/mods/mission-fleet/hooks/skill-coverage.ts`. The workspace receives
+  the mod's skill-coverage module (removed by MC-177). The workspace receives
   the new guard when it pulls main.
 
 - 2026-10-18: a Controller asks each decision as its own question
@@ -237,7 +237,7 @@ changes should never reach you silently.
   learns it from a refusal. A console staffed under the earlier rule keeps
   cloning into its own front only until it is staffed again.
 - 2026-10-17: the mission-fleet mod type-checks against the engine's current
-  plugin types, and `tools/check-mod-types.sh` runs that check where it can
+  plugin types, and the mod type-check script (removed by MC-177) runs that check where it can
   fail (MC-128). An engine update rewrote the generated types: they no
   longer declare the agent type's `autoCompactWindow` or the tool's
   `isDeferred` as register options, and a register hook's answer now names

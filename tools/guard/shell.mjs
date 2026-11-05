@@ -1,5 +1,5 @@
 // The shell tokenizer and git helpers the push guard reads a Bash command with.
-// Extracted from the retired mod guard (tools/mods/mission-fleet/hooks/guards.ts) and stripped of types, so it runs on any Node 18+.
+// Extracted from the retired mod guard and stripped of types, so it runs on any Node 18+.
 export const SHELL_KEYWORDS = new Set(['if', 'then', 'else', 'elif', 'fi', 'do', 'done', 'while', 'until', 'for', 'case', 'esac', 'in', 'function', 'time', '!', '{', '}', '[[', ']]'])
 export const WRAPPERS = new Set(['env', 'command', 'builtin', 'nohup', 'nice', 'sudo', 'caffeinate', 'timeout', 'stdbuf'])
 /** Commands that run code they read from an argument, stdin or a heredoc. */

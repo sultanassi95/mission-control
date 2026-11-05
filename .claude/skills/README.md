@@ -128,11 +128,9 @@ skeleton, and running each epic stacked on the one before, each with its own
 PR that the founder merges; the deploy and go-public gates grant the deploy
 and the launch steps. It never merges a PR, and nothing is ever posted, sent
 or paid on the founder's behalf.
-A Controller, staffed by Flight with `/console staff`, may commit, push its
-own feature branches and open PRs inside its scope. It never merges a PR,
-never pushes a base or deploy branch, never force-pushes and never stashes;
-the mission-fleet guard refuses those calls
-(`tools/mods/mission-fleet/hooks/controller.ts`, `guards.ts`).
+A push to a base or deploy branch raises a permission prompt in every session
+(`tools/guard/guard.mjs`, a PreToolUse hook); the founder's yes is the explicit
+request. No other git command is blocked by it.
 Every other skill observes the standing default: no git writes
 unless the founder asks in the moment. Skills that write files
 (`triage`, `as-built`, `promote-learnings`, `retire-front`) carry their
