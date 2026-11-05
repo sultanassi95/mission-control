@@ -365,7 +365,7 @@ changes should never reach you silently.
   Under auto mode the fleet approves its own messages only to a staffed
   console.
 
-- 2026-10-16: the console skill is now `fleet` (`.claude/skills/fleet/SKILL.md`,
+- 2026-10-16: the console skill is now `fleet` (the fleet skill, removed by MC-177,
   MC-121). The skill and the mission-fleet mod's `/console` command shared one
   name, so the engine refused the mod's command at every session start, and a
   typed `/console go <id>` could load the skill's text instead of running: the
@@ -454,7 +454,7 @@ changes should never reach you silently.
   Controller names is watched every ten minutes, waking the Controller on a
   change in state, reviews, comments or checks. The mod ships 47 tests, run
   with `claude plugin test tools/mods/mission-fleet`. New: the console skill
-  (renamed `fleet` on 2026-10-16, now `.claude/skills/fleet/SKILL.md`), the
+  (renamed `fleet` on 2026-10-16, now the fleet skill, removed by MC-177), the
   Controller clause in the constitution, and `framework/remote-access.md`, the
   runbook for reaching the app from a phone through `tailscale serve` only,
   never a public tunnel.

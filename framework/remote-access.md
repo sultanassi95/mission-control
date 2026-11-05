@@ -76,7 +76,7 @@ session starts it and a supervisor restarts it when the server dies.
   Flight runs with the console tool once its current turn ends. Done on a to-do is
   relayed the same way, since it tells the Controller; dismissing an item,
   retuning and stopping the app run at once. The
-  fleet skill (`.claude/skills/fleet/SKILL.md`) has the details.
+  fleet skill (`.claude/skills/console/SKILL.md`) has the details.
 - **Photos.** A photo attached in the app is stored under `_command/fleet/uploads`
   so the session can read it. Photos are pruned after 7 days, and the folder
   never holds more than 200 photos or 256 MB (oldest first).

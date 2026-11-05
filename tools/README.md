@@ -296,7 +296,7 @@ The console fleet: a Claude Code mod, packaged as a plugin, that adds
 a kept-alive Controller per front or project, retunes and calls it, keeps the
 poll of the questions and to-dos it leaves the founder and the loops, and guards what Controllers and their back rooms
 may run. The verbs, the guard's limits and the founder-only commands are in
-`.claude/skills/fleet/SKILL.md`; the remote runbook is
+`.claude/skills/console/SKILL.md`; the remote runbook is
 `framework/remote-access.md`.
 
 Loading it. A mod is not on by default. Either set `CLAUDE_CODE_PLUGIN_DIRS`
