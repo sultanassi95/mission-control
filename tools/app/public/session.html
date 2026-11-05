@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0A6A70" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111819" media="(prefers-color-scheme: dark)">
+<title>Session - Mission Control</title>
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<script src="/theme.js"></script>
+<link rel="stylesheet" href="/tokens.css">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<div class="app" id="app">
+  <header class="top">
+    <a class="iconbtn" href="/" aria-label="All sessions"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></a>
+    <div class="grow">
+      <h1 id="title">Session</h1>
+      <p class="sub" id="link" role="status"><span class="dot" aria-hidden="true"></span><span id="link-text">Connecting…</span></p>
+    </div>
+  </header>
+  <nav class="chips" id="switcher" aria-label="Sessions" hidden></nav>
+  <main class="main" id="main" tabindex="-1"></main>
+  <section class="gate" id="prompt" aria-label="The session is asking" hidden></section>
+  <div class="composer" id="composer">
+    <p class="hint" id="readonly" role="status" hidden></p>
+    <p class="hint" id="attached" role="status" hidden></p>
+    <form class="row" id="send">
+      <button class="slash attach" type="button" id="attach" aria-label="Attach photos or files"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.4 11.1l-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg></button>
+      <input type="file" id="files" accept="image/*,.pdf,.txt,.md,.csv,.json" multiple hidden>
+      <label class="visually-hidden" for="draft">Message this session</label>
+      <textarea id="draft" rows="1" placeholder="Message this session" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="sentences"></textarea>
+      <button class="send" type="submit" aria-label="Send"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+    </form>
+  </div>
+</div>
+<div id="toast" class="toast" role="status" hidden></div>
+<script src="/md.js"></script>
+<script src="/transcript.js"></script>
+<script src="/session.js"></script>
+<script src="/files.js"></script>
+</body>
+</html>

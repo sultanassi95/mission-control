@@ -17,12 +17,11 @@ flowchart LR
   subgraph INST[instance checks]
     CF[check-fronts]
   end
-  subgraph FLEET[console fleet]
-    MF[mods/mission-fleet] --> APP[app]
-    CMT[check-mod-types] -. type-checks .-> MF
-  end
-  subgraph METER[spend meter]
-    SR[mods/spend-recorder] --> SPEND["/spend"]
+  subgraph SESS[named sessions]
+    SR[hooks/session-register] --> APP[app]
+    CON[console] --> APP
+    GD[guard] -. asks before a push to base .-> SESSION((every session))
+    SPD[spend] --> TX[(transcripts)]
   end
 ```
 
@@ -36,9 +35,10 @@ flowchart LR
 | `epic-coverage` | the E4 gate of epic-flow | `.sh`, `.py` |
 | `status-after-pipe-guard`, `front-context` | settings hooks | `.sh` |
 | `token-lint` | the design-token ratchet | `.sh`, `.py` |
-| `mods/mission-fleet` | the console fleet, a Claude Code plugin | TypeScript |
-| `check-mod-types` | type-checks a mod against the plugin types its engine wrote | `.sh` |
-| `mods/spend-recorder` | records the tokens every model call used, for `/spend` | TypeScript |
+| `console` | `app --code <name>`, `app stop`, `list`: shows a named session in the app, launching it in tmux from a shell | Node (`node tools/console`) |
+| `hooks/session-register.sh` | hook: records each named session so the app can show it | `.sh` |
+| `guard/` | hook: asks before a push to a base branch, in every session | Node |
+| `spend.mjs` | measured tokens per agent and model from session transcripts, for `/spend` | Node |
 | `app/` | the Mission Control App | Node |
 
 On macOS and Linux use the `.sh` entry points; the `.ps1` twins exist for
@@ -289,81 +289,48 @@ that day, and each conversion lowers the number for good. A front whose own
 tests already hold a value class keeps that idiom. Tests:
 `tools/tests/token-lint.tests.sh`, 14 cases with negative controls both ways.
 
-## mods/mission-fleet
+## console, hooks and guard
 
-The console fleet: a Claude Code mod, packaged as a plugin, that adds
-`/console` and a console tool for Flight (the orchestrator session). It staffs
-a kept-alive Controller per front or project, retunes and calls it, keeps the
-poll of the questions and to-dos it leaves the founder and the loops, and guards what Controllers and their back rooms
-may run. The verbs, the guard's limits and the founder-only commands are in
-`.claude/skills/fleet/SKILL.md`; the remote runbook is
-`framework/remote-access.md`.
+`node tools/console` is the founder's verb set for named terminal sessions; the
+`/console` skill (`.claude/skills/console/SKILL.md`) runs it. The shipped
+`.claude/settings.json` wires two hooks that every session in this repository
+runs:
 
-Loading it. A mod is not on by default. Either set `CLAUDE_CODE_PLUGIN_DIRS`
-in the `env` block of the profile's `settings.json` to the absolute path of
-`tools/mods/mission-fleet`, or start a session with
-`claude --plugin-dir tools/mods/mission-fleet`. It needs a Claude Code build
-that supports mods.
+- `hooks/session-register.sh` (SessionStart and UserPromptSubmit) writes
+  `~/.mission-control/sessions/<name>.json` from the hook payload: the session
+  id, its transcript, its folder, its process and, when it runs in tmux, the pane.
+  The name is `session_title` (what `claude -n <name>` sets), or the name in a
+  `/console app --code <name>` prompt.
+- `guard/guard.mjs` (PreToolUse on Bash) answers `permissionDecision: "ask"` for
+  a command that pushes to a base or deploy branch, so the push becomes a
+  permission prompt the founder answers. Every other command, other git
+  commands included, runs untouched. `guard/push.mjs` holds the rule,
+  `guard/shell.mjs` the shell tokenizer, `guard/spokes.mjs` the repo's base
+  branches (its spoke's `base_branch`, origin's default branch, `MC_GUARD_BASES`).
 
-Tests: `claude plugin test tools/mods/mission-fleet` (the tests in
-`controller`, `guards`, `loops` and `register`; the run prints the count).
-The test run does not type-check; `check-mod-types` does.
+A session started in another folder registers and is guarded only when the same
+two hooks are wired in user settings, with absolute paths.
 
-## check-mod-types
+Tests: `node --test 'tools/guard/*.test.mjs' tools/tests/app-sessions.test.mjs tools/tests/app-tmux.test.mjs`.
 
-`bash tools/check-mod-types.sh [MOD] [--types DIR]` runs a pinned TypeScript
-(5.6.3, through `npx`, so the first run fetches it and needs the network
-once) over a mod's `hooks`, `types` and `tests` with the compiler options of
-the plugin types the engine writes into `MOD/.claude-plugin/types` where it
-loads the mod. That folder is gitignored and the engine rewrites it on
-update, so a type error can arrive with an engine update and no commit.
-`MOD` defaults to `tools/mods/mission-fleet`. A clone or worktree the engine
-has not loaded has no types folder: pass `--types` with a loaded copy's,
-such as the operating workspace's
-`tools/mods/mission-fleet/.claude-plugin/types`. Exit 0 clean; 1 on type
-errors in the mod's own files (tsc's lines, then a count); 2 when it cannot
-run (no mod, no types, `--types` with no folder, TypeScript did not start,
-or tsc stopped on its configuration or found no files), never a pass. The
-clean and failed lines name the engine version the types came from. Tests:
-`tests/check-mod-types.tests.sh` (fake engine types, a planted error, each
-cannot-run case, a folder name with a space and a quote).
+## spend
 
-## mods/spend-recorder
-
-The meter behind `/spend`: a Claude Code mod that records the model, effort
-and token usage of every model call the session makes, the main session's and
-each subagent's, summed per agent and kept in the plugin's store for the last
-30 sessions. A subagent's line carries the description and type it was started
-with. It prices nothing: prices live in the instance's routing doctrine, and
-`/spend` applies them.
-
-It adds `/spend-log` (this session's table; `--sessions` for one line per kept
-session) and a `spend` tool the model calls with the same arguments, which is
-how `/spend` reads it.
-
-Loading it works as for mission-fleet: add the absolute path of
-`tools/mods/spend-recorder` to `CLAUDE_CODE_PLUGIN_DIRS` (several paths join
-with `:`), or start a session with `claude --plugin-dir
-tools/mods/spend-recorder`. Calls made before it loaded are not recorded.
-
-Tests: `claude plugin test tools/mods/spend-recorder` (10 tests on the ledger at
-the time of writing; the run prints the count).
+`node tools/spend.mjs` sums the usage in Claude Code's session transcripts per
+agent and model (`--session <id|path>`, `--sessions`); `/spend` reads it.
+Tests: `node --test tools/tests/spend.test.mjs`.
 
 ## app
 
-The Mission Control App, a local web app for the fleet: Flight, Consoles,
-Poll and Loops. `app/server.mjs` is Node standard library only, with no build
-step. You do not run it by hand: `/console app` starts it from the mod, and
-`/console app stop` ends it.
+The Mission Control App, a local web app that shows your named terminal sessions
+(`claude -n <name>`) and types into the ones that run in tmux. `app/server.mjs`
+is Node standard library only, with no build step. You start it with
+`node tools/console app --code <name>`, which starts the server when it is down
+and prints that session's link; `node tools/console app stop` ends it.
 
-- One server runs per Claude profile. The one holding port 4777 is the front
-  door: it serves the app and routes `/p/<profile>/` to the other profiles'
-  servers, so one URL covers every profile.
+- One server runs per machine, on port 4777 (`MCAPP_PORT`), and serves every
+  session at `/s/<name>/`; the front page lists them.
 - It listens on 127.0.0.1 only. Reaching it from a phone is through
   `tailscale serve`, never a public tunnel: `framework/remote-access.md`.
-- The design, tokens and states: `app/DESIGN.md`. The token ratchet is held at
-  zero: `tools/token-lint.sh tools/app`.
+- The design, tokens and states: `app/DESIGN.md`.
 
-Tests: `node --test tools/tests/app-badge.tests.mjs` (the call-sign marker that
-badges a Flight message and the call-sign chip, `app/public/badge.js`; 22
-tests at the time of writing).
+Tests: `node --test tools/tests/*.tests.mjs tools/tests/*.test.mjs tools/guard/`.

@@ -1,0 +1,124 @@
+#!/usr/bin/env node
+// The founder's verbs for named terminal sessions: show one in the Mission Control App, stop the
+// app, list the sessions. One app server runs per machine; `app --code <name>` starts it when it is
+// down and prints the session's link. Node standard library only (CommonJS: this file has no extension).
+//
+//   console app --code <name>   print the app link for the named session, starting the app if needed
+//   console app stop            stop the app server
+//   console list                the registered sessions: name, alive, role, folder
+//
+// Env: MCAPP_HOME (default ~/.mission-control) holds sessions/, server.json and app-token;
+//      MCAPP_PORT (default 4777) is the app's front-door port.
+'use strict'
+const fs = require('node:fs')
+const os = require('node:os')
+const path = require('node:path')
+const { spawn, spawnSync } = require('node:child_process')
+
+const HOME = process.env.MCAPP_HOME || path.join(os.homedir(), '.mission-control')
+const SESSIONS = path.join(HOME, 'sessions')
+const REGISTRY = path.join(HOME, 'server.json')
+const PORT = Number(process.env.MCAPP_PORT || 4777)
+const SERVER = path.join(__dirname, 'app', 'server.mjs')
+// The registry reader is shared with the server (an ES module, so imported, not required).
+let lib
+const sessions = () => lib.listSessions(SESSIONS).map(s => ({ name: s.name, cwd: s.cwd, role: s.role, pid: s.pid, alive: s.alive, tmux: s.tmux_pane !== '' }))
+const alive = pid => lib.pidAlive(pid)
+const cleanName = raw => lib.cleanName(raw)
+const USAGE = 'Usage:\n  console app --code <name>   show the named session in the app\n  console app stop            stop the app server\n  console list                list the registered sessions\n'
+
+const die = (msg, code = 1) => {
+  process.stderr.write(`${msg}\n`)
+  process.exit(code)
+}
+const running = () => {
+  try {
+    const e = JSON.parse(fs.readFileSync(REGISTRY, 'utf8'))
+    return Number.isInteger(e.port) && alive(e.pid) ? e : null
+  } catch {
+    return null
+  }
+}
+const sleep = ms => new Promise(r => setTimeout(r, ms))
+
+// The one server: reuse the running one, else start it detached and wait for it to register.
+async function ensureServer() {
+  const have = running()
+  if (have) return have
+  fs.mkdirSync(HOME, { recursive: true, mode: 0o700 })
+  const log = fs.openSync(path.join(HOME, 'server.log'), 'a', 0o600)
+  const child = spawn(process.execPath, [SERVER], {
+    detached: true,
+    stdio: ['ignore', log, log],
+    env: { ...process.env, MCAPP_HOME: HOME, MCAPP_PORT: String(PORT) },
+  })
+  child.unref()
+  for (let i = 0; i < 80; i++) {
+    await sleep(100)
+    const up = running()
+    if (up) return up
+  }
+  die(`the app server did not start; see ${path.join(HOME, 'server.log')}`)
+}
+
+// Starts `claude -n <name>` in a detached tmux session mc-<name> in the current folder and waits for its
+// hook to register it. MCAPP_CLAUDE_CMD replaces `claude` (extra flags, a test double); MCAPP_TMUX_SOCKET
+// names a private tmux server.
+async function launch(name) {
+  const socket = process.env.MCAPP_TMUX_SOCKET ? ['-L', process.env.MCAPP_TMUX_SOCKET] : []
+  const tmux = args => spawnSync(process.env.MCAPP_TMUX || 'tmux', [...socket, ...args], { encoding: 'utf8' })
+  if (tmux(['-V']).error) die('tmux is not installed: brew install tmux')
+  if (tmux(['has-session', '-t', `=mc-${name}`]).status !== 0) {
+    const env = ['MCAPP_HOME', 'MCAPP_PORT'].filter(k => process.env[k]).flatMap(k => ['-e', `${k}=${process.env[k]}`])
+    const r = tmux(['new-session', '-d', '-s', `mc-${name}`, '-c', process.cwd(), ...env, `${process.env.MCAPP_CLAUDE_CMD || 'claude'} -n ${name}`])
+    if (r.status !== 0) die(`could not start tmux session mc-${name}: ${r.stderr.trim()}`)
+    console.log(`Started claude -n ${name} in tmux session mc-${name}. Attach with: tmux ${socket.join(' ')} attach -t mc-${name}`.replace('  ', ' '))
+  }
+  for (let i = 0; i < 300; i++) {
+    const s = sessions().find(x => x.name === name && x.alive)
+    if (s) return
+    await sleep(100)
+  }
+  die(`session ${name} did not register within 30 s. It may be waiting at a first-run prompt: tmux ${socket.join(' ')} attach -t mc-${name}`.replace('  ', ' '))
+}
+
+async function app(args) {
+  if (args[0] === 'stop') {
+    const e = running()
+    if (!e) return console.log('The app server is not running.')
+    process.kill(e.pid, 'SIGTERM')
+    return console.log(`The app server is stopped (pid ${e.pid}).`)
+  }
+  const i = args.findIndex(a => a === '--code' || a.startsWith('--code='))
+  const raw = i < 0 ? '' : args[i].includes('=') ? args[i].slice(7) : args[i + 1]
+  const name = cleanName(raw)
+  if (!name || name !== String(raw).toLowerCase()) die(`app needs --code <name> (letters, digits, . _ -); got ${JSON.stringify(raw ?? '')}\n${USAGE}`)
+  const known = sessions().find(s => s.name === name)
+  // From a shell, a name nothing runs under is launched: in tmux, so the app can type into it. A name
+  // that runs but not in tmux is shown read-only; one that ended is launched again.
+  if (!known || (!known.alive && !known.tmux)) await launch(name)
+  else if (!known.tmux) process.stderr.write(`Session ${name} is not running in tmux, so the app can only read it. To type into it from the app, end it and run: node tools/console app --code ${name}\n`)
+  const server = await ensureServer()
+  let token = ''
+  try {
+    token = fs.readFileSync(path.join(HOME, 'app-token'), 'utf8').trim()
+  } catch {
+    /* the server writes it at start; without it the link needs a tailnet login */
+  }
+  console.log(`Mission Control App, session ${name}: http://127.0.0.1:${server.port}/s/${name}/${token ? `?t=${token}` : ''}`)
+}
+
+import(path.join(__dirname, 'app', 'sessions.mjs')).then(m => {
+  lib = m
+  main()
+})
+
+function main() {
+const [verb, ...rest] = process.argv.slice(2)
+if (verb === 'app') app(rest).catch(err => die(String(err?.message ?? err)))
+else if (verb === 'list') {
+  const all = sessions()
+  if (!all.length) console.log('No sessions registered. Start one with: claude -n <name>')
+  for (const s of all) console.log(`${s.name}\t${s.alive ? 'alive' : 'dead'}\t${s.role}\t${s.cwd}`)
+} else die(USAGE, verb ? 1 : 0)
+}
