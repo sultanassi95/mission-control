@@ -23,7 +23,92 @@
     p.textContent = text
     main.replaceChildren(p)
   }
+  const headers = (extra = {}) => ({ ...(token ? { 'x-mcapp-token': token } : {}), ...extra })
+  const prefix = `/s/${encodeURIComponent(name)}`
+  const say2 = text => {
+    const t = document.getElementById('readonly')
+    t.textContent = text
+    t.hidden = !text
+  }
+  let tmux = false
+  let alive = false
+  function lockComposer() {
+    const can = tmux && alive
+    document.getElementById('draft').disabled = !can
+    document.querySelector('#send .send').disabled = !can
+    say2(!alive ? 'This session has ended; its messages stay here.' : !tmux ? `Read-only: this session is not running in tmux. Reopen it with tools/console app --code ${name}` : '')
+  }
+  async function post(path, body) {
+    try {
+      const r = await fetch(`${prefix}/${path}`, { method: 'POST', headers: headers({ 'Content-Type': 'application/json' }), body: JSON.stringify(body) })
+      return r.ok ? '' : r.status === 409 ? 'This session is not in tmux, so it cannot be typed into.' : r.status === 410 ? 'This session has ended.' : r.status === 401 ? 'Open the link /console app printed first.' : 'The Mac did not take that.'
+    } catch {
+      return "Couldn't reach the Mac. Check that it is awake and connected."
+    }
+  }
+  document.getElementById('send').addEventListener('submit', async e => {
+    e.preventDefault()
+    const draft = document.getElementById('draft')
+    const text = draft.value.trim()
+    if (!text) return
+    const problem = await post('send', { text })
+    if (problem) return say2(problem)
+    draft.value = ''
+    say2('')
+  })
+  document.getElementById('draft').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey && matchMedia('(min-width: 1024px)').matches) {
+      e.preventDefault()
+      document.getElementById('send').requestSubmit()
+    }
+  })
+
+  // The terminal's own question (a permission prompt, a choice): read from its screen while the page is
+  // open, answered by pressing the option's key.
+  const promptBox = document.getElementById('prompt')
+  let asking = ''
+  async function readScreen() {
+    if (!tmux || !alive || document.visibilityState !== 'visible') return
+    const r = await fetch(`${prefix}/screen`, { headers: headers() }).catch(() => null)
+    const m = r && r.ok ? (await r.json().catch(() => null))?.menu : null
+    const sig = m ? JSON.stringify(m) : ''
+    if (sig === asking) return
+    asking = sig
+    if (!m) {
+      promptBox.hidden = true
+      return
+    }
+    const h = document.createElement('h2')
+    h.textContent = m.question || 'The session is asking'
+    const k = document.createElement('p')
+    k.className = 'kind'
+    k.textContent = 'Waiting on you'
+    const row = document.createElement('div')
+    row.className = `btnrow ${m.options.length === 2 ? 'two' : 'one'}`
+    for (const o of m.options) {
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.className = o.key === m.selected ? 'primary' : 'note'
+      b.textContent = o.label
+      b.addEventListener('click', async () => {
+        row.querySelectorAll('button').forEach(x => (x.disabled = true))
+        const problem = await post('key', { key: o.key })
+        if (problem) say2(problem)
+        asking = ''
+      })
+      row.append(b)
+    }
+    promptBox.replaceChildren(k, h, row)
+    promptBox.hidden = false
+  }
+  setInterval(readScreen, 2000)
+
   function paint(st) {
+    if (!st.gone) {
+      tmux = st.session.tmux
+      alive = st.session.alive
+      lockComposer()
+    }
     if (st.gone) {
       say('This session is no longer registered', 'off')
       return

@@ -23,9 +23,10 @@ mkdir -p "$dir" 2>/dev/null || exit 0
 chmod 700 "$home" "$dir" 2>/dev/null
 # The session's process: the hook runs as its child. A hook run by a wrapper shell reports that shell, which dies with the call; say so by a pid of 0 only when it is gone.
 pid="$PPID"
+tsock="${TMUX:-}"; tsock="${tsock%%,*}"
 tmp="$dir/.$name.$$"
-jq -n --arg name "$name" --arg sid "$sid" --arg tp "$tp" --arg cwd "$(field .cwd)" --arg pane "${TMUX_PANE:-}" --argjson pid "$pid" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-  '{name:$name, session_id:$sid, transcript_path:$tp, cwd:$cwd, role:"flight", pid:$pid, tmux_pane:$pane, at:$at}' > "$tmp" 2>/dev/null \
+jq -n --arg name "$name" --arg sid "$sid" --arg tp "$tp" --arg cwd "$(field .cwd)" --arg pane "${TMUX_PANE:-}" --arg sock "$tsock" --argjson pid "$pid" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  '{name:$name, session_id:$sid, transcript_path:$tp, cwd:$cwd, role:"flight", pid:$pid, tmux_pane:$pane, tmux_socket:$sock, at:$at}' > "$tmp" 2>/dev/null \
   && mv "$tmp" "$dir/$name.json" 2>/dev/null
 rm -f "$tmp" 2>/dev/null
 exit 0

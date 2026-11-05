@@ -20,6 +20,15 @@
     </div>
   </header>
   <main class="main" id="main" tabindex="-1"></main>
+  <section class="gate" id="prompt" aria-label="The session is asking" hidden></section>
+  <div class="composer" id="composer">
+    <p class="hint" id="readonly" role="status" hidden></p>
+    <form class="row" id="send">
+      <label class="visually-hidden" for="draft">Message this session</label>
+      <textarea id="draft" rows="1" placeholder="Message this session" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="sentences"></textarea>
+      <button class="send" type="submit" aria-label="Send"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+    </form>
+  </div>
 </div>
 <script src="/md.js"></script>
 <script src="/session.js"></script>

@@ -32,7 +32,7 @@ export function readSession(dir, name, alive = pidAlive) {
   try {
     const e = JSON.parse(readFileSync(join(dir, `${n}.json`), 'utf8'))
     if (typeof e.session_id !== 'string' || typeof e.transcript_path !== 'string') return null
-    return { name: n, session_id: e.session_id, transcript_path: e.transcript_path, cwd: String(e.cwd ?? ''), role: String(e.role ?? 'flight'), pid: Number.isInteger(e.pid) ? e.pid : 0, tmux_pane: String(e.tmux_pane ?? ''), at: String(e.at ?? ''), alive: alive(e.pid) }
+    return { name: n, session_id: e.session_id, transcript_path: e.transcript_path, cwd: String(e.cwd ?? ''), role: String(e.role ?? 'flight'), pid: Number.isInteger(e.pid) ? e.pid : 0, tmux_pane: String(e.tmux_pane ?? ''), tmux_socket: String(e.tmux_socket ?? ''), at: String(e.at ?? ''), alive: alive(e.pid) }
   } catch {
     return null
   }

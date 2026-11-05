@@ -25,6 +25,7 @@ import { execFile } from 'node:child_process'
 import { FILE_MAX, TOO_LARGE, FILE_ROUTE, SERVED, classify, prune } from './uploads.mjs'
 import { readShares, resolveFile } from './files.mjs'
 import { statSync } from 'node:fs'
+import { capture, menuOf, paneAlive, sendKey, sendText } from './tmux.mjs'
 import { cleanName, listSessions, messagesFrom, readSession } from './sessions.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -308,7 +309,7 @@ function handler(port) {
     }
 
     // The page and its scripts carry no secrets and are public; every data endpoint needs the token.
-    const isData = url.pathname === '/sessions.json' || /^\/s\/[^/]+\/(state\.json|events)$/.test(url.pathname) || url.pathname === '/op' || url.pathname === '/events' || url.pathname === '/state.json' || url.pathname === '/flights.json' || url.pathname === '/upload' || url.pathname.startsWith('/upload/') || url.pathname === '/file' || url.pathname === '/file-ticket' || url.pathname === '/files.json' || url.pathname.startsWith('/p/')
+    const isData = url.pathname === '/sessions.json' || /^\/s\/[^/]+\/(state\.json|events|screen|send|key)$/.test(url.pathname) || url.pathname === '/op' || url.pathname === '/events' || url.pathname === '/state.json' || url.pathname === '/flights.json' || url.pathname === '/upload' || url.pathname.startsWith('/upload/') || url.pathname === '/file' || url.pathname === '/file-ticket' || url.pathname === '/files.json' || url.pathname.startsWith('/p/')
     // /s/<name>/ is one session's page; it carries no secrets, its data routes below need the token.
     if (req.method === 'GET' && /^\/s\/[^/]+$/.test(url.pathname)) return send(res, 302, '', { Location: `${url.pathname}/` })
     if (req.method === 'GET' && /^\/s\/[^/]+\/$/.test(url.pathname)) return serveStatic(res, '/session.html').then(() => undefined, () => send(res, 500, 'error'))
@@ -328,6 +329,8 @@ function handler(port) {
       if (req.method !== 'GET') return send(res, 405, 'method not allowed')
       return send(res, 200, JSON.stringify({ sessions: listSessions(SESSIONS).map(({ name, cwd, role, alive }) => ({ name, cwd, role, alive })) }), { 'Content-Type': 'application/json' })
     }
+    const drive = /^\/s\/([^/]+)\/(screen|send|key)$/.exec(url.pathname)
+    if (drive) return driveSession(req, res, drive[1], drive[2])
     const sess = /^\/s\/([^/]+)\/(state\.json|events)$/.exec(url.pathname)
     if (sess) {
       if (req.method !== 'GET') return send(res, 405, 'method not allowed')
@@ -409,6 +412,39 @@ function handler(port) {
       return send(res, 200, await readFile(file), { 'Content-Type': SERVED[stored[2]], 'Cache-Control': 'private, max-age=604800, immutable', 'Content-Security-Policy': "default-src 'none'; sandbox" })
     }
     return send(res, 404, 'not found')
+  }
+}
+
+// The session's terminal, for sessions that run in tmux: what is on its screen (and the numbered menu
+// on it, a permission prompt or a question), text typed into it, and one menu key pressed.
+async function driveSession(req, res, name, what) {
+  if (what === 'screen' ? req.method !== 'GET' : req.method !== 'POST') return send(res, 405, 'method not allowed')
+  const e = readSession(SESSIONS, name)
+  if (!e || cleanName(name) !== name) return send(res, 404, `no session named ${name.slice(0, 41)}`)
+  if (!e.tmux_pane) return send(res, 409, `this session is not running in tmux, so the app can only read it. Reopen it with: tools/console app --code ${e.name}`)
+  const target = { pane: e.tmux_pane, socket: e.tmux_socket, pid: e.pid }
+  if (!e.alive || !(await paneAlive(target))) return send(res, 410, 'this session has ended')
+  try {
+    if (what === 'screen') {
+      const screen = await capture(target)
+      return send(res, 200, JSON.stringify({ screen, menu: menuOf(screen) }), { 'Content-Type': 'application/json' })
+    }
+    let body
+    try {
+      body = JSON.parse(await readBody(req, 16 * 1024))
+    } catch {
+      return send(res, 400, 'bad json')
+    }
+    if (what === 'send') {
+      if (typeof body?.text !== 'string' || body.text.length === 0 || body.text.length > 8000) return send(res, 400, 'send is {text}, 1 to 8000 characters')
+      await sendText(target, body.text)
+    } else {
+      if (typeof body?.key !== 'string') return send(res, 400, 'key is {key}')
+      await sendKey(target, body.key)
+    }
+    return send(res, 202, '{}', { 'Content-Type': 'application/json' })
+  } catch (err) {
+    return send(res, err.message === 'key not allowed' ? 400 : 502, err.message === 'key not allowed' ? 'key not allowed' : 'tmux did not take that')
   }
 }
 

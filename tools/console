@@ -14,7 +14,7 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 const crypto = require('node:crypto')
-const { spawn } = require('node:child_process')
+const { spawn, spawnSync } = require('node:child_process')
 
 const HOME = process.env.MCAPP_HOME || path.join(os.homedir(), '.mission-control')
 const SESSIONS = path.join(HOME, 'sessions')
@@ -65,6 +65,27 @@ async function ensureServer() {
   die(`the app server did not start; see ${path.join(HOME, 'server.log')}`)
 }
 
+// Starts `claude -n <name>` in a detached tmux session mc-<name> in the current folder and waits for its
+// hook to register it. MCAPP_CLAUDE_CMD replaces `claude` (extra flags, a test double); MCAPP_TMUX_SOCKET
+// names a private tmux server.
+async function launch(name) {
+  const socket = process.env.MCAPP_TMUX_SOCKET ? ['-L', process.env.MCAPP_TMUX_SOCKET] : []
+  const tmux = args => spawnSync(process.env.MCAPP_TMUX || 'tmux', [...socket, ...args], { encoding: 'utf8' })
+  if (tmux(['-V']).error) die('tmux is not installed: brew install tmux')
+  if (tmux(['has-session', '-t', `=mc-${name}`]).status !== 0) {
+    const env = ['MCAPP_HOME', 'MCAPP_PORT'].filter(k => process.env[k]).flatMap(k => ['-e', `${k}=${process.env[k]}`])
+    const r = tmux(['new-session', '-d', '-s', `mc-${name}`, '-c', process.cwd(), ...env, `${process.env.MCAPP_CLAUDE_CMD || 'claude'} -n ${name}`])
+    if (r.status !== 0) die(`could not start tmux session mc-${name}: ${r.stderr.trim()}`)
+    console.log(`Started claude -n ${name} in tmux session mc-${name}. Attach with: tmux ${socket.join(' ')} attach -t mc-${name}`.replace('  ', ' '))
+  }
+  for (let i = 0; i < 300; i++) {
+    const s = sessions().find(x => x.name === name && x.alive)
+    if (s) return
+    await sleep(100)
+  }
+  die(`session ${name} did not register within 30 s. It may be waiting at a first-run prompt: tmux ${socket.join(' ')} attach -t mc-${name}`.replace('  ', ' '))
+}
+
 async function app(args) {
   if (args[0] === 'stop') {
     const e = running()
@@ -76,7 +97,11 @@ async function app(args) {
   const raw = i < 0 ? '' : args[i].includes('=') ? args[i].slice(7) : args[i + 1]
   const name = cleanName(raw)
   if (!name || name !== String(raw).toLowerCase()) die(`app needs --code <name> (letters, digits, . _ -); got ${JSON.stringify(raw ?? '')}\n${USAGE}`)
-  if (!sessions().some(s => s.name === name)) die(`no session named ${name}. Start it with: claude -n ${name}   (the hook registers it), or run /console app --code ${name} inside the session.`)
+  const known = sessions().find(s => s.name === name)
+  // From a shell, a name nothing runs under is launched: in tmux, so the app can type into it. A name
+  // that runs but not in tmux is shown read-only; one that ended is launched again.
+  if (!known || (!known.alive && !known.tmux)) await launch(name)
+  else if (!known.tmux) process.stderr.write(`Session ${name} is not running in tmux, so the app can only read it. To type into it from the app, end it and run: tools/console app --code ${name}\n`)
   const server = await ensureServer()
   let token = ''
   try {

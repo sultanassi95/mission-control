@@ -15,7 +15,8 @@ const CONSOLE = join(TOOLS, 'console')
 const PORT = 42000 + Math.floor(Math.random() * 9000)
 const scratch = mkdtempSync(join(tmpdir(), 'mc-sessions-'))
 const HOME = join(scratch, 'home')
-const env = { ...process.env, MCAPP_HOME: HOME, MCAPP_PORT: String(PORT) }
+// No test here may start a real tmux or claude: the launch path is tested in app-tmux.test.mjs on a private socket.
+const env = { ...process.env, MCAPP_HOME: HOME, MCAPP_PORT: String(PORT), MCAPP_TMUX: join(scratch, 'no-tmux') }
 
 const line = (type, text, extra = {}) => JSON.stringify({ type, message: { role: type, content: type === 'user' ? text : [{ type: 'text', text }] }, ...extra })
 const transcript = (name, lines) => {
@@ -82,10 +83,10 @@ test('console app --code starts the one server and prints the link; a second nam
   assert.equal(log.split('\n').filter(l => l.includes('"type":"ready"')).length, 1, 'one server, started once')
 })
 
-test('console app --code for a name nothing registered says how to register it', () => {
+test('console app --code for a name nothing runs under launches it (here: refused, no tmux)', () => {
   const r = consoleRun(['app', '--code', 'nobody'])
   assert.equal(r.status, 1)
-  assert.match(r.stderr, /no session named nobody.*claude -n nobody/)
+  assert.match(r.stderr, /tmux is not installed/)
 })
 
 test('console list prints every session with its liveness and folder', () => {
