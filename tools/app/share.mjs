@@ -4,27 +4,19 @@
 //   node tools/app/share.mjs <absolute path>      share it and print its link
 //   node tools/app/share.mjs --list               print every shared file
 //   node tools/app/share.mjs --revoke <path>      stop sharing it
-// The list is the instance's own state, beside the app's state file, never in the repository;
+// The list is this machine's own state, in the app home beside the token, never in the repository;
 // MCAPP_SHARE_FILE names another list (tests).
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { canonical, readShares, shareable, writeShares } from './files.mjs'
 
-// The portfolio root: the nearest folder up from here holding the instance folder.
-function portfolioRoot(start) {
-  for (let dir = resolve(start); ; dir = dirname(dir)) {
-    if (existsSync(join(dir, '_command'))) return dir
-    if (dirname(dir) === dir) return ''
-  }
-}
-
-const listFile = process.env.MCAPP_SHARE_FILE || (portfolioRoot(process.cwd()) ? join(portfolioRoot(process.cwd()), '_command', 'fleet', 'shared-files.json') : '')
+const listFile = process.env.MCAPP_SHARE_FILE || join(process.env.MCAPP_HOME || join(homedir(), '.mission-control'), 'shared-files.json')
 const fail = msg => {
   process.stderr.write(`${msg}\n`)
   process.exit(1)
 }
-if (!listFile) fail('No portfolio found from this folder: run /share from the portfolio, or set MCAPP_SHARE_FILE.')
 
 // The tailnet link: this Mac's name, as tailscale serve publishes the app; the local one when Tailscale is absent.
 function linkFor(real) {
@@ -35,7 +27,7 @@ function linkFor(real) {
     const host = String(st.Self?.DNSName ?? '').replace(/\.$/, '')
     if (host) return `https://${host}${view}`
   } catch {}
-  return `http://127.0.0.1:4777${view} (Tailscale is not running here, so this is the Mac's own link)`
+  return `http://127.0.0.1:${process.env.MCAPP_PORT || 4777}${view} (Tailscale is not running here, so this is the Mac's own link)`
 }
 
 const [first, second] = process.argv.slice(2)

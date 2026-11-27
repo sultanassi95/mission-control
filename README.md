@@ -23,49 +23,32 @@ it forgets what it was doing, spends what it should not, and asks you the same q
 again. Mission Control is the missing layer: a portfolio memory, a set of rules it cannot
 argue its way around, and a control room you can run from your phone.
 
-<p align="center">
-  <img src="docs/assets/app-phone-flight.png" alt="Flight: the morning summary across three fronts" width="240">
-  &nbsp;
-  <img src="docs/assets/app-phone-consoles.png" alt="Consoles: one Controller per front, with its state" width="240">
-</p>
-<p align="center"><sub>The Mission Control App on a phone: Flight's morning summary and the Controller running each front.</sub></p>
-
 ## What it does for you
 
-### <img src="docs/assets/icon-fleet.svg" width="28" align="top"> Run every venture at once, from one terminal
+### <img src="docs/assets/icon-fleet.svg" width="28" align="top"> Run every venture at once, from its own terminal
 
-Your main Claude Code session becomes **Flight**, and it staffs a **Controller** for each
-venture: a long-lived agent that works that one front, keeps its own back room of helpers
-within a budget you set, and reports in four lines (state, shipped, blocked on you, next), plus a fifth when something other fronts depend on has changed.
-Change a Controller's model mid-job, call it, or stand it down with a written handoff.
-PR watches wake a Controller when its checks or reviews change, so nobody polls GitHub.
-
-### <img src="docs/assets/icon-poll.svg" width="28" align="top"> Every decision that needs you, in one place
-
-When a Controller needs you to decide something, Flight asks you as its own question, with
-the Controller's options spelled out, each with what it does; urgent ones first. Pick one, or
-answer in your own words, and the pick goes straight to that Controller. Things only you can do
-land in Flight as to-dos with their links, and Done tells the Controller.
-Changes that ripple into other fronts are routed to the Controllers they affect. Nothing
-waits silently.
+Each venture gets its own terminal session with a name: `claude -n storefront`, `claude -n billing`.
+A session is a **Flight** for its own front, with its own back room of helpers, and nothing
+else to learn: there is no fleet to staff. Two terminals with two names run side by side, and
+`/console app --code <name>` shows any of them in the app.
 
 ### <img src="docs/assets/icon-phone.svg" width="28" align="top"> Run it from your phone, from anywhere
 
-`/console app` starts the **Mission Control App**: Flight's conversation with its questions and
-your to-dos, your Controllers and the message traffic, as a home-screen app. Over Tailscale it reaches your phone
-in any city, signed in by your own Tailscale account and never exposed to the public internet.
-Send Flight a message or a photo, answer the questions it asks, get an alert when a decision
-lands. One front door covers every Claude account you use (work, personal, a partner's) with
-a switcher in the header. Once on, it keeps itself running for as long as your session does.
+`node tools/console app --code <name>` starts the **Mission Control App**: the named session's
+conversation, read live, as a home-screen app. A session started that way runs in tmux, so you
+can type to it from the phone, attach a photo, and answer the permission prompt or the choice
+it is stuck on. Over Tailscale it reaches your phone in any city, signed in by your own
+Tailscale account and never exposed to the public internet. One server covers every session on
+the machine, with a switcher in the header.
 
 ### <img src="docs/assets/icon-guard.svg" width="28" align="top"> Guardrails it cannot talk its way around
 
 It never commits, pushes, deploys or spends without your word in the moment. Fan-outs of
 agents are sized and approved before they fire, every agent gets the cheapest model and
-effort that holds the bar, and evidence comes before every claim. Controllers may push their
-own feature branches and open PRs, never merge, never touch a base or deploy branch, and a
-guard enforces that on every tool call. Hooks block personal data and process chatter from
-ever reaching a commit or a PR.
+effort that holds the bar, and evidence comes before every claim. A session may push its
+own feature branches and open PRs; a push to a base or deploy branch raises a permission
+prompt in every session, and the merge stays yours. Hooks block personal data and process
+chatter from ever reaching a commit or a PR.
 
 ### <img src="docs/assets/icon-flows.svg" width="28" align="top"> Delivery at the right altitude
 
@@ -98,25 +81,20 @@ of 23 lessons paid for on a real multi-venture portfolio.
 
 ```mermaid
 flowchart TB
-  YOU(["You<br/>terminal or phone"]) <-->|messages, answers, photos| FLIGHT["Flight<br/>your main Claude Code session"]
-  FLIGHT -->|"/console staff"| C1["Controller<br/>storefront"]
-  FLIGHT --> C2["Controller<br/>billing-api"]
-  FLIGHT --> C3["Controller<br/>mobile-app"]
-  C1 & C2 & C3 -->|status, questions, to-dos| FLIGHT
-  C2 --> BR["back room<br/>helper agents within budget"]
+  YOU(["You<br/>terminal or phone"]) <-->|messages, answers, photos| S1["Flight<br/>claude -n storefront"]
+  YOU <--> S2["Flight<br/>claude -n billing"]
+  S1 & S2 --> BR["back room<br/>helper agents, sized first"]
+  S1 & S2 -.->|"push to a base branch"| ASK{{"asks you first"}}
   subgraph PORTFOLIO["Your portfolio, plain Markdown in git"]
     HUB["hubs, spokes, boards,<br/>today's pointer, the rules"]
   end
-  FLIGHT --- PORTFOLIO
+  S1 --- PORTFOLIO
+  S2 --- PORTFOLIO
 ```
 
 Everything is local and yours: plain Markdown files in a git repository, the rules Claude
 loads every session, and 26 skills that turn your rituals into one command each. No hosted
 service, no database, no lock-in.
-
-<p align="center">
-  <img src="docs/assets/app-desktop-flight.png" alt="The Mission Control App on desktop" width="88%">
-</p>
 
 ## Start in 60 seconds
 
@@ -133,15 +111,15 @@ session reads your setup cold, states your board and your rules, and **refuses a
 unauthorized push**. That refusal is the product working. Big portfolio? Lift off with the
 fronts you touch this week and add the rest later with `/new-front`.
 
-Then, for the phone: load the mission-fleet plugin (see [tools/README.md](tools/README.md)),
-type `/console app`, and follow [the remote access guide](framework/remote-access.md).
+Then, for the phone: run `node tools/console app --code <name>` (see
+[tools/README.md](tools/README.md)) and follow [the remote access guide](framework/remote-access.md).
 
 ## A day with Mission Control
 
 | When | You type | What happens |
 |---|---|---|
 | Morning | `/briefing` | It reads every front and locks today's one objective |
-| Any time | `/console staff <front>` | A Controller takes a venture and runs it |
+| Any time | `/console app --code <name>` | A named session opens in the app on your phone |
 | A bug or a task | `/mission-flow <description>` | Root cause to a checks-green PR, nothing merged without you |
 | Bigger work | `/epic-flow` or `/product-flow` | A plan you lock, then the whole thing delivered |
 | Before a meeting | `/standup` | A paste-ready report with a two-minute talk track |
@@ -176,8 +154,8 @@ own if you want its history.
 
 ## Requirements
 
-- **Claude Code** with plugin support. The console fleet is a Claude Code plugin
-  (`tools/mods/mission-fleet`).
+- **Claude Code**, with the hooks in `.claude/settings.json` (they ship with the clone).
+- **tmux** (optional) to type into a session from your phone.
 - **Node.js** for the Mission Control App and the docs viewer.
 - **Tailscale** (optional) to reach the app from your phone.
 - **macOS or Linux** is the primary platform: every gate has a bash form. On Windows the leak gates and the reference check also ship as
@@ -192,7 +170,7 @@ own if you want its history.
 |---|---|
 | [framework/](framework/CONSTITUTION.md) | The doctrine: the constitution, the engineering standard, routing, continuity, design, remote access |
 | [.claude/skills/](.claude/skills/README.md) | The 26 skills |
-| [tools/](tools/README.md) | The gates and hooks, the mission-fleet plugin and the Mission Control App |
+| [tools/](tools/README.md) | The gates and hooks, the session console and the Mission Control App |
 | [LIFTOFF.md](LIFTOFF.md) | The one-time guided setup |
 
 ## Provenance and license

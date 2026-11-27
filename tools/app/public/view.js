@@ -36,7 +36,7 @@
     } catch {
       return say("Couldn't reach the Mac. Check that it is awake and connected.")
     }
-    if (r.status === 401) return say('This page needs the app open on this device first: open the link /console app printed, then this file again.')
+    if (r.status === 401) return say('This page needs the app open on this device first: open the link the console printed, then this file again.')
     if (r.status === 415) return say('The app does not show this kind of file.')
     if (r.status === 413) return say('This file is too large to show here.')
     if (!r.ok) return say('That file is not shared, or it is not there any more. Share it from the Mac with /share <path>.')

@@ -291,13 +291,13 @@ is done only when the probe passes.**
 - **Map the big fronts:** a multi-project front deserves
   `/map-front --front <name>` (depth 1 by default) - so a change to one
   project never blindsides its dependents.
-- **Run several fronts at once:** `/console staff <front>` puts a kept-alive
-  Controller on a front or project, and `/console list`, `call`, `retune`,
-  `poll` and `stand-down` run the fleet (`.claude/skills/fleet/SKILL.md`).
-  It needs the mission-fleet mod, `tools/mods/mission-fleet`, loaded as a
-  Claude Code plugin (`tools/README.md` says how).
-- **The Mission Control App:** `/console app` starts a local control surface
-  (Flight, Consoles, Poll, Loops) on 127.0.0.1, port 4777. To reach it from
+- **Run several fronts at once:** start one named terminal session per front,
+  `claude -n <name>`. `node tools/console list` shows them, and
+  `/console app --code <name>` shows one in the app (`.claude/skills/console/SKILL.md`).
+  A push to a base or deploy branch raises a permission prompt in every session.
+- **The Mission Control App:** `node tools/console app --code <name>` starts a
+  local control surface (the sessions list and each session's view, with a
+  composer for sessions run in tmux) on 127.0.0.1, port 4777. To reach it from
   your phone, follow `framework/remote-access.md`: Tailscale only, never a
   public URL.
 - **Update doctrine:** `git pull upstream main` - it touches `framework/`,

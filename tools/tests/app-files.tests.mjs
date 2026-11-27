@@ -17,7 +17,6 @@ import { fileURLToPath } from 'node:url'
 const SERVER = process.env.MCAPP_SERVER ?? fileURLToPath(new URL('../app/server.mjs', import.meta.url))
 const SHARE = fileURLToPath(new URL('../app/share.mjs', import.meta.url))
 const TOKEN = 'filestokenfilestokenfilestoken0001'
-const KEY = 'fileskeyfileskeyfileskeyfileskey01'
 const FRONT = 42000 + Math.floor(Math.random() * 9000)
 const ORIGIN = `http://127.0.0.1:${FRONT}`
 const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'mc-files-')))
@@ -50,12 +49,14 @@ before(async () => {
   writeFileSync(join(OUTSIDE, 'secret.txt'), 'outside the share list')
   symlinkSync(join(OUTSIDE, 'secret.txt'), join(DIR, 'escape.txt'))
   for (const f of ['report.md', 'evidence/shot.png', 'page.html', 'notes.txt', 'doc.pdf']) assert.equal(share(join(DIR, f)).status, 0, f)
+  // The app reads its token from the app home; the test plants one.
+  mkdirSync(join(scratch, 'home'), { recursive: true })
+  writeFileSync(join(scratch, 'home', 'app-token'), TOKEN, { mode: 0o600 })
   server = spawn(process.execPath, [SERVER], {
     // MCAPP_FILE_ROOTS was this route's first control; it is set here to show it opens nothing now.
-    env: { ...process.env, MCAPP_PORT: String(FRONT), MCAPP_HOME: join(scratch, 'home'), MCAPP_PROFILE: 'work', MCAPP_STATE_FILE: join(scratch, 'state', 'app-state.json'), MCAPP_SHARE_FILE: LIST, MCAPP_FILE_ROOTS: ROOT },
-    stdio: ['pipe', 'pipe', 'inherit'],
+    env: { ...process.env, MCAPP_PORT: String(FRONT), MCAPP_HOME: join(scratch, 'home'), MCAPP_SHARE_FILE: LIST, MCAPP_FILE_ROOTS: ROOT },
+    stdio: ['ignore', 'pipe', 'inherit'],
   })
-  server.stdin.end(JSON.stringify({ token: TOKEN, key: KEY }))
   await new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('server did not start')), 15_000)
     const seen = new Set()
@@ -65,7 +66,7 @@ before(async () => {
       } catch {
         return
       }
-      if (seen.has('ready') && seen.has('front')) {
+      if (seen.has('ready')) {
         clearTimeout(timer)
         resolve()
       }
@@ -194,12 +195,10 @@ test('a .. in the path is a 404 even when it lands on a shared file', async () =
   assert.equal((await get('')).status, 404)
 })
 
-test('the file route needs the owner\'s token or tailnet identity like every data route, under any profile path', async () => {
+test('the file route needs the owner\'s token or tailnet identity like every data route', async () => {
   assert.equal((await get(join(DIR, 'report.md'), { token: '' })).status, 401)
   assert.equal((await get(join(DIR, 'report.md'), { token: 'not-the-token-not-the-token-000000' })).status, 401)
   assert.equal((await fetch(`${ORIGIN}/files.json`)).status, 401)
-  assert.equal((await get(join(DIR, 'report.md'), { prefix: '/p/work' })).status, 200)
-  assert.equal((await get(join(DIR, 'report.md'), { prefix: '/p/other' })).status, 200)
 })
 
 // ---- A file opened as itself takes a single-use ticket, never the token ----

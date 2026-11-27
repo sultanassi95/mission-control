@@ -13,7 +13,7 @@ description: >-
 ```mermaid
 flowchart LR
   F["/share &lt;path&gt;"] --> C{"a file the app shows?<br/>not a symlink, not a credential"}
-  C -->|yes| L["added to the share list<br/>(instance state, beside the app's state file)"] --> K["prints its tailnet link"]
+  C -->|yes| L["added to the share list<br/>(this machine's app home)"] --> K["prints its tailnet link"]
   C -->|no| R["refused, saying why"]
   P["a path in a message"] -->|"shared"| A["a link to the viewer"]
   P -->|"not shared"| T["plain text"]
@@ -21,12 +21,10 @@ flowchart LR
 
 The app shows a file only when it is on the share list. A path in a message
 links only when that file is shared; any other path stays plain text. Sharing
-is the founder's or Flight's: the fleet guard refuses the script to every
-Controller and back-room agent, which leave a file to share under
-`for you to do:` instead. That refusal reads the command's text, so it is a
-speed bump, not a lock: an agent running as the same Mac user could still
-change the list another way. What holds either way is that a shared file
-opens only for the founder's own tailnet sign-in or the app token.
+is the founder's or the session's own call; a sub-agent leaves a file to share
+under `for you to do:` instead. Nothing stops an agent running as the same Mac
+user from changing the list another way. What holds either way is that a
+shared file opens only for the founder's own tailnet sign-in or the app token.
 
 ## Run it
 

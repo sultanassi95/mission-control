@@ -122,6 +122,6 @@ deviation is a finding), each fragment brief's state field (a brief reading
 `in-progress` with no branch behind it is stale), and a front's declared
 compliance or quality profile block (declared standards with no reader is a
 finding, as is a profile naming a collector that no PR evidence reaches), and
-the console fleet's folder `_command/fleet/`, where a fleet has run (the audit
-log, the app's state file and the uploaded photos), which only Flight and the
-app write.
+the app home `~/.mission-control/` (the session registry, the app token, the
+share list and the uploaded photos), which only the session hook, the app and
+the share script write.
